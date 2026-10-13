@@ -1,0 +1,33 @@
+# 코드 오너. 여기 적힌 사람의 승인이 있어야 해당 경로의 PR을 머지할 수 있다
+# (ruleset: require code owner review). 나중 줄이 앞 줄을 덮어쓴다.
+# 오너로 지정하려면 해당 계정이나 팀에 레포 write 권한이 있어야 한다.
+#
+# TODO: 팀원 GitHub ID 확인 — 역할이 정해지면 아래 주석을 풀고 실제 ID로 바꾼다.
+#       ID를 채우기 전에 주석을 풀면 "unknown owner"로 리뷰 요청이 영원히 걸리지 않는다.
+#
+# 역할
+#   PL   @TODO-pl-github-id
+#   팀원 @TODO-member-github-id
+
+# 저장소 규칙·CI — PL
+# /.github/                 @TODO-pl-github-id
+# /commitlint.config.mjs    @TODO-pl-github-id
+# /AGENT.md                 @TODO-pl-github-id
+# /CONTRIBUTING.md          @TODO-pl-github-id
+
+# 보안·컨벤션 문서 — PL
+# /docs/security/           @TODO-pl-github-id
+# /docs/conventions/        @TODO-pl-github-id
+
+# 확장 프로그램 매니페스트와 권한 — 권한이 늘어나는 변경은 PL이 본다
+# /apps/extension/AGENT.md  @TODO-pl-github-id
+
+# 중계 서버 — API 키를 다루는 유일한 곳이다
+# /apps/proxy/              @TODO-pl-github-id
+
+# 판단 스키마와 점수 규칙 — 산출물 품질에 직접 영향을 준다
+# /packages/shared/         @TODO-pl-github-id
+
+# 제출 서류·AI 활용 기록 — 대회 제출물
+# /docs/submission/         @TODO-pl-github-id
+# /docs/ai-log/             @TODO-pl-github-id

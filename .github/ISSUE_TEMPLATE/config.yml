@@ -1,0 +1,11 @@
+# 팀 작업은 Jira에서 관리한다. GitHub Issues는 외부 제보 전용이다 (CONTRIBUTING.md 5절).
+blank_issues_enabled: false
+contact_links:
+  - name: 보안 취약점 제보
+    # TODO: 비공개 보안 제보 켜기 — Settings > Security > Private vulnerability reporting.
+    #       켜지 않으면 아래 주소가 404가 되어 제보자가 공개 이슈로 올리게 된다.
+    url: https://github.com/sumin0218/GenuEarly/security/advisories/new
+    about: 취약점은 공개 이슈로 올리지 말아 주세요. 비공개 보안 제보로 알려 주시면 확인 후 답변드립니다.
+  - name: 팀 내부 작업 요청
+    url: https://somsumun.atlassian.net/jira/software/projects/GE/boards/1
+    about: 팀 작업(기능 개발, 일정, 담당자)은 GitHub가 아니라 Jira에서 관리합니다. 팀원은 Jira에 이슈를 만들어 주세요.

@@ -1,0 +1,54 @@
+name: Lint PR
+
+# squash merge에서는 PR 제목이 그대로 커밋 메시지가 된다 — 그래서 여기가 히스토리의 관문이다.
+# 로컬 commit-msg 훅은 편의라서 설치하지 않은 사람도 막지 않는다.
+
+on:
+  pull_request:
+    types: [opened, edited, reopened, synchronize]
+
+permissions:
+  contents: read
+
+jobs:
+  pr-title:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 22
+          cache: npm
+      - name: 메시지 규칙 설치
+        run: npm ci
+      # 규칙 자체를 검사한다. 오타 하나로 type-enum이 비어도 모든 제목이 통과하는 일을 막는다.
+      - name: 메시지 규칙 테스트
+        run: npm run test:commitlint
+      - name: PR 제목 검사
+        env:
+          PR_TITLE: ${{ github.event.pull_request.title }}
+        run: printf '%s' "$PR_TITLE" | npx --no -- commitlint
+
+  branch-name:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      # Jira 연결은 브랜치 이름이 한다. 키가 빠지면 이슈에 아무것도 남지 않으므로 여기서 막는다.
+      - name: 브랜치 이름 규칙 테스트
+        run: bash .github/scripts/test-validate-branch-name.sh
+      - name: 출발 브랜치 이름 검사
+        env:
+          HEAD_REF: ${{ github.head_ref }}
+        run: bash .github/scripts/validate-branch-name.sh "$HEAD_REF"
+
+  pr-source:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - name: 출발 브랜치 규칙 테스트
+        run: bash .github/scripts/test-validate-pr-source.sh
+      - name: main 대상 PR 출발 브랜치 검사
+        env:
+          BASE_REF: ${{ github.base_ref }}
+          HEAD_REF: ${{ github.head_ref }}
+        run: bash .github/scripts/validate-pr-source.sh "$BASE_REF" "$HEAD_REF"

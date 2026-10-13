@@ -1,0 +1,17 @@
+# 저장소에는 LF로 저장하고, 체크아웃할 때도 LF를 유지한다.
+#
+# Git for Windows 기본값(core.autocrlf=true)은 체크아웃할 때 LF를 CRLF로 바꾼다.
+# 그러면 .github/scripts의 셸 스크립트가 CRLF로 커밋되어 Linux 러너에서
+# `$'\r': command not found`로 실패한다.
+
+* text=auto eol=lf
+
+# Windows 배치 파일은 CRLF여야 한다.
+*.bat text eol=crlf
+*.cmd text eol=crlf
+
+*.png binary
+*.jpg binary
+*.ico binary
+*.pdf binary
+*.zip binary

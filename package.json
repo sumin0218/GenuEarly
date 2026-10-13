@@ -1,0 +1,19 @@
+{
+  "name": "genuearly",
+  "private": true,
+  "description": "루트 package.json은 커밋 메시지 검사 도구(commitlint, husky) 전용이다. 확장 프로그램과 중계 서버의 기술 스택은 미정이며, 정해지면 각 앱 디렉터리 안에서 관리한다.",
+  "license": "MIT",
+  "scripts": {
+    "prepare": "husky",
+    "commitlint": "commitlint",
+    "test:commitlint": "bash .github/scripts/test-commitlint.sh",
+    "test:branch-name": "bash .github/scripts/test-validate-branch-name.sh",
+    "test:pr-source": "bash .github/scripts/test-validate-pr-source.sh",
+    "test:rules": "npm run test:commitlint && npm run test:branch-name && npm run test:pr-source"
+  },
+  "devDependencies": {
+    "@commitlint/cli": "^20.1.0",
+    "@commitlint/config-conventional": "^20.0.0",
+    "husky": "^9.1.7"
+  }
+}

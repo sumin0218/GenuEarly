@@ -1,0 +1,40 @@
+# 시크릿 — Jev API 키는 중계 서버(apps/proxy) 환경변수에만 둔다.
+# 확장 프로그램 번들에는 어떤 형태로도 넣지 않는다 (docs/security/secure-coding.md 1절).
+.env
+.env.*
+!.env.example
+
+# 자격 증명 파일 — 저장소 안에 두면 그대로 커밋되므로 파일명 자체를 막는다
+*credentials*.json
+client_secret*.json
+*.pem
+*.key
+*.p12
+
+# 평가 데이터 — 공개 저장소다.
+# 기사 본문은 커밋하지 않는다. eval/data에는 URL과 라벨만 둔다 (eval/README.md).
+# 테스트용으로 만든 가상의 가짜 기사는 전부 여기에 두고 커밋하지 않는다.
+eval/data/private/
+
+# 제출 서류 — 서명이 들어간 파일(개인정보 포함)은 커밋하지 않는다 (docs/submission/README.md)
+docs/submission/signed/
+
+# 확장 프로그램 빌드 산출물 — 빌드 도구 미정이라 흔한 이름을 미리 막아 둔다.
+# 도구가 정해지면 실제 출력 경로로 이 블록을 정리한다.
+dist/
+build/
+out/
+*.crx
+web-ext-artifacts/
+
+# 의존성·캐시
+node_modules/
+coverage/
+.cache/
+
+# IDE / OS
+.idea/
+.vscode/*
+!.vscode/extensions.json
+.DS_Store
+Thumbs.db

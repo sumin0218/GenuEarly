@@ -1,0 +1,85 @@
+name: 버그 제보
+description: 확장 프로그램이 동작하지 않거나 화면이 깨지는 문제를 알려 주세요.
+title: "[버그] "
+labels: ["bug", "외부 제보"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        제보해 주셔서 감사합니다. 확인 후 답변드립니다.
+
+        **먼저 읽어 주세요.**
+        - 이 저장소는 누구나 볼 수 있는 공개 저장소입니다.
+        - **개인정보(이름, 연락처, 로그인 정보, 캡처 속 계정 이름 등)를 적지 말아 주세요.**
+        - **기사 본문 전체를 붙여 넣지 말아 주세요.** 기사 주소(URL)와 문제가 된 문장 한두 개면 충분합니다.
+        - 보안 취약점은 이 양식이 아니라 비공개 보안 제보로 알려 주세요.
+
+  - type: textarea
+    id: what-happened
+    attributes:
+      label: 어떤 일이 있었나요
+      description: 무엇을 하려다 무엇이 일어났는지 적어 주세요.
+      placeholder: 네이버 뉴스 목록을 열었는데 제목 옆에 아무 표시도 뜨지 않았습니다.
+    validations:
+      required: true
+
+  - type: textarea
+    id: expected
+    attributes:
+      label: 어떻게 되기를 기대했나요
+    validations:
+      required: true
+
+  - type: textarea
+    id: steps
+    attributes:
+      label: 재현 방법
+      description: 저희가 그대로 따라 할 수 있게 순서대로 적어 주세요.
+      value: |
+        1.
+        2.
+        3.
+    validations:
+      required: true
+
+  - type: input
+    id: page-url
+    attributes:
+      label: 문제가 난 페이지 주소
+      description: 기사 본문 대신 주소만 적어 주세요. 주소에 개인정보가 들어 있다면 비워 두셔도 됩니다.
+      placeholder: https://...
+    validations:
+      required: false
+
+  - type: input
+    id: version
+    attributes:
+      label: 확장 프로그램 버전
+      description: 크롬 주소창에 chrome://extensions 를 입력하면 버전을 볼 수 있습니다.
+      placeholder: 1.0.0
+    validations:
+      required: false
+
+  - type: input
+    id: browser
+    attributes:
+      label: 브라우저와 운영체제
+      placeholder: Chrome 141 / Windows 11
+    validations:
+      required: false
+
+  - type: textarea
+    id: extra
+    attributes:
+      label: 그 밖에 알려 주실 것
+      description: 화면 캡처를 올리실 때는 개인정보가 찍히지 않았는지 한 번 확인해 주세요.
+    validations:
+      required: false
+
+  - type: checkboxes
+    id: privacy
+    attributes:
+      label: 확인
+      options:
+        - label: 개인정보와 기사 본문 전체를 넣지 않았습니다.
+          required: true
