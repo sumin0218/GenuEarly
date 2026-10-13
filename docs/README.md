@@ -6,8 +6,9 @@
 | [jev.md](jev.md) | Jev 1.13의 한계·요금·한도와 거기서 나온 설계 규칙. 공식 문서에서 확인한 사실만 |
 | [conventions/code-style.md](conventions/code-style.md) | 네이밍, 디렉터리 경계, 상수 관리, 테스트 |
 | [security/secure-coding.md](security/secure-coding.md) | 시큐어 코딩 규칙. **코드 작성 전 필독.** 확장 프로그램 권한 표 포함 |
-| [ai-log/](ai-log/) | AI 활용 과정 기록. 대회 **서식4** 증빙 |
-| [submission/](submission/) | 제출 서류와 일정 |
+| [ai-log/](ai-log/) | AI 활용 과정 기록. 대회 **서식4** 증빙. 파일이 서식4의 6단계와 일치한다 |
+| [ai-log/sources.md](ai-log/sources.md) | 출처·권리·라이선스 목록. 서식4의 두 번째 표 |
+| [submission/](submission/) | 제출 서류 5종, 일정, 서식3·4 분량 제한 |
 
 ## 어떤 순서로 읽나
 
