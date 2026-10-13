@@ -5,12 +5,37 @@
 루트 규칙이 먼저다: [../../AGENT.md](../../AGENT.md), [../../docs/security/secure-coding.md](../../docs/security/secure-coding.md).
 이 문서는 확장 프로그램에만 해당하는 규칙이다.
 
-## 기술 스택: 미정
+## 기술 스택
 
-**언어, 번들러, 테스트 도구, 패키지 매니저를 아직 정하지 않았다.** 추측해서 코드를 쓰지 않는다.
-정해지면 이 문서와 [../../docs/conventions/code-style.md](../../docs/conventions/code-style.md)의 "스택별 규칙"을 같은 PR에서 갱신한다.
+| | |
+| --- | --- |
+| 프레임워크 | [WXT](https://wxt.dev) 0.21.x — MV3 확장 전용. Vite 기반 |
+| 언어 | TypeScript. **타입을 꼭 쓰지 않아도 된다** — 평범한 JS를 `.ts` 파일에 써도 빌드된다 |
+| 테스트 | Vitest |
+| 패키지 매니저 | npm 워크스페이스 (저장소 루트에서 `npm install`) |
 
-MV3라는 것만 정해져 있다. 아래 규칙은 전부 그 전제에서 나온다.
+```bash
+npm run dev     # 개발 모드
+npm run build   # .output/chrome-mv3 생성
+npm run zip     # 배포용 zip (제출에 쓴다)
+npm test        # 테스트
+npm run compile # 타입 검사만 (빌드를 막지 않는다)
+```
+
+빌드 결과를 크롬에 올리려면 `chrome://extensions` → 개발자 모드 → **압축해제된 확장 프로그램을 로드** → `.output/chrome-mv3`.
+
+### WXT를 쓰면서 알아야 할 것
+
+- **`manifest.json` 파일은 없다.** [`wxt.config.ts`](wxt.config.ts)에서 생성된다. 결과물은 `.output/chrome-mv3/manifest.json`에서 확인한다
+- **`entrypoints/` 안의 파일은 전부 엔트리포인트**가 된다. CSS나 헬퍼를 여기 두면 안 된다 — `assets/`나 `components/`에 둔다
+- **auto-import가 켜져 있다.** `defineContentScript`, `defineBackground`, `createShadowRootUi`, `browser`는 import 없이 쓴다. WXT 공식 문서 예제가 전부 그렇게 되어 있다
+- **Shadow DOM은 `createShadowRootUi`로 만든다.** 직접 만들지 않는다. CSS는 `assets/`에서 import하고 엔트리포인트에 `cssInjectionMode: 'ui'`를 준다
+- 파이어폭스는 지원하지 않는다. `web-ext`를 일부러 설치하지 않았다 (취약점이 딸려 온다)
+
+### 권한은 테스트가 지킨다
+
+[`tests/manifest.test.ts`](tests/manifest.test.ts)가 금지 권한, `<all_urls>`, 와일드카드 호스트를 막는다.
+권한 표([../../docs/security/secure-coding.md](../../docs/security/secure-coding.md) 2절)를 고치면 이 테스트도 같이 본다.
 
 ## 맡는 일
 
