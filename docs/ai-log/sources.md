@@ -26,7 +26,7 @@
 | **WXT** 0.21.x | WXT 기여자 | **MIT** (npm 레지스트리 확인) | 확장 프로그램 빌드 프레임워크 |
 | **Vite / Vitest** | 각 프로젝트 | **MIT** (npm 레지스트리 확인) | 번들링, 테스트 |
 | **commitlint / husky** | 각 프로젝트 | **MIT** (npm 레지스트리 확인) | 커밋 메시지 검사 |
-| 코딩 도구 (Claude Code) | Anthropic | **TODO** — 확인 | 구현 보조, 문서 작성, 조사 |
+| 코딩 도구 (Claude Code / Claude Opus 5) | Anthropic | **TODO** — 확인 | 구현 보조, 문서 작성, 조사 |
 
 > **TODO: 의존성 라이선스 일괄 확인** — `npm ls --all` 또는 라이선스 수집 도구로 한 번에 뽑아 채운다.
 > 지금 일일이 적기보다 제출 전에 한 번 돌리는 쪽이 정확하다.
