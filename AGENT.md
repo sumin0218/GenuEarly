@@ -25,6 +25,7 @@ apps/proxy/        Jev 중계 서버. API 키를 들고 있는 유일한 곳 —
 packages/shared/   판단 스키마, 점수 합산, 배지 단계 결정
 packages/content/  사용자에게 보이는 문구
 eval/              판단 품질 평가 세트와 결과. 기사 본문은 두지 않는다
+tools/             개발할 때만 쓰는 도구. 제품에 배포되지 않는다
 docs/              제품 정의, Jev 정리, 컨벤션, 보안, AI 활용 기록, 제출 서류
 .github/           PR·이슈 양식, 규칙 검사 워크플로
 ```

@@ -30,6 +30,7 @@
 | [`packages/shared/`](packages/shared/) | 판단 스키마, 점수 합산, 배지 단계 결정 | 설계 중 |
 | [`packages/content/`](packages/content/) | 사용자에게 보이는 문구 | 설계 중 |
 | [`eval/`](eval/) | 판단 품질 평가 세트와 측정 결과 | 설계 중 |
+| [`tools/`](tools/) | 개발할 때만 쓰는 도구. **제품에 배포되지 않는다** | `content-gen` 준비 중 |
 | [`docs/`](docs/) | 제품 정의, Jev 정리, 컨벤션, 보안, AI 활용 기록, 제출 서류 | |
 | [`.github/`](.github/) | PR·이슈 양식, 규칙 검사 워크플로 | |
 
