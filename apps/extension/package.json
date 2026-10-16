@@ -1,0 +1,23 @@
+{
+  "name": "@genuearly/extension",
+  "description": "GenuEarly 크롬 확장 프로그램 (Manifest V3)",
+  "private": true,
+  "version": "0.0.0",
+  "type": "module",
+  "scripts": {
+    "dev": "wxt",
+    "build": "wxt build",
+    "zip": "wxt zip",
+    "compile": "tsc --noEmit",
+    "test": "wxt build && vitest run",
+    "test:watch": "vitest",
+    "postinstall": "wxt prepare",
+    "test:only": "vitest run"
+  },
+  "devDependencies": {
+    "typescript": "^5.9.3",
+    "vite": "^8.1.5",
+    "vitest": "^5.0.4",
+    "wxt": "^0.21.4"
+  }
+}

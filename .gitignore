@@ -19,13 +19,11 @@ eval/data/private/
 # 제출 서류 — 서명이 들어간 파일(개인정보 포함)은 커밋하지 않는다 (docs/submission/README.md)
 docs/submission/signed/
 
-# 확장 프로그램 빌드 산출물 — 빌드 도구 미정이라 흔한 이름을 미리 막아 둔다.
-# 도구가 정해지면 실제 출력 경로로 이 블록을 정리한다.
-dist/
-build/
-out/
+# 확장 프로그램 빌드 산출물 (WXT)
+.output/
+.wxt/
 *.crx
-web-ext-artifacts/
+*.zip
 
 # 의존성·캐시
 node_modules/

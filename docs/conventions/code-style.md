@@ -75,8 +75,25 @@
 
 ## 스택별 규칙
 
-- `apps/extension`: 미정 — [apps/extension/AGENT.md](../../apps/extension/AGENT.md)
-- `apps/proxy`: 미정 — [apps/proxy/AGENT.md](../../apps/proxy/AGENT.md)
-- `packages/shared`, `packages/content`: 미정
+### `apps/extension` — WXT + TypeScript
 
-> 스택이 정해지면 이 절에 포매터·린터와 실행 명령을 적고, CI에 연결한다.
+규칙은 [apps/extension/AGENT.md](../../apps/extension/AGENT.md)에 있다. 명령은 저장소 루트에서도 쓸 수 있다.
+
+| 할 일 | 명령 |
+| --- | --- |
+| 개발 | `npm run dev -w @genuearly/extension` |
+| 빌드 | `npm run build -w @genuearly/extension` |
+| 테스트 | `npm test -w @genuearly/extension` |
+| 타입 검사 | `npm run compile -w @genuearly/extension` |
+
+- **타입을 강제하지 않는다.** 평범한 JS를 `.ts` 파일에 써도 된다. 타입 오류는 빌드를 막지 않고 `npm run compile`에서만 보인다
+- `entrypoints/` 안에는 엔트리포인트만 둔다. CSS·헬퍼는 `assets/`, `components/`에 둔다
+- WXT의 auto-import(`defineContentScript`, `browser` 등)를 쓴다. 공식 문서 예제와 같은 형태를 유지하기 위해서다
+
+### 아직 정하지 않은 것
+
+- `apps/proxy`: **미정** — [apps/proxy/AGENT.md](../../apps/proxy/AGENT.md)
+- `packages/shared`, `packages/content`: 중계 서버 스택이 정해진 뒤에 맞춘다
+
+> **포매터·린터는 아직 없다.** 지금은 [.editorconfig](../../.editorconfig)만 적용된다.
+> 정하면 이 절에 명령을 적고 CI에 연결한다.

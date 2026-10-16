@@ -35,7 +35,7 @@
 | `storage` | 설정, 피드백 동의 여부, 판단 결과 캐시 | service worker가 종료돼도 남아야 한다 | 필요 |
 | `scripting` | ① ② 배지 주입 | 기사·목록 페이지에 UI를 넣는다 | 검토 중 — `content_scripts` 정적 선언으로 충분하면 쓰지 않는다 |
 | `activeTab` | ③ 선택 텍스트 검사 | 사용자가 메뉴를 누른 그 탭에만, 그 순간에만 접근한다 | 검토 중 |
-| `host_permissions` (포털·언론사 도메인) | ① ② | 그 사이트의 DOM을 읽어야 판단할 내용이 나온다 | 필요 — **도메인을 명시해서** 받는다 |
+| `host_permissions` (포털·언론사 도메인) | ① ② | 그 사이트의 DOM을 읽어야 판단할 내용이 나온다 | 필요 — **도메인을 명시해서** 받는다. 현재 `n.news.naver.com/article/*`, `v.daum.net/v/*` |
 | `notifications` | ④ 공유 직전 알림 | 페이지 안 알림으로 충분하면 쓰지 않는다 | 검토 중 |
 | `tabs` | — | 전체 탭의 URL과 제목을 읽을 수 있다. 필요 없다 | **쓰지 않는다** |
 | `<all_urls>` | — | 모든 사이트의 내용을 읽겠다는 뜻이다 | **쓰지 않는다** |
@@ -43,7 +43,14 @@
 | `cookies` | — | 쿠키를 읽을 이유가 없다 | **쓰지 않는다** |
 | `history` / `bookmarks` | — | 열람 기록을 보지 않는다 | **쓰지 않는다** |
 
-> **TODO: host_permissions에 넣을 도메인 목록 확정** — 네이버·다음 뉴스 경로를 먼저 정하고, 언론사 도메인을 어디까지 받을지 결정한다. 넓게 받고 나중에 줄이는 것보다 좁게 시작해 늘리는 쪽이 안전하다.
+**목록의 원본은 [`apps/extension/match-patterns.ts`](../../apps/extension/match-patterns.ts)다.** `host_permissions`와
+`content_scripts`의 `matches`가 그 상수를 함께 쓴다. **MV3에서 `matches`는 그 자체로 사이트 접근 권한이고
+설치 경고에도 뜬다.** `host_permissions`만 줄여도 소용없다. 두 곳을 따로 적으면 반드시 어긋난다.
+
+> **TODO: 언론사 도메인 확정** — 포털 기사 경로는 확인했다(네이버 기사 본문은 `news.naver.com`이 아니라
+> `n.news.naver.com/article/…`에 있다). 언론사 자체 도메인을 어디까지 받을지는 아직 미정이다.
+> 넓게 받고 나중에 줄이는 것보다 좁게 시작해 늘리는 쪽이 안전하다.
+> **TODO: 포털 목록 페이지 추가(GE-23)** — `news.naver.com/section/*`. 쓰는 기능이 생길 때 받는다.
 > **TODO: `optional_permissions`로 돌릴 수 있는 권한 검토** — 사용자가 그 기능을 쓸 때만 허용을 받는 방식.
 
 ### 원칙
