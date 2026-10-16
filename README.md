@@ -25,7 +25,7 @@
 
 | 디렉터리 | 내용 | 상태 |
 | --- | --- | --- |
-| [`apps/extension/`](apps/extension/) | 크롬 확장 프로그램 (Manifest V3) | 기술 스택 미정 |
+| [`apps/extension/`](apps/extension/) | 크롬 확장 프로그램 (Manifest V3) | WXT + TypeScript |
 | [`apps/proxy/`](apps/proxy/) | Jev 중계 서버. API 키를 들고 있는 유일한 곳 | 기술 스택 미정 |
 | [`packages/shared/`](packages/shared/) | 판단 스키마, 점수 합산, 배지 단계 결정 | 설계 중 |
 | [`packages/content/`](packages/content/) | 사용자에게 보이는 문구 | 설계 중 |
@@ -34,9 +34,23 @@
 | [`docs/`](docs/) | 제품 정의, Jev 정리, 컨벤션, 보안, AI 활용 기록, 제출 서류 | |
 | [`.github/`](.github/) | PR·이슈 양식, 규칙 검사 워크플로 | |
 
-> **기술 스택은 아직 정하지 않았다.** 언어, 패키지 매니저, 빌드·테스트 도구, 배포 방식 모두 미정이다.
+> **중계 서버의 기술 스택은 아직 정하지 않았다** (언어, 프레임워크, 배포 대상).
 > 정해지면 이 표와 [AGENT.md](AGENT.md)를 같은 PR에서 갱신한다.
-> 루트의 `package.json`은 커밋 메시지 검사 도구(commitlint, husky) 전용이고, 앱의 스택을 정한 것이 아니다.
+>
+> 확장 프로그램은 **WXT + TypeScript + npm**이다. 루트 `package.json`은 커밋 메시지 검사 도구와
+> npm 워크스페이스 연결만 맡고, 앱 의존성은 각 `apps/*`, `packages/*` 안에 둔다.
+
+### 확장 프로그램 실행
+
+```bash
+npm install                      # 저장소 루트에서 한 번
+npm run dev   -w @genuearly/extension   # 개발 모드 (변경하면 자동 반영)
+npm run build -w @genuearly/extension   # 빌드 → apps/extension/.output/chrome-mv3
+npm test      -w @genuearly/extension   # 테스트
+```
+
+빌드한 것을 크롬에 올리려면 `chrome://extensions` → 개발자 모드 켜기 → **압축해제된 확장 프로그램을 로드** →
+`apps/extension/.output/chrome-mv3` 폴더를 고른다.
 
 ## AI 역할 분담
 

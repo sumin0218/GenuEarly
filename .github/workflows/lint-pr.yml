@@ -52,3 +52,18 @@ jobs:
           BASE_REF: ${{ github.base_ref }}
           HEAD_REF: ${{ github.head_ref }}
         run: bash .github/scripts/validate-pr-source.sh "$BASE_REF" "$HEAD_REF"
+
+  extension:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 22
+          cache: npm
+      - name: 설치
+        run: npm ci
+      # 권한 규칙은 문서에만 적어 두면 지켜지지 않는다.
+      # 이 검사가 빌드된 manifest 를 읽어 금지 권한과 와일드카드 호스트를 막는다.
+      - name: 확장 프로그램 테스트 (빌드 포함)
+        run: npm test -w @genuearly/extension
