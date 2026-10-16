@@ -34,8 +34,23 @@ npm run compile # 타입 검사만 (빌드를 막지 않는다)
 
 ### 권한은 테스트가 지킨다
 
-[`tests/manifest.test.ts`](tests/manifest.test.ts)가 금지 권한, `<all_urls>`, 와일드카드 호스트를 막는다.
+[`tests/manifest.test.ts`](tests/manifest.test.ts)가 **빌드된 `.output/chrome-mv3/manifest.json`** 을 읽어
+금지 권한, `optional_permissions`, `<all_urls>`, 와일드카드 호스트, `content_scripts`와 `host_permissions`의
+불일치를 막는다. CI의 `Lint PR / extension` job 이 PR마다 이것을 돌린다.
+
+**`wxt.config.ts` 만 읽으면 안 된다.** `content_scripts`는 `entrypoints/*.ts` 에서 만들어져 config 객체에
+없기 때문에, config 만 검사하면 `matches` 를 `<all_urls>` 로 바꿔도 통과한다. MV3 에서 `content_scripts`
+의 `matches` 는 그 자체로 사이트 접근 권한이고 설치 경고에도 뜬다. 그래서 `npm test` 가 빌드를 먼저 돌린다.
+
 권한 표([../../docs/security/secure-coding.md](../../docs/security/secure-coding.md) 2절)를 고치면 이 테스트도 같이 본다.
+
+### 대상 페이지는 한 곳에 적는다
+
+[`match-patterns.ts`](match-patterns.ts) 가 원본이다. `wxt.config.ts` 의 `host_permissions` 와
+`entrypoints/*.ts` 의 `matches` 가 이 상수를 함께 쓴다. 두 곳에 따로 적으면 어긋난다.
+
+**네이버 기사 본문은 `news.naver.com` 이 아니라 `n.news.naver.com/article/…` 에 있다.**
+`news.naver.com` 에는 목록·섹션 페이지만 있다.
 
 ## 맡는 일
 

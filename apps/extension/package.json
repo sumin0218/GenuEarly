@@ -9,9 +9,10 @@
     "build": "wxt build",
     "zip": "wxt zip",
     "compile": "tsc --noEmit",
-    "test": "vitest run",
+    "test": "wxt build && vitest run",
     "test:watch": "vitest",
-    "postinstall": "wxt prepare"
+    "postinstall": "wxt prepare",
+    "test:only": "vitest run"
   },
   "devDependencies": {
     "typescript": "^5.9.3",
