@@ -32,20 +32,33 @@ Jev에 보내는 질문의 원본이다. 스택이 정해지지 않아 **언어�
 
 | 필드 | 뜻 |
 | --- | --- |
-| `version` | 질문 세트의 버전. 문구·보기·순서를 고치면 올리고, 로그와 eval 결과에 함께 남긴다 |
+| `version` | 질문 세트의 버전. 문구·보기·순서를 고치면 올리고, 로그와 eval 결과에 함께 남긴다. 머지 전 초안에는 버전을 붙이지 않는다 |
 | `model` | 이 질문을 맞춘 Jev 버전. [../../docs/jev.md](../../docs/jev.md) 6절의 버전 고정 규칙을 따른다 |
-| `state_fields` | `state`에 넣는 필드와 그 안에 들어갈 글. 기사 글은 **여기에만** 들어간다 |
+| `state_fields` | `state`에 넣을 수 있는 필드와 그 안에 들어갈 글. 기사 글은 **여기에만** 들어간다 |
 | `common_criteria` | 모든 질문의 `criteria` 뒤에 붙이는 공통 문장. 적대적 입력 대응이다 ([../../docs/jev.md](../../docs/jev.md) 3절 ⑥) |
-| `request_groups` | 요청을 나누는 단위. 그룹마다 `state`에 넣는 필드가 정해져 있고, 같은 그룹의 질문만 한 요청에 묶는다 (아래) |
-| `request_groups.article.min_body_chars` | 본문이 이 글자 수보다 짧으면 `article` 요청을 보내지 않고 이 그룹의 항목을 모두 ⚪로 둔다. 값은 eval 후에 정한다 (`null`은 미정) |
+| `request_groups` | 요청을 나누는 단위. **요청의 `state`에 넣는 필드는 그룹의 `state_fields`만 정한다.** 같은 그룹의 질문만 한 요청에 묶는다 (아래) |
+| `request_groups.headline_body.min_body_chars` | 기능별 본문 최소 글자 수. 본문이 이보다 짧으면 `headline_body` 요청을 보내지 않는다. ① 포토·단신 기사와 ③ 한두 문장 선택은 길이가 달라 따로 둔다. 값은 eval 후에 정한다 (`null`은 미정) |
+| `request_groups.headline_body.short_body_fallback` | 본문이 짧아 `headline_body` 요청을 건너뛸 때, 항목의 `request_group`에서 이 기능(`portal_list`)의 그룹을 대신 쓴다 |
 | `items[].unit` | `article`은 기사 하나에 질문 하나, `sentence`는 문장마다 요청 하나(질문은 `questions` 수만큼) |
-| `items[].request_group` | 기능별로 이 질문이 들어갈 요청 그룹. 키가 쓰는 기능이다: `article` ① 기사 자동 검사, `portal_list` ② 포털 목록, `selection` ③ 선택 텍스트. 키가 없는 기능에서는 이 질문을 보내지 않는다 |
-| `items[].state_fields` | 이 질문이 보는 필드 |
+| `items[].request_group` | 기능별로 이 질문이 들어갈 요청 그룹. 키가 쓰는 기능이다: `page` ① 기사 자동 검사, `portal_list` ② 포털 목록, `selection` ③ 선택 텍스트. 키가 없는 기능에서는 이 질문을 보내지 않는다 |
+| `items[].basis_fields` | 이 질문이 판단 근거로 삼는 필드. `instructions`가 이름으로 가리키는 필드다. `state` 구성에는 쓰지 않는다 |
 | `items[].options` | Choice의 보기. **배열 순서가 보내는 순서다** |
 | `items[].options[].signal` | 보기의 방향. `caution` 주의, `neutral` 중간, `clear` 안심. **점수 합산과 eval은 순서가 아니라 이 값을 읽는다** |
 | `items[].grades` | Score의 등급. 낮은 등급부터 적는다 |
-| `items[].questions`, `combine` | 판단 하나를 Jev 질문 여러 개로 나눈 항목. 질문별 확률을 `combine`의 식대로 코드가 합친다 |
-| `items[].undetermined_rule` | `combine` 전에 적용하는 ⚪ 규칙. **질문 중 하나라도 확률이 0.5 근처(보류 구간)면 그 문장은 ⚪**이고 `combine`을 계산하지 않는다. 곱한 값은 0.5에서의 거리라는 뜻을 잃기 때문이다 (예: 둘 다 0.5면 곱이 0.25라 확신한 것처럼 보인다). 보류 구간의 폭은 eval 후에 정한다 |
+| `items[].questions` | 판단 하나를 Jev 질문 여러 개로 나눈 항목의 질문들 |
+| `items[].combine` | 질문별 확률을 합치는 방법. `op`가 연산이고 `formula`는 사람이 읽는 설명이다. `and_not`은 `P(a = 예) × (1 − P(b = 예))`다 |
+| `items[].undetermined_band` | 확률이 이 구간 안이면 그 질문은 "모름"이다. `[0.4, 0.6]` 같은 값을 eval 후에 넣는다 (`null`은 미정) |
+
+### `combine`과 ⚪ — 판정 순서
+
+곱한 값은 "0.5에서의 거리"라는 확신도의 뜻을 잃는다. 둘 다 0.5(모름)면 곱이 0.25라 확신한 것처럼 보인다.
+그래서 `combine` 전에 아래 순서로 판정한다. `and_not` 기준이다.
+
+1. `a`가 "모름" 밖의 아니오이거나 `b`가 "모름" 밖의 예면 → 결과는 0이다. 다른 질문은 보지 않는다 (의견 문장, 실명 출처가 있는 문장)
+2. 그 밖에 하나라도 "모름"이면 → 그 문장은 ⚪
+3. 둘 다 "모름" 밖이면 → `combine` 값을 쓴다
+
+이 순서는 `op`에 딸린 규칙이라 코드가 `op`별로 구현한다. **`combine`과 `undetermined_band`의 값(질문 id, 구간)은 JSON에서 읽고, 판정 순서만 코드에 둔다.**
 
 ### 요청을 나누는 방법
 
@@ -55,14 +68,16 @@ Jev에 보내는 질문의 원본이다. 스택이 정해지지 않아 **언어�
 | 그룹 | `state` | 들어가는 질문 |
 | --- | --- | --- |
 | `headline_only` | `headline` | `clickbait_headline`, ② 포털 목록의 `spread_inducement` |
-| `article` | `headline`, `body` | 제목과 본문을 보는 나머지 항목. 본문이 `min_body_chars`보다 짧으면 이 그룹 전체가 ⚪ |
+| `headline_body` | `headline`, `body` | 제목과 본문을 보는 나머지 항목. 본문이 짧으면 건너뛴다 (아래) |
 | `sentence` | `sentence` | `unverifiable_claim`의 두 질문. 문장마다 한 요청 |
 
 - 제목만 보는 질문은 본문과 섞지 않는다. 본문 속 인젝션과 context rot이 제목 판단에 닿지 않게 하기 위해서다
-- `article` 그룹에는 본문만 보는 질문(`source_citation`, `ai_style_signal`)도 있다. 이 질문들은 `instructions`에서 `body` 필드를 이름으로 가리키고, 공통 `criteria`가 판단 근거를 가리킨 필드로 한정한다
+- `headline_body` 그룹에는 본문만 보는 질문(`source_citation`, `ai_style_signal`)도 있다. 이 질문들은 `instructions`에서 `body` 필드를 이름으로 가리키고, 공통 `criteria`가 판단 근거를 가리킨 필드로 한정한다
 - 기능마다 어느 그룹으로 갈지는 각 항목의 `request_group`에 적혀 있다. 확장 프로그램과 중계 서버는 이 값만 읽고, 예외를 코드에 따로 적지 않는다
-- 본문이 짧은 기사(포토·영상 기사, 단신)는 `article` 그룹 전체를 ⚪로 두고 `headline_only` 질문만 보낸다. 짧은 본문에서는 `source_citation`이 구조적으로 "출처 부재"가 되고 `ai_style_signal`은 판단할 글이 부족하다
-- ③ 선택 텍스트는 고른 글을 `body`에 넣는다. 고른 글이 짧으면 `article` 그룹이 ⚪가 되는데, ③에서 ⚪가 자주 나오는 것은 정상이다 ([../../docs/product.md](../../docs/product.md) 3절 ③). 고른 글은 보통 한두 문장이라 출처가 그 밖에 있으므로 `source_citation`은 보내지 않는다. ③의 출처 신호는 `unverifiable_claim`이 맡는다
+- **본문이 짧으면** (포토·영상 기사, 단신) `headline_body` 요청을 보내지 않는다. 짧은 본문에서는 `source_citation`이 구조적으로 "출처 부재"가 되고 `ai_style_signal`은 판단할 글이 부족하다
+  - 그 그룹의 항목 중 `request_group`에 `portal_list` 값이 있는 것(`spread_inducement`)은 그 그룹(`headline_only`)으로 보낸다. 같은 기사의 판단이 ② 목록과 ① 기사 화면에서 달라지지 않게 하기 위해서다
+  - 나머지 항목은 ⚪다
+- ③ 선택 텍스트는 고른 글을 `body`에 넣는다. 고른 글은 보통 한두 문장이라 `min_body_chars.selection`을 ①과 따로 둔다. 같은 이유로 출처가 고른 글 밖에 있기 쉬워 `source_citation`은 보내지 않는다. ③의 출처 신호는 `unverifiable_claim`이 맡는다
 
 ### 보기 순서
 
