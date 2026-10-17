@@ -15,15 +15,38 @@
 
 ## 여기 들어갈 것
 
-| 내용 | 근거 문서 |
+| 내용 | 어디에 | 근거 문서 |
+| --- | --- | --- |
+| 판단 항목 이름과 질문 유형 | [judgment-items.json](judgment-items.json) | [../../docs/product.md](../../docs/product.md) 4절 |
+| 각 항목의 `instructions`와 `criteria` | [judgment-items.json](judgment-items.json) | [../../docs/jev.md](../../docs/jev.md) 3절 |
+| Choice의 보기와 **그 순서**, Score의 등급 | [judgment-items.json](judgment-items.json) | [../../docs/jev.md](../../docs/jev.md) 3절 ⑧ |
+| 항목별 가중치 | TODO — eval 측정 후 | |
+| 확신도 임계값 | TODO — eval 측정 후 | |
+| 점수 합산과 배지 단계 경계 | TODO — eval 측정 후 | |
+| 출처 도메인 목록과 대조 규칙 | TODO | |
+
+## 판단 항목 정의 — `judgment-items.json`
+
+Jev에 보내는 질문의 원본이다. 스택이 정해지지 않아 **언어에 묶이지 않는 JSON**으로 두었다.
+확장 프로그램과 중계 서버는 이 파일을 읽어 질문을 만든다. 코드에 같은 문장을 다시 적지 않는다.
+
+| 필드 | 뜻 |
 | --- | --- |
-| 판단 항목 이름과 질문 유형 | [../../docs/product.md](../../docs/product.md) 4절 |
-| 각 항목의 `instructions`와 `criteria` | [../../docs/jev.md](../../docs/jev.md) 3절 |
-| Choice의 보기와 **그 순서** | [../../docs/jev.md](../../docs/jev.md) 3절 ⑧ |
-| 항목별 가중치 | TODO — eval 측정 후 |
-| 확신도 임계값 | TODO — eval 측정 후 |
-| 점수 합산과 배지 단계 경계 | TODO — eval 측정 후 |
-| 출처 도메인 목록과 대조 규칙 | TODO |
+| `version` | 질문 세트의 버전. 문구·보기·순서를 고치면 올리고, 로그와 eval 결과에 함께 남긴다 |
+| `model` | 이 질문을 맞춘 Jev 버전. [../../docs/jev.md](../../docs/jev.md) 6절의 버전 고정 규칙을 따른다 |
+| `state_fields` | `state`에 넣는 필드와 그 안에 들어갈 글. 기사 글은 **여기에만** 들어간다 |
+| `common_criteria` | 모든 항목의 `criteria` 뒤에 붙이는 공통 문장. 적대적 입력 대응이다 ([../../docs/jev.md](../../docs/jev.md) 3절 ⑥) |
+| `items[].unit` | `article`은 기사 하나에 질문 하나, `sentence`는 문장마다 질문 하나 |
+| `items[].features` | 쓰는 기능. `article` ① 기사 자동 검사, `portal_list` ② 포털 목록, `selection` ③ 선택 텍스트 |
+| `items[].state_fields` | 이 질문이 보는 필드. 요청의 `state`는 묶인 질문들이 보는 필드의 합집합으로 만든다 |
+| `items[].options` | Choice의 보기. **배열 순서가 보내는 순서다** |
+| `items[].grades` | Score의 등급. 낮은 등급부터 적는다 |
+
+- `instructions`와 `criteria`에 기사 글을 이어 붙이지 않는다. 글은 `state`에만 넣는다
+- Choice 보기는 **주의 신호 쪽을 앞에** 둔다. 유리한 보기를 맨 앞에 두지 않는다는 규칙이다 ([../../docs/jev.md](../../docs/jev.md) 3절 ⑧)
+- `criteria` 배열은 줄바꿈으로 이어 하나의 문자열로 보낸다. 항목의 `criteria` 다음에 `common_criteria`를 붙인다
+- ② 포털 목록에서는 `state`에 `headline`만 넣는다. ③ 선택 텍스트는 고른 글을 `body`에 넣는다
+- 보기의 `key`는 코드와 로그가 쓰는 이름이다. 보기 문구를 고쳐도 `key`는 그대로 둔다
 
 ## 규칙
 

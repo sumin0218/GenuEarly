@@ -82,20 +82,25 @@
 > **TODO: 피드백으로 정확히 무엇을 보낼지 확정** — 기사 URL, 표시된 배지, 사용자가 맞다고 본 배지, 확장 프로그램 버전까지로 생각하고 있다. 확정되면 여기와 [docs/security/secure-coding.md](security/secure-coding.md)에 함께 적는다.
 > **TODO: 받은 피드백을 어디에 쌓을지** — 중계 서버 기술 스택과 함께 정한다.
 
-## 4. 판단 항목 (초안)
+## 4. 판단 항목
 
-**초안이다.** 확정은 eval로 측정한 뒤에 한다. 유형별 설명은 [docs/jev.md](jev.md) 2절에 있다.
+**질문은 확정했다 (질문 세트 v1.0.0).** 각 항목의 `instructions`, `criteria`, 보기와 그 순서의 원본은 [packages/shared/judgment-items.json](../packages/shared/judgment-items.json)이다.
+가중치, 배지 경계, 확신도 임계값은 아직이다. eval로 측정한 뒤에 정한다. 유형별 설명은 [docs/jev.md](jev.md) 2절에 있다.
 
-| 항목 | 유형 | 묻는 것 | 쓰는 기능 |
-| --- | --- | --- | --- |
-| `source_citation` | Choice | 주장의 출처(기관·인물·문서)가 본문에 적혀 있는가 | ① ③ |
-| `headline_body_match` | Choice | 제목이 본문 내용과 맞는가 | ① |
-| `clickbait_headline` | Choice | 제목이 내용을 숨기거나 과장해 클릭을 유도하는가 | ① ② |
-| `spread_inducement` | Choice | 퍼뜨리기를 재촉하는 표현이 있는가 ("꼭 공유하세요") | ① ② |
-| `emotional_language` | Score | 감정을 끌어올리는 표현이 얼마나 강한가 | ① ③ |
-| `ai_style_signal` | Score | 기계가 쓴 글에서 흔한 문체 특징이 얼마나 보이는가 | ① ③ |
-| `unverifiable_claim` | Noul | 이 문장은 확인할 수 없는 주장인가 (**문장 단위**) | ① ③ |
-| 출처 도메인 | **코드** | 알려진 언론사 도메인인가, 알려진 가짜 뉴스 도메인인가 | ① ② |
+| 항목 | 유형 | 묻는 것 | 답 (Jev에 보내는 순서) | 보는 필드 | 쓰는 기능 |
+| --- | --- | --- | --- | --- | --- |
+| `source_citation` | Choice | 본문이 주장의 출처를 어떤 방식으로 밝히는가 | 출처 표현 부재 / 이름이 빠진 출처만 등장 / 특정된 출처 등장 | `body` | ① ③ |
+| `headline_body_match` | Choice | 제목의 핵심 내용과 본문 내용이 어떤 관계인가 | 본문과 어긋남 / 본문 일부만 반영 / 본문과 일치 | `headline` `body` | ① |
+| `clickbait_headline` | Choice | 제목이 내용을 감추거나 부풀려 클릭을 끌어내는 방식으로 쓰였는가 | 낚시성 표현 뚜렷함 / 낚시성 표현 일부 / 사실 전달형 | `headline` | ① ② |
+| `spread_inducement` | Choice | 글이 독자에게 퍼뜨리라고 재촉하는가 ("꼭 공유하세요") | 확산 재촉 / 확산 암시 / 확산 표현 부재 | `headline` `body` | ① ② |
+| `emotional_language` | Score | 분노·공포·혐오·불안을 끌어올리는 표현을 얼마나 강하게 쓰는가 | 0 담담함 ~ 3 매우 강함 | `headline` `body` | ① ③ |
+| `ai_style_signal` | Score | 기계가 생성한 글에서 흔한 문체 특징이 얼마나 뚜렷한가 | 0 드묾 ~ 3 매우 뚜렷함 | `body` | ① ③ |
+| `unverifiable_claim` | Noul | 이 문장이 사실을 단정하면서 근거를 생략하거나 이름이 빠진 출처에만 기대는가 (**문장 단위**) | 예일 확률 | `sentence` | ① ③ |
+| 출처 도메인 | **코드** | 알려진 언론사 도메인인가, 알려진 가짜 뉴스 도메인인가 | — | — | ① ② |
+
+- ② 포털 목록에서는 `headline`만 보낸다. `spread_inducement`도 제목만 보고 판단한다.
+- ③ 선택 텍스트는 고른 글을 `body`에 넣는다. `unverifiable_claim`은 그 글을 문장으로 나눠 보낸다.
+- Choice 보기는 **주의 신호 쪽이 앞**이다. "안심" 쪽 보기를 맨 앞에 두지 않는다는 [docs/jev.md](jev.md) 3절 ⑧의 규칙을 따른 것이다. 순서를 바꿔도 답이 같은지는 eval에서 확인한다.
 
 ### 원칙
 
