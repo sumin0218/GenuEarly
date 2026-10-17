@@ -36,16 +36,16 @@ Jev에 보내는 질문의 원본이다. 스택이 정해지지 않아 **언어�
 | `model` | 이 질문을 맞춘 Jev 버전. [../../docs/jev.md](../../docs/jev.md) 6절의 버전 고정 규칙을 따른다 |
 | `state_fields` | `state`에 넣는 필드와 그 안에 들어갈 글. 기사 글은 **여기에만** 들어간다 |
 | `common_criteria` | 모든 질문의 `criteria` 뒤에 붙이는 공통 문장. 적대적 입력 대응이다 ([../../docs/jev.md](../../docs/jev.md) 3절 ⑥) |
-| `request_groups` | 요청을 나누는 단위. 같은 그룹의 질문만 한 요청에 묶는다 (아래) |
-| `items[].unit` | `article`은 기사 하나에 질문 하나, `sentence`는 문장마다 질문 하나 |
-| `items[].features` | 쓰는 기능. `article` ① 기사 자동 검사, `portal_list` ② 포털 목록, `selection` ③ 선택 텍스트 |
-| `items[].request_group` | 이 질문이 들어갈 요청 그룹 |
+| `request_groups` | 요청을 나누는 단위. 그룹마다 `state`에 넣는 필드가 정해져 있고, 같은 그룹의 질문만 한 요청에 묶는다 (아래) |
+| `request_groups.article.min_body_chars` | 본문이 이 글자 수보다 짧으면 `article` 요청을 보내지 않고 이 그룹의 항목을 모두 ⚪로 둔다. 값은 eval 후에 정한다 (`null`은 미정) |
+| `items[].unit` | `article`은 기사 하나에 질문 하나, `sentence`는 문장마다 요청 하나(질문은 `questions` 수만큼) |
+| `items[].request_group` | 기능별로 이 질문이 들어갈 요청 그룹. 키가 쓰는 기능이다: `article` ① 기사 자동 검사, `portal_list` ② 포털 목록, `selection` ③ 선택 텍스트. 키가 없는 기능에서는 이 질문을 보내지 않는다 |
 | `items[].state_fields` | 이 질문이 보는 필드 |
 | `items[].options` | Choice의 보기. **배열 순서가 보내는 순서다** |
 | `items[].options[].signal` | 보기의 방향. `caution` 주의, `neutral` 중간, `clear` 안심. **점수 합산과 eval은 순서가 아니라 이 값을 읽는다** |
 | `items[].grades` | Score의 등급. 낮은 등급부터 적는다 |
 | `items[].questions`, `combine` | 판단 하나를 Jev 질문 여러 개로 나눈 항목. 질문별 확률을 `combine`의 식대로 코드가 합친다 |
-| `items[].min_body_chars` | 본문이 이 글자 수보다 짧으면 질문을 보내지 않고 이 항목을 ⚪로 둔다. 값은 eval 후에 정한다 (`null`은 미정) |
+| `items[].undetermined_rule` | `combine` 전에 적용하는 ⚪ 규칙. **질문 중 하나라도 확률이 0.5 근처(보류 구간)면 그 문장은 ⚪**이고 `combine`을 계산하지 않는다. 곱한 값은 0.5에서의 거리라는 뜻을 잃기 때문이다 (예: 둘 다 0.5면 곱이 0.25라 확신한 것처럼 보인다). 보류 구간의 폭은 eval 후에 정한다 |
 
 ### 요청을 나누는 방법
 
@@ -54,13 +54,15 @@ Jev에 보내는 질문의 원본이다. 스택이 정해지지 않아 **언어�
 
 | 그룹 | `state` | 들어가는 질문 |
 | --- | --- | --- |
-| `headline_only` | `headline` | `clickbait_headline`. ② 포털 목록의 `spread_inducement`도 이 모양으로 보낸다 |
-| `article` | `headline`, `body` | 제목과 본문을 보는 나머지 항목 |
+| `headline_only` | `headline` | `clickbait_headline`, ② 포털 목록의 `spread_inducement` |
+| `article` | `headline`, `body` | 제목과 본문을 보는 나머지 항목. 본문이 `min_body_chars`보다 짧으면 이 그룹 전체가 ⚪ |
 | `sentence` | `sentence` | `unverifiable_claim`의 두 질문. 문장마다 한 요청 |
 
 - 제목만 보는 질문은 본문과 섞지 않는다. 본문 속 인젝션과 context rot이 제목 판단에 닿지 않게 하기 위해서다
 - `article` 그룹에는 본문만 보는 질문(`source_citation`, `ai_style_signal`)도 있다. 이 질문들은 `instructions`에서 `body` 필드를 이름으로 가리키고, 공통 `criteria`가 판단 근거를 가리킨 필드로 한정한다
-- ③ 선택 텍스트는 고른 글을 `body`에 넣는다. 고른 글은 보통 한두 문장이라 출처가 그 밖에 있으므로 `source_citation`은 보내지 않는다. ③의 출처 신호는 `unverifiable_claim`이 맡는다
+- 기능마다 어느 그룹으로 갈지는 각 항목의 `request_group`에 적혀 있다. 확장 프로그램과 중계 서버는 이 값만 읽고, 예외를 코드에 따로 적지 않는다
+- 본문이 짧은 기사(포토·영상 기사, 단신)는 `article` 그룹 전체를 ⚪로 두고 `headline_only` 질문만 보낸다. 짧은 본문에서는 `source_citation`이 구조적으로 "출처 부재"가 되고 `ai_style_signal`은 판단할 글이 부족하다
+- ③ 선택 텍스트는 고른 글을 `body`에 넣는다. 고른 글이 짧으면 `article` 그룹이 ⚪가 되는데, ③에서 ⚪가 자주 나오는 것은 정상이다 ([../../docs/product.md](../../docs/product.md) 3절 ③). 고른 글은 보통 한두 문장이라 출처가 그 밖에 있으므로 `source_citation`은 보내지 않는다. ③의 출처 신호는 `unverifiable_claim`이 맡는다
 
 ### 보기 순서
 
