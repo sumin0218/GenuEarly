@@ -92,7 +92,7 @@
 
 ### 아직 정하지 않은 것
 
-- `apps/proxy`: **미정** — [apps/proxy/AGENT.md](../../apps/proxy/AGENT.md)
+- `apps/proxy`: **Cloudflare Workers + TypeScript** — [apps/proxy/AGENT.md](../../apps/proxy/AGENT.md)
 - `packages/shared`, `packages/content`: 중계 서버 스택이 정해진 뒤에 맞춘다
 
 > **포매터·린터는 아직 없다.** 지금은 [.editorconfig](../../.editorconfig)만 적용된다.

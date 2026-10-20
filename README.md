@@ -26,7 +26,7 @@
 | 디렉터리 | 내용 | 상태 |
 | --- | --- | --- |
 | [`apps/extension/`](apps/extension/) | 크롬 확장 프로그램 (Manifest V3) | WXT + TypeScript |
-| [`apps/proxy/`](apps/proxy/) | Jev 중계 서버. API 키를 들고 있는 유일한 곳 | 기술 스택 미정 |
+| [`apps/proxy/`](apps/proxy/) | Jev 중계 서버. API 키를 들고 있는 유일한 곳 | Cloudflare Workers + TypeScript |
 | [`packages/shared/`](packages/shared/) | 판단 스키마, 점수 합산, 배지 단계 결정 | 설계 중 |
 | [`packages/content/`](packages/content/) | 사용자에게 보이는 문구 | 설계 중 |
 | [`eval/`](eval/) | 판단 품질 평가 세트와 측정 결과 | 설계 중 |

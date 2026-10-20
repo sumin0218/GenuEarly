@@ -67,3 +67,19 @@ jobs:
       # 이 검사가 빌드된 manifest 를 읽어 금지 권한과 와일드카드 호스트를 막는다.
       - name: 확장 프로그램 테스트 (빌드 포함)
         run: npm test -w @genuearly/extension
+
+  proxy:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 22
+          cache: npm
+      - name: 설치
+        run: npm ci
+      # 중계 서버는 키를 가진 유일한 곳이다. 출처 검증과 CORS 규칙이 살아 있는지 본다.
+      - name: 중계 서버 테스트
+        run: npm test -w @genuearly/proxy
+      - name: 타입 검사
+        run: npm run compile -w @genuearly/proxy

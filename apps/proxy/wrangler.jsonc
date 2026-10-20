@@ -1,0 +1,29 @@
+{
+  // Cloudflare Workers 설정. https://developers.cloudflare.com/workers/wrangler/configuration/
+  //
+  // 이 파일에 키를 적지 않는다. 키는 secret 으로 넣는다:
+  //   npx wrangler secret put JEV_API_KEY
+  // 로컬 개발은 .dev.vars 를 쓴다 (커밋되지 않는다).
+  "name": "genuearly-proxy",
+  "main": "src/index.ts",
+  "compatibility_date": "2026-10-20",
+
+  "observability": { "enabled": true },
+
+  // 선언해 두면 wrangler 가 배포 전에 빠진 secret 을 알려 준다.
+  "secrets": {
+    "required": ["JEV_API_KEY"]
+  },
+
+  // 키가 아닌 설정값. 여기 들어간 것은 공개돼도 된다.
+  "vars": {
+    // ChatKHU API Gateway. docs/jev.md 6-1절
+    "JEV_API_BASE_URL": "https://factchat-cloud.mindlogic.ai/v1/gateway",
+    // 별칭이 아니라 버전을 고정한다. packages/shared/judgment-items.json 의 model 과 맞춘다.
+    "JEV_MODEL": "jev-1.13.0",
+    // Jev 한 번 호출을 기다리는 최대 시간(ms). 넘으면 판단 보류로 돌려준다.
+    "JEV_TIMEOUT_MS": "8000",
+    // 요청 본문 크기 상한(바이트).
+    "MAX_REQUEST_BYTES": "65536"
+  }
+}
