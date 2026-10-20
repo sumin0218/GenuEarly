@@ -53,6 +53,7 @@ docs/              제품 정의, Jev 정리, 컨벤션, 보안, AI 활용 기�
 | 하려는 일 | 읽을 것 |
 | --- | --- |
 | 모든 코드 작업 (필수) | [docs/security/secure-coding.md](docs/security/secure-coding.md) |
+| 기능 구현 (필수) | [docs/requirements.md](docs/requirements.md) — 화면 동작과 상태 |
 | 판단 기준·프롬프트·점수 변경 | [docs/jev.md](docs/jev.md), [docs/product.md](docs/product.md) |
 | 사용자에게 보이는 문구 작성 | [docs/product.md](docs/product.md) |
 | 코드 스타일·네이밍 | [docs/conventions/code-style.md](docs/conventions/code-style.md) |

@@ -19,6 +19,9 @@ eval/data/private/
 # 제출 서류 — 서명이 들어간 파일(개인정보 포함)은 커밋하지 않는다 (docs/submission/README.md)
 docs/submission/signed/
 
+# Cloudflare Workers 로컬 상태 (miniflare)
+.wrangler/
+
 # 확장 프로그램 빌드 산출물 (WXT)
 .output/
 .wxt/
