@@ -323,4 +323,4 @@ apps/proxy      ──▶  judgment-items.json (검증)
 | 네이버·다음 선택자 | GE-22, GE-23 |
 | 캐시 용량 상한 | 실제 사용량을 보고 |
 | 피드백 저장소 | GE-26 |
-| 런타임 Jev 경로를 TypeSafe 직접으로 바꿀지 | **다시 열렸다.** 초당 2건이 ①에도 걸린다 ([requirements.md](requirements.md) 8-1절). 이용 조건과 함께 정한다 (GE-11) |
+| 런타임 Jev 경로를 TypeSafe 직접으로 바꿀지 | **지연은 근거가 아니다** — 기사 하나가 0.66초다. 남은 것은 분당 120건 천장과 이용 조건이다 ([requirements.md](requirements.md) 8-1절, GE-11) |
