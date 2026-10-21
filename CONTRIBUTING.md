@@ -82,7 +82,7 @@ bash .github/scripts/validate-branch-name.sh "$(git branch --show-current)"
 | `release/vX.Y.Z` → `develop` | Squash merge |
 
 - **리뷰**: 팀원 1명 이상의 승인이 필요하다. 코드 오너 경로는 코드 오너 승인도 필요하다 ([CODEOWNERS](.github/CODEOWNERS)).
-- **필수 검사**: `Lint PR / pr-title`, `Lint PR / branch-name`, `Lint PR / pr-source`, `Lint PR / extension`.
+- **필수 검사**: `Lint PR / pr-title`, `Lint PR / branch-name`, `Lint PR / pr-source`, `Lint PR / extension`, `Lint PR / proxy`.
   - `extension`은 확장 프로그램을 빌드하고 **빌드된 `manifest.json`의 권한을 검사한다.** 금지 권한, `<all_urls>`, 와일드카드 호스트가 들어가면 여기서 막힌다.
 - **템플릿을 비우지 않는다.** [PR 템플릿](.github/PULL_REQUEST_TEMPLATE.md)의 보안 체크리스트, 권한 변경 사유, eval 전후 수치, AI 활용 기록은 해당 없으면 "해당 없음"이라고 적는다.
 - **권한을 늘리는 PR**은 본문에 "이 권한 없이는 안 되는 이유"를 적는다. 이유가 비어 있으면 머지하지 않는다.
