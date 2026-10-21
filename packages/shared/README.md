@@ -60,13 +60,23 @@ Jev에 보내는 질문의 원본이다. 스택이 정해지지 않아 **언어�
 
 | 유형 | `criteria` | 답 |
 | --- | --- | --- |
-| `choice` | **객체** `{보기이름: 설명}` (1~255개) | `choice`에 보기 이름, `probabilities`에 보기별 확률 |
-| `score` | **배열** (1~10개). 자리가 곧 점수, 낮은 등급부터 | `score`에 0~1 값, `legend`에 등급 설명 |
-| `noul` | **객체, 키는 `true`와 `false`뿐** | `noul`에 참/거짓, `probabilities`에 확률 |
+| `choice` | **객체** `{보기이름: 설명}` (1~255개) | `choice` 보기 이름, `probabilities`, `confidence` |
+| `score` | **배열** (1~10개). 자리가 곧 점수, 낮은 등급부터 | `score` 숫자, `legend`, `probabilities`, `confidence` |
+| `noul` | **객체, 키는 `true`와 `false`뿐** | `noul` 하나. **`confidence`도 `probabilities`도 없다** |
 
 - Choice 보기 설명은 `criteria` 안에 있다. **보기별 판별 기준을 그 설명에 함께 적고**, 보기를 가리지 않는 일반 규칙만 `instructions`에 둔다
 - **객체 키의 순서가 보내는 순서다.** JSON 객체의 키 순서는 `JSON.parse`와 `JSON.stringify`를 거쳐도 유지된다
 - `instructions`는 문자열·객체·배열을 다 받지만 우리는 문자열로 통일한다
+
+#### 답의 범위 — 2026-10-21 실제 호출로 확인
+
+문서에 적혀 있지 않아 직접 재 보았다. **둘 다 0~1이 아니다.**
+
+- **Score는 0부터 (등급 수 − 1)까지다.** `legend`의 키가 `"0"`부터 시작하고, `score`는 등급 번호를 확률로 가중평균한 값이다.
+  등급 4개짜리 `emotional_language`가 `probabilities {0: 0, 1: 0.32, 2: 0.60, 3: 0.08}`에 `score: 1.75`를 돌려줬다 (가중평균 1.76).
+  **점수 합산 코드는 등급 수가 다른 항목을 섞기 전에 `(등급 수 − 1)`로 나눠 맞춰야 한다** (GE-15).
+- **Noul은 "예"일 확률 하나뿐이다.** `{"type": "noul", "noul": 0.63}` — `confidence`도 `probabilities`도 오지 않는다.
+  `combine`의 `P(a = 예)`가 곧 이 값이고, `undetermined_band`도 이 값에 건다. Choice·Score처럼 `confidence`를 따로 볼 수 없다
 
 ### `combine`과 ⚪ — 판정 순서
 
@@ -124,7 +134,7 @@ Jev에 보내는 질문의 원본이다. 스택이 정해지지 않아 **언어�
 
 어떤 입력에서 ⚪가 나오는지는 전부 여기서 결정된다.
 
-- 확신도가 임계값 아래일 때
+- 확신도가 임계값 아래일 때 (Choice·Score). **Noul은 `confidence`가 없어 `undetermined_band`가 그 자리를 맡는다**
 - 응답이 우리가 정한 보기 밖의 값일 때
 - 호출이 실패했을 때 (실패 사실은 호출한 쪽이 알려 준다)
 
