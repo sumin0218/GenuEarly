@@ -10,6 +10,10 @@
 import { describe, expect, it } from 'vitest'
 import worker, { type Env } from '../src/index'
 
+// @types/node 를 넣지 않는다. 넣으면 src/ 에서도 Node API 가 있는 것처럼 보여
+// Workers 타이핑이 헐거워진다. 이 파일에서 쓰는 것만 여기서 선언한다.
+declare const process: { env: Record<string, string | undefined> }
+
 const KEY = process.env.CHATKHU_API_KEY
 const BASE = process.env.CHATKHU_API_BASE_URL
 
