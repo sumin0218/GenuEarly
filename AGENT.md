@@ -20,7 +20,7 @@ AI 코딩 도구(Claude Code, Codex, Cursor 등)와 사람이 공통으로 읽�
 모노레포. 현재 상태·일정은 [README.md](README.md)가 진입점이다.
 
 ```
-apps/extension/    크롬 확장 프로그램 (MV3) — 기술 스택 미정
+apps/extension/    크롬 확장 프로그램 (MV3) — WXT + TypeScript
 apps/proxy/        Jev 중계 서버. API 키를 들고 있는 유일한 곳 — Cloudflare Workers
 packages/shared/   판단 스키마, 점수 합산, 배지 단계 결정
 packages/content/  사용자에게 보이는 문구

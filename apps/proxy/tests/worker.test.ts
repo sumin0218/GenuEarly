@@ -73,4 +73,19 @@ describe('그 밖', () => {
     const res = await call('/v1/judge', { method: 'GET', headers: { Origin: EXT_ORIGIN } })
     expect(res.status).toBe(405)
   })
+
+  it('허용 origin 의 오류 응답에도 CORS 헤더가 있다', async () => {
+    // 없으면 브라우저가 응답을 막아서 확장은 상태 코드 대신 Failed to fetch 만 받는다.
+    for (const init of [
+      { method: 'GET', headers: { Origin: EXT_ORIGIN } },
+      { method: 'POST', headers: { Origin: EXT_ORIGIN } },
+    ]) {
+      const res = await call('/v1/judge', init)
+      expect(res.status, 'OK 가 아닌 응답이어야 한다').not.toBe(200)
+      expect(
+        res.headers.get('Access-Control-Allow-Origin'),
+        `${init.method} ${res.status} 응답에 CORS 헤더 없음`,
+      ).toBe(EXT_ORIGIN)
+    }
+  })
 })

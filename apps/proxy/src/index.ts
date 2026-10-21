@@ -45,6 +45,17 @@ function json(body: unknown, status: number, extra: Record<string, string> = {})
   })
 }
 
+/**
+ * 허용한 origin 에서 온 요청의 응답. **성공이든 오류든 CORS 헤더를 붙인다.**
+ *
+ * 오류 응답에 CORS 헤더가 없으면 브라우저가 응답 자체를 막아서, 확장 프로그램은
+ * 상태 코드 대신 `TypeError: Failed to fetch` 만 받는다. 429(잠시 후 재시도)와
+ * 서버 장애를 구분할 수 없게 된다.
+ */
+function reply(origin: string | null, body: unknown, status: number): Response {
+  return json(body, status, corsHeaders(origin))
+}
+
 export default {
   async fetch(request: Request, env: Env): Promise<Response> {
     const url = new URL(request.url)
@@ -72,20 +83,30 @@ export default {
 
     // --- 판단 요청 -----------------------------------------------------------
     if (url.pathname === '/v1/judge') {
-      if (request.method !== 'POST') {
-        return json({ error: 'method_not_allowed' }, 405)
-      }
       if (!isAllowedOrigin(origin)) {
-        // 공개된 엔드포인트는 남도 부른다. 우리 확장 프로그램만 받는다.
+        // 브라우저 안에서 다른 사이트가 부르는 것을 막는다.
+        // **이것은 인증이 아니다.** 아래 TODO 를 본다.
         return json({ error: 'forbidden_origin' }, 403)
+      }
+      if (request.method !== 'POST') {
+        return reply(origin, { error: 'method_not_allowed' }, 405)
       }
 
       // TODO(GE-18): 항목 id 검증 → Jev 호출 → 응답 중계.
       //   - judgment-items.json 에 없는 항목 id 는 거절한다.
       //     임의의 프롬프트를 통과시키면 우리 키로 남이 Jev 를 쓰는 셈이 된다.
+      //   - items 의 request_group[feature] 가 요청의 group 과 다르면 거절한다.
+      //     제목 판단에 본문이 섞이는 것을 막는다 (docs/architecture.md 4절).
+      //   - 요청 본문 크기 상한 (MAX_REQUEST_BYTES).
       //   - 실패(429·타임아웃·보기 밖 응답)는 판단 보류로 돌려준다.
       //   - 요청 본문을 저장하지 않는다. 기사 글을 로그에 남기지 않는다.
-      return json({ error: 'not_implemented' }, 501, corsHeaders(origin))
+      //
+      // TODO(GE-20): **레이트 리밋.** Origin 헤더는 누구나 적어 보낼 수 있어서
+      //   위 origin 검사는 인증이 아니다. curl 로 아무 값이나 넣으면 통과한다.
+      //   Workers Rate Limiting 바인딩으로 IP 당 상한을 두고, 전체 상한을
+      //   게이트웨이 한도 아래로 묶는다. 그래야 남의 호출이 우리 크레딧을
+      //   소진하거나 실제 사용자의 배지를 전부 ⚪ 로 만드는 것을 막을 수 있다.
+      return reply(origin, { error: 'not_implemented' }, 501)
     }
 
     return json({ error: 'not_found' }, 404)

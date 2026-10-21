@@ -90,10 +90,20 @@
 - `entrypoints/` 안에는 엔트리포인트만 둔다. CSS·헬퍼는 `assets/`, `components/`에 둔다
 - WXT의 auto-import(`defineContentScript`, `browser` 등)를 쓴다. 공식 문서 예제와 같은 형태를 유지하기 위해서다
 
+### `apps/proxy` — Cloudflare Workers + TypeScript
+
+규칙은 [apps/proxy/AGENT.md](../../apps/proxy/AGENT.md)에 있다.
+
+| 할 일 | 명령 |
+| --- | --- |
+| 개발 | `npm run dev -w @genuearly/proxy` |
+| 테스트 | `npm test -w @genuearly/proxy` |
+| 타입 검사 | `npm run compile -w @genuearly/proxy` |
+| 배포 | `npm run deploy -w @genuearly/proxy` |
+
 ### 아직 정하지 않은 것
 
-- `apps/proxy`: **Cloudflare Workers + TypeScript** — [apps/proxy/AGENT.md](../../apps/proxy/AGENT.md)
-- `packages/shared`, `packages/content`: 중계 서버 스택이 정해진 뒤에 맞춘다
+- `packages/shared`, `packages/content`, `eval`: 코드를 넣는 PR 에서 정한다. TypeScript 가 기본값이다
 
 > **포매터·린터는 아직 없다.** 지금은 [.editorconfig](../../.editorconfig)만 적용된다.
 > 정하면 이 절에 명령을 적고 CI에 연결한다.
