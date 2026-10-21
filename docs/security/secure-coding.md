@@ -15,7 +15,8 @@
 - **Jev API 키는 중계 서버([apps/proxy](../../apps/proxy/))의 환경변수에만 둔다.**
 - **확장 프로그램에는 어떤 형태로도 넣지 않는다.** 확장 프로그램은 설치한 사람 누구나 압축을 풀어 전부 읽을 수 있다. 난독화, base64, 분할 저장, `chrome.storage`, 원격으로 받아서 메모리에만 두기 — **전부 안 된다.** 사용자의 컴퓨터에 내려간 것은 공개된 것이다.
 - 확장 프로그램은 키를 모른다. 중계 서버에 요청을 보내고, 중계 서버가 자기 키로 Jev를 부른다.
-- `.env`를 커밋하지 않는다. 변수 **이름**만 [`apps/proxy/.env.example`](../../apps/proxy/.env.example)에 값 없이 적는다.
+- **키 파일을 커밋하지 않는다.** 변수 **이름**만 예시 파일에 값 없이 적는다 — 중계 서버는 [`apps/proxy/.dev.vars.example`](../../apps/proxy/.dev.vars.example), 개발 도구는 [`tools/content-gen/.env.example`](../../tools/content-gen/.env.example).
+  - 배포 환경의 키는 `npx wrangler secret put` 으로 넣는다. `wrangler.jsonc` 에 적지 않는다.
 - 시크릿을 코드, 설정, 테스트, 로그, 커밋 메시지, 스크린샷, 시연 화면에 넣지 않는다.
 - AI 도구에 키나 `.env` 내용을 붙여 넣지 않는다.
 - **실수로 올렸다면 커밋을 지우는 것으로 끝나지 않는다.** 즉시 키를 폐기하고 재발급한 뒤 팀에 알린다. 공개 저장소는 push한 순간 크롤링된다고 본다.

@@ -20,8 +20,8 @@ AI 코딩 도구(Claude Code, Codex, Cursor 등)와 사람이 공통으로 읽�
 모노레포. 현재 상태·일정은 [README.md](README.md)가 진입점이다.
 
 ```
-apps/extension/    크롬 확장 프로그램 (MV3) — 기술 스택 미정
-apps/proxy/        Jev 중계 서버. API 키를 들고 있는 유일한 곳 — 기술 스택 미정
+apps/extension/    크롬 확장 프로그램 (MV3) — WXT + TypeScript
+apps/proxy/        Jev 중계 서버. API 키를 들고 있는 유일한 곳 — Cloudflare Workers
 packages/shared/   판단 스키마, 점수 합산, 배지 단계 결정
 packages/content/  사용자에게 보이는 문구
 eval/              판단 품질 평가 세트와 결과. 기사 본문은 두지 않는다
@@ -36,14 +36,19 @@ docs/              제품 정의, Jev 정리, 컨벤션, 보안, AI 활용 기�
 | --- | --- |
 | 확장 프로그램 | **WXT + TypeScript + Vite**, 테스트는 Vitest ([apps/extension/AGENT.md](apps/extension/AGENT.md)) |
 | 패키지 매니저 | **npm 워크스페이스** (`apps/*`, `packages/*`) |
-| 중계 서버 | **미정** — 언어, 프레임워크, 배포 대상 |
+| 중계 서버 | **Cloudflare Workers + TypeScript**, 프레임워크 없음 ([apps/proxy/AGENT.md](apps/proxy/AGENT.md)) |
 
-- **중계 서버 스택을 추측해서 코드를 쓰지 않는다. 먼저 물어본다**
-- 스택을 정하는 것은 그 자체로 하나의 작업이다. 다른 기능 PR에 끼워 넣지 않는다
-- 정해지면 [README.md](README.md)의 구조 표, 이 파일, 해당 앱의 `AGENT.md`, [docs/conventions/code-style.md](docs/conventions/code-style.md)의 "스택별 규칙"을 같은 PR에서 갱신한다
+- 스택을 바꾸는 것은 그 자체로 하나의 작업이다. 다른 기능 PR에 끼워 넣지 않는다
+- 바꾸면 [README.md](README.md)의 구조 표, 이 파일, 해당 앱의 `AGENT.md`, [docs/conventions/code-style.md](docs/conventions/code-style.md)의 "스택별 규칙"을 같은 PR에서 갱신한다
 
-`packages/shared`는 확장 프로그램과 중계 서버 **양쪽에서 돌아야 한다.** 중계 서버를 JS/TS가 아닌
-언어로 정하면 그 코드를 공유할 수 없고, 같은 로직을 두 번 구현하게 된다. 서버 스택을 정할 때 이걸 먼저 본다.
+### 점수 합산은 확장 프로그램이 한다
+
+`packages/shared`의 [judgment-items.json](packages/shared/judgment-items.json)은 **언어에 묶이지 않는 JSON**이다.
+중계 서버는 이 파일을 읽어 **항목 id 를 검증**하고 Jev 요청을 만든다. **점수 합산과 배지 단계 결정은
+확장 프로그램이 한다.**
+
+서버를 얇게 둔 이유는 코드가 적을수록 빨리 끝나고 덜 깨지기 때문이다. 다만 **"얇다"가 "아무거나 통과시킨다"는
+뜻은 아니다.** 정의되지 않은 항목 id 를 통과시키면 우리 키로 남이 Jev 를 쓰는 셈이 된다.
 
 루트의 `package.json`은 **커밋 메시지 검사 도구(commitlint, husky)와 워크스페이스 연결 전용**이다.
 여기에 앱 의존성을 추가하지 않는다.
