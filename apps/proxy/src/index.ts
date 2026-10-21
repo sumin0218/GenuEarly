@@ -3,7 +3,10 @@
 // **키를 가진 유일한 곳이다.** 확장 프로그램은 키를 모른다.
 // 규칙은 apps/proxy/AGENT.md 와 docs/security/secure-coding.md 8절에 있다.
 //
-// 지금은 뼈대다. 실제 Jev 중계는 GE-18 에서 붙인다.
+// 하는 일은 셋뿐이다. 요청이 우리 것인지 보고, 판단 항목이 규약에 맞는지 보고, Jev 로 넘긴다.
+// **점수로 바꾸거나 해석하지 않는다.** 그건 확장 프로그램의 몫이다 (docs/architecture.md 5절).
+import { buildRequest, isRejection, SCHEMA_MODEL, SCHEMA_VERSION } from './schema'
+import { callJev } from './jev'
 
 export interface Env {
   /** ChatKHU API 키. wrangler secret 으로 넣는다. 로그에 남기지 않는다. */
@@ -56,6 +59,29 @@ function reply(origin: string | null, body: unknown, status: number): Response {
   return json(body, status, corsHeaders(origin))
 }
 
+/**
+ * 설정한 모델과 게이트웨이가 답한 모델이 다르면 한 번만 알린다.
+ *
+ * 다른 버전에 맞추지 않은 질문을 쓰고 있다는 뜻이라 봐야 하는 신호인데,
+ * **게이트웨이 경로에서는 항상 다르다.** 보내는 것은 jev-1.13.0 이지만 응답의 model 은
+ * 늘 jev-latest 로 정규화돼 돌아온다 (docs/jev.md 6-1절). 그래서 매 요청 경고하면
+ * 로그가 쓸모없어진다. 격리 수명당 한 번만 남긴다.
+ */
+let modelWarned = false
+function warnOnModelMismatch(env: Env, upstream: unknown): void {
+  if (modelWarned || upstream === env.JEV_MODEL) return
+  modelWarned = true
+  console.warn(
+    JSON.stringify({
+      at: 'model',
+      sent: env.JEV_MODEL,
+      got: upstream,
+      schema: `${SCHEMA_MODEL}@${SCHEMA_VERSION}`,
+      note: 'gateway normalises to an alias; expected on this path',
+    }),
+  )
+}
+
 export default {
   async fetch(request: Request, env: Env): Promise<Response> {
     const url = new URL(request.url)
@@ -92,21 +118,51 @@ export default {
         return reply(origin, { error: 'method_not_allowed' }, 405)
       }
 
-      // TODO(GE-18): 항목 id 검증 → Jev 호출 → 응답 중계.
-      //   - judgment-items.json 에 없는 항목 id 는 거절한다.
-      //     임의의 프롬프트를 통과시키면 우리 키로 남이 Jev 를 쓰는 셈이 된다.
-      //   - items 의 request_group[feature] 가 요청의 group 과 다르면 거절한다.
-      //     제목 판단에 본문이 섞이는 것을 막는다 (docs/architecture.md 4절).
-      //   - 요청 본문 크기 상한 (MAX_REQUEST_BYTES).
-      //   - 실패(429·타임아웃·보기 밖 응답)는 판단 보류로 돌려준다.
-      //   - 요청 본문을 저장하지 않는다. 기사 글을 로그에 남기지 않는다.
-      //
       // TODO(GE-20): **레이트 리밋.** Origin 헤더는 누구나 적어 보낼 수 있어서
       //   위 origin 검사는 인증이 아니다. curl 로 아무 값이나 넣으면 통과한다.
       //   Workers Rate Limiting 바인딩으로 IP 당 상한을 두고, 전체 상한을
-      //   게이트웨이 한도 아래로 묶는다. 그래야 남의 호출이 우리 크레딧을
+      //   게이트웨이 한도(분당 120건) 아래로 묶는다. 그래야 남의 호출이 우리 크레딧을
       //   소진하거나 실제 사용자의 배지를 전부 ⚪ 로 만드는 것을 막을 수 있다.
-      return reply(origin, { error: 'not_implemented' }, 501)
+
+      // --- 크기 상한 --------------------------------------------------------
+      // 본문을 읽기 전에 먼저 막는다. 큰 요청으로 CPU 와 크레딧을 태우지 못하게 한다.
+      const max = Number(env.MAX_REQUEST_BYTES) || 65536
+      const declared = Number(request.headers.get('Content-Length'))
+      if (Number.isFinite(declared) && declared > max) {
+        return reply(origin, { error: 'too_large' }, 400)
+      }
+      const raw = await request.text()
+      // Content-Length 는 없을 수도, 거짓일 수도 있다. 실제 길이로 다시 본다.
+      if (new TextEncoder().encode(raw).length > max) {
+        return reply(origin, { error: 'too_large' }, 400)
+      }
+
+      let parsed: unknown
+      try {
+        parsed = JSON.parse(raw)
+      } catch {
+        return reply(origin, { error: 'invalid_json' }, 400)
+      }
+
+      // --- 규약 검증 --------------------------------------------------------
+      // 모르는 항목 id 를 통과시키면 우리 키로 남이 Jev 를 쓰는 셈이 된다.
+      // 항목·그룹·기능의 짝까지 본다. 안 보면 제목 판단에 본문이 섞인다.
+      const built = buildRequest(parsed)
+      if (isRejection(built)) {
+        return reply(origin, { error: built.error, detail: built.detail }, 400)
+      }
+
+      // --- 호출 -------------------------------------------------------------
+      const out = await callJev(env, built.state, built.questions, built.criteria)
+
+      if (!out.ok) {
+        // 실패가 아니라 결과다. 그래서 200 이다 (packages/shared/README.md).
+        return reply(origin, { model: env.JEV_MODEL, undetermined: true, reason: out.reason }, 200)
+      }
+
+      warnOnModelMismatch(env, out.upstreamModel)
+      // Jev 응답을 그대로 중계한다. 서버가 해석하거나 점수로 바꾸지 않는다.
+      return reply(origin, { model: env.JEV_MODEL, answers: out.answers }, 200)
     }
 
     return json({ error: 'not_found' }, 404)
