@@ -143,6 +143,7 @@ content script          service worker              proxy                gateway
 | `items` | **[judgment-items.json](../packages/shared/judgment-items.json)에 있는 id 만.** 하나라도 없으면 **요청 전체를 거절한다** |
 | `items` ↔ `group` ↔ `feature` | **모든 항목에 대해 `request_group[feature] === group` 이어야 한다.** 아니면 거절. `feature` 키가 그 항목에 없어도 거절 (아래) |
 | `state` | 그룹이 허용한 필드만. 그 밖의 필드는 **무시가 아니라 거절** |
+| `state` ↔ `group` ↔ `feature` | **그룹의 `required[feature]` 필드가 모두 있어야 한다.** 없으면 거절 (아래) |
 
 **왜 교차 검증이 필요한가**
 
@@ -152,6 +153,7 @@ id 가 JSON 에 있는지, state 필드가 그룹에 맞는지만 보면 아래�
 | --- | --- |
 | `group: "headline_body"` 에 `clickbait_headline` | **제목 판단에 본문이 섞인다.** 본문 속 인젝션과 context rot 이 제목 판단에 닿는다 |
 | `group: "headline_only"` 에 `source_citation` | 본문 없이 출처를 묻게 되어 구조적으로 "출처 부재" 가 나온다 |
+| `group: "headline_body"` 인데 `state` 에 `body` 가 없음 | **위와 같은 결과다.** 그룹 이름만 맞춰 놓고 필드를 빼면 통과한다. 확장 프로그램이 본문 추출에 실패하고 빈 값 대신 필드를 빼 보내는 버그만으로도 생긴다 |
 
 클라이언트 버그든 위조된 요청이든 서버가 막아야 한다.
 
@@ -168,6 +170,11 @@ id 가 JSON 에 있는지, state 필드가 그룹에 맞는지만 보면 아래�
 ```
 
 Jev 응답을 **그대로 중계한다.** 서버가 해석하거나 점수로 바꾸지 않는다.
+
+> **`answers` 의 키는 항목 id 가 아니라 질문 id 다.** 대부분 같지만, 한 판단이 질문 여러 개로 나뉜 항목은
+> 하위 질문 id 로 온다 — `unverifiable_claim` 을 보내면 `answers.unverifiable_claim` 이 아니라
+> **`answers.factual_assertion` 과 `answers.named_basis`** 가 온다.
+> 확장 프로그램이 `answers[항목id]` 로만 찾으면 이 항목이 늘 비어 ⚪ 가 된다 (GE-22).
 
 **응답 (판단 보류)**
 
@@ -323,4 +330,4 @@ apps/proxy      ──▶  judgment-items.json (검증)
 | 네이버·다음 선택자 | GE-22, GE-23 |
 | 캐시 용량 상한 | 실제 사용량을 보고 |
 | 피드백 저장소 | GE-26 |
-| 런타임 Jev 경로를 TypeSafe 직접으로 바꿀지 | **다시 열렸다.** 초당 2건이 ①에도 걸린다 ([requirements.md](requirements.md) 8-1절). 이용 조건과 함께 정한다 (GE-11) |
+| **대회 이후** 일반 배포 때의 Jev 경로 | v1.0.0 은 **ChatKHU Gateway 로 확정**했다 (2026-10-21, GE-11). 다만 이용 조건이 "대회 결과물 단계"까지라 배포를 결정하면 다시 확인한다 ([jev.md](jev.md) 6-1절) |

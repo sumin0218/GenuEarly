@@ -21,11 +21,11 @@
 
 | 자료명·출처 | 저작권자·제공처 | 이용 조건 | 활용 내용 |
 | --- | --- | --- | --- |
-| **ChatKHU API Gateway** (`factchat-cloud.mindlogic.ai/v1/gateway`) | 경희대학교 | **TODO** — 생성물의 이용 조건, 사용자 트래픽 대행 가부 확인. (이용 자격은 교내 재학생) | 하나의 키로 여러 제공사 모델을 호출한다. 아래 세 줄이 전부 이 경로다 |
+| **ChatKHU API Gateway** (`factchat-cloud.mindlogic.ai/v1/gateway`) | 경희대학교 | **대회 결과물 단계 이용 허용** (2026-10-21 확인). 사용자 트래픽 대행 가능, 공개 배포 가능, 보낸 내용 미보관, 분당 120건 고정, 출처 표기는 권장(의무 아님). **대회 이후 일반 배포는 재확인 필요** ([../jev.md](../jev.md) 6-1절) | 하나의 키로 여러 제공사 모델을 호출한다. 아래 세 줄이 전부 이 경로다 |
 | ├ `claude-sonnet-5-5` (Anthropic) | ChatKHU 경유 | 위와 같음 | 사용자 노출 문구 생성 ([`tools/content-gen`](../../tools/content-gen/)) |
 | ├ `gpt-image-2.5-sunburst` (OpenAI) | ChatKHU 경유 | 위와 같음 | 확장 프로그램 아이콘 생성 |
-| └ `jev-latest` (TypeSafe) | ChatKHU 경유 | 위와 같음 | **개발·평가 단계의 판단 호출.** 2026-10-16 실제 호출로 동작 확인 |
-| **Jev 1.13** (`jev-1.13.0`) — TypeSafe 직접 | TypeSafe (<https://docs.typesafe.ai>) | **TODO** — 약관 확인. 계정 미발급 | 제품 런타임 판단. **아직 쓰지 않는다** ([../jev.md](../jev.md) 6-1절) |
+| └ `jev-latest` (TypeSafe) | ChatKHU 경유 | 위와 같음 | **런타임 판단 호출 (v1.0.0 확정 경로).** 2026-10-16 동작 확인, 2026-10-21 질문 세트 전체로 재확인 |
+| **Jev 1.13** (`jev-1.13.0`) — TypeSafe 직접 | TypeSafe (<https://docs.typesafe.ai>) | 약관 미확인. 계정 미발급 | **v1.0.0 에서 쓰지 않는다.** 게이트웨이 경유로 확정 (2026-10-21). 대회 이후 일반 배포 시 다시 본다 ([../jev.md](../jev.md) 6-1절) |
 | **WXT** 0.21.x | WXT 기여자 | **MIT** (npm 레지스트리 확인) | 확장 프로그램 빌드 프레임워크 |
 | **Vite / Vitest** | 각 프로젝트 | **MIT** (npm 레지스트리 확인) | 번들링, 테스트 |
 | **commitlint / husky** | 각 프로젝트 | **MIT** (npm 레지스트리 확인) | 커밋 메시지 검사 |
