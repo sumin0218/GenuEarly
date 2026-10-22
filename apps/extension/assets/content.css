@@ -49,3 +49,21 @@
     border-top-color: rgba(255, 255, 255, 0.12);
   }
 }
+
+.ge-badge__row {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  padding: 4px 0;
+}
+.ge-badge__row + .ge-badge__row { border-top: 1px solid rgba(0, 0, 0, 0.06); }
+.ge-badge__row-name { font-weight: 600; color: #3c4043; }
+.ge-badge__row-text { color: #5f6368; }
+.ge-badge__note { color: #5f6368; }
+
+@media (prefers-color-scheme: dark) {
+  .ge-badge__row + .ge-badge__row { border-top-color: rgba(255, 255, 255, 0.1); }
+  .ge-badge__row-name { color: #e8eaed; }
+  .ge-badge__row-text,
+  .ge-badge__note { color: #9aa0a6; }
+}

@@ -36,4 +36,19 @@
 - 문구를 바꾸면 **AI 활용 기록을 남긴다** ([../../docs/ai-log/](../../docs/ai-log/)). 사용자 노출 문구는 ChatKHU의 주 역할이라 서식4의 증빙이 된다
 - 문구 변경은 `design` 또는 `docs`가 아니라 내용이 바뀌면 `feat`/`fix`다. 보이는 글이 제품의 일부다
 
+## 지금 있는 것
+
+[ui.ko.json](ui.ko.json) — **ChatKHU (`gpt-5.6-luna`) 가 2026-10-22 에 쓴 글.**
+항목마다 후보 3개를 받아 사람이 골랐고, 고른 것은 **손대지 않고 그대로** 넣었다.
+프롬프트는 [tools/content-gen/prompt.md](../../tools/content-gen/prompt.md) 에 있다.
+
+**규칙은 테스트가 지킨다** — [apps/extension/tests/content.test.ts](../../apps/extension/tests/content.test.ts).
+금지어, 사과 표현, 막는 말투, 말투 섞임, 길이, 빠진 항목을 본다.
+일부러 어겨 보고 실제로 걸리는 것을 확인했다.
+
+> **TODO: SAFE 항목 문구가 없다.** ChatKHU 에 "신호가 있을 때" 와 "판단하지 못했을 때" 만 요청했다.
+> 지금은 **신호 없는 항목을 배지 상세에서 아예 빼서** 넘어가고 있다
+> (어떤 신호가 걸렸는지만 보여 주는 쪽이 맞기도 하다, [docs/product.md](../../docs/product.md) 5절).
+> 항목별로 "이 항목은 괜찮았다" 를 보여 줄 거라면 그 문구를 따로 받아야 한다.
+
 > **TODO: 다국어 지원 여부** — 전시회에 외국인 방문자가 올 수 있다. v1.2.0 범위에 넣을지 정한다.
