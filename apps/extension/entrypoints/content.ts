@@ -39,26 +39,25 @@ function createBadge() {
     label.textContent = content.badge[level].name
     detail.replaceChildren()
 
-    // **걸린 신호와 판단하지 못한 항목만 보여 준다** (docs/product.md 5절).
-    // 아무 신호 없는 항목까지 늘어놓으면 무엇이 걸렸는지 묻히고, 그 경우의 문구도 없다.
-    const rows = (verdict?.items ?? []).flatMap((it) => {
-      if (it.level === 'SAFE' || it.level === 'PENDING') return []
-      const c = content.items[it.id as keyof typeof content.items] as
-        | { name: string; signal: string; undetermined: string }
-        | undefined
-      if (!c) return []
-      return [{
-        mark: MARK[it.level],
-        level: it.level,
-        name: c.name,
-        text: it.level === 'UNDETERMINED' ? c.undetermined : c.signal,
-      }]
-    })
+    // **일곱 항목을 전부 보여 준다.** 무엇을 검사했는지 알 수 있어야 하고,
+    // 그래야 ⚪ 항목도 맥락 속에서 읽힌다. **걸린 것이 위로 온다.**
+    const ORDER: Record<string, number> = { CAUTION: 0, CHECK: 1, UNDETERMINED: 2, SAFE: 3, PENDING: 4 }
+    const rows = (verdict?.items ?? [])
+      .flatMap((it) => {
+        const c = content.items[it.id as keyof typeof content.items] as
+          | { name: string; safe: string; signal: string; undetermined: string }
+          | undefined
+        if (!c || it.level === 'PENDING') return []
+        const text = it.level === 'UNDETERMINED' ? c.undetermined : it.level === 'SAFE' ? c.safe : c.signal
+        return [{ mark: MARK[it.level], level: it.level, name: c.name, text }]
+      })
+      .sort((a, b) => (ORDER[a.level] ?? 9) - (ORDER[b.level] ?? 9))
 
     if (rows.length === 0) {
+      // 판단을 하나도 못 했다 — 기사 구조를 못 읽었거나 중계가 전부 실패했다.
       const note = document.createElement('div')
       note.className = 'ge-badge__note'
-      note.textContent = content.badge[level].description
+      note.textContent = content.undetermined.description
       detail.append(note)
       return
     }
@@ -90,12 +89,6 @@ export default defineContentScript({
 
   async main(ctx) {
     const article = extractArticle()
-    if (!article) {
-      // 기사 구조를 못 읽었다. 배지를 띄우지 않는다 — 틀린 자리에 뜨는 것보다 낫다.
-      console.warn('[GenuEarly] 기사 구조를 읽지 못했다')
-      return
-    }
-
     const badge = createBadge()
     const ui = await createShadowRootUi(ctx, {
       name: 'genuearly-badge',
@@ -110,6 +103,15 @@ export default defineContentScript({
       onMount: (container) => { container.append(badge.el) },
     })
     ui.mount()
+
+    if (!article) {
+      // **기사 구조를 못 읽었다. 그래도 ⚪ 를 띄운다** (docs/requirements.md 2절).
+      // 배지를 아예 안 띄우면 사용자는 확장이 죽은 것인지 판단을 못 한 것인지 알 수 없다.
+      // ⚪ 는 실패가 아니라 결과다.
+      console.warn('[GenuEarly] 기사 구조를 읽지 못했다')
+      badge.render('UNDETERMINED')
+      return
+    }
 
     const msg: Message = {
       kind: 'judge-article',

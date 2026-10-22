@@ -25,6 +25,9 @@ describe('단정하지 않는다', () => {
   const 금지 = [
     '가짜', '허위', '거짓', '사실이 아', '사실무근', '조작',
     '신뢰할 수 있', '믿을 만', '믿어도', '안전한 기사', '검증된',
+    // **신호가 없는 항목(safe)의 문구가 합격 판정으로 읽히면 안 된다.**
+    // 우리는 신호를 찾지 못한 것이지 그 점에서 옳다고 확인한 것이 아니다.
+    '문제없', '이상 없', '적절합', '타당합', '정확합', '충분합',
   ]
 
   it.each(금지)('"%s" 를 쓰지 않는다', (word) => {
@@ -82,12 +85,19 @@ describe('빠진 문구가 없다', () => {
     expect(Object.keys(content.items).sort()).toEqual([...ids].sort())
   })
 
-  it('항목마다 이름·신호·보류 세 가지가 다 있다', () => {
+  it('항목마다 이름·신호없음·신호·보류 네 가지가 다 있다', () => {
     for (const [id, c] of Object.entries(content.items)) {
       expect(c.name, `${id}.name`).toBeTruthy()
+      expect(c.safe, `${id}.safe`).toBeTruthy()
       expect(c.signal, `${id}.signal`).toBeTruthy()
       expect(c.undetermined, `${id}.undetermined`).toBeTruthy()
     }
+  })
+
+  it('신호 없음 문구가 신호 있음 문구와 다르다', () => {
+    // 복사해 붙이다 같아지면 상태를 구분할 수 없다.
+    const same = Object.entries(content.items).filter(([, c]) => c.safe === c.signal)
+    expect(same.map(([id]) => id)).toEqual([])
   })
 
   it('피드백 안내가 보내는 것과 보내지 않는 것을 모두 적는다', () => {
