@@ -4,6 +4,7 @@
 // 측정으로 정한 것이 아니다. 근거가 있는 것은 `NOISE` 하나뿐이다.
 // 값을 바꾸는 PR 은 eval 전후 수치를 적는다 (packages/shared/README.md).
 import schema from '../../../packages/shared/judgment-items.json'
+import type { ItemScores } from './cache'
 import type { ArticleVerdict, BadgeLevel, JevAnswer } from './protocol'
 
 /**
@@ -84,36 +85,43 @@ function sentenceScore(perSentence: Record<string, JevAnswer>[]): number | null 
 const label = (v: number): BadgeLevel =>
   v >= CAUTION_AT ? 'CAUTION' : v < SAFE_BELOW ? 'SAFE' : 'CHECK'
 
-export function scoreArticle(
+/**
+ * Jev 답을 **항목별 점수**로 바꾼다. 0(안심) ~ 1(주의), `null` 은 판단 보류.
+ *
+ * 판정과 나눠 둔 이유는 **캐시가 항목 단위**이기 때문이다. 이 결과를 그대로 저장하고,
+ * 다음에는 없는 항목만 다시 묻는다 (lib/cache.ts).
+ */
+export function toItemScores(
   answers: Record<string, JevAnswer>,
   perSentence: Record<string, JevAnswer>[],
-): ArticleVerdict {
-  const items: ArticleVerdict['items'] = []
-  const scores: number[] = []
-
+): ItemScores {
+  const out: ItemScores = {}
   for (const id of Object.keys(answers)) {
     if (id === 'factual_assertion' || id === 'named_basis') continue
-    const v = itemScore(id, answers[id])
+    out[id] = itemScore(id, answers[id])
+  }
+  if (perSentence.length > 0) out.unverifiable_claim = sentenceScore(perSentence)
+  return out
+}
+
+/** 항목별 점수를 배지 단계로 접는다. */
+export function verdictFrom(scores: ItemScores): ArticleVerdict {
+  const items: ArticleVerdict['items'] = []
+  const judged: number[] = []
+
+  for (const [id, v] of Object.entries(scores)) {
     if (v === null) {
-      items.push({ id, level: 'UNDETERMINED', note: '확신도가 낮거나 아는 보기 밖' })
+      items.push({ id, level: 'UNDETERMINED', note: '확신도가 낮거나 판단할 글이 부족' })
       continue
     }
-    scores.push(v)
+    judged.push(v)
     items.push({ id, level: label(v), note: v.toFixed(2) })
   }
 
-  const s = sentenceScore(perSentence)
-  if (s === null) {
-    items.push({ id: 'unverifiable_claim', level: 'UNDETERMINED', note: '판단된 문장 없음' })
-  } else {
-    scores.push(s)
-    items.push({ id: 'unverifiable_claim', level: label(s), note: s.toFixed(2) })
-  }
-
-  if (scores.length < MIN_JUDGED_ITEMS) {
+  if (judged.length < MIN_JUDGED_ITEMS) {
     return { level: 'UNDETERMINED', items, reason: 'not_enough_items' }
   }
-  const total = scores.reduce((a, b) => a + b, 0) / scores.length
+  const total = judged.reduce((a, b) => a + b, 0) / judged.length
   return { level: label(total), items }
 }
 
