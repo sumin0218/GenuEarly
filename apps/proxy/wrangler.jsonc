@@ -10,6 +10,24 @@
 
   "observability": { "enabled": true },
 
+  // 폭주 차단기. 값의 근거는 src/ratelimit.ts 주석에 있다.
+  // 카운터는 Cloudflare 지점별로 따로 센다. 전역 합산 한도가 아니다.
+  // period 는 10 또는 60 만 쓸 수 있다.
+  "ratelimits": [
+    {
+      // IP 당. 정상 사용의 최대(바쁜 심사위원 분당 60~100건) 위, 폭주(분당 수천) 아래.
+      "name": "RATE_LIMIT_BURST",
+      "namespace_id": "1001",
+      "simple": { "limit": 150, "period": 60 }
+    },
+    {
+      // 전체. 게이트웨이 한도 120 아래에서 우리가 먼저 거절해 대기 시간을 우리가 정한다.
+      "name": "RATE_LIMIT_BUDGET",
+      "namespace_id": "1002",
+      "simple": { "limit": 110, "period": 60 }
+    }
+  ],
+
   // 선언해 두면 wrangler 가 배포 전에 빠진 secret 을 알려 준다.
   "secrets": {
     "required": ["JEV_API_KEY"]

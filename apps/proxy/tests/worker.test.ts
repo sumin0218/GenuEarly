@@ -571,3 +571,107 @@ describe('열린 프록시가 아니다', () => {
     expect(calls[0].init.body as string).toContain('evil.example')
   })
 })
+
+// ─────────────────────────────────────────────────────────────────────────────
+// 폭주 차단기 (GE-20)
+// ─────────────────────────────────────────────────────────────────────────────
+
+/** 지정한 횟수까지만 통과시키는 가짜 바인딩. 키별로 센다. */
+function fakeLimiter(limit: number) {
+  const seen = new Map<string, number>()
+  return {
+    keys: seen,
+    limit: ({ key }: { key: string }) => {
+      const n = (seen.get(key) ?? 0) + 1
+      seen.set(key, n)
+      return Promise.resolve({ success: n <= limit })
+    },
+  }
+}
+
+const withLimits = (burst: number, budget: number): Env => ({
+  ...env,
+  RATE_LIMIT_BURST: fakeLimiter(burst) as unknown as RateLimit,
+  RATE_LIMIT_BUDGET: fakeLimiter(budget) as unknown as RateLimit,
+})
+
+const judgeFrom = (e: Env, ip = '203.0.113.9') =>
+  worker.fetch(new Request('https://proxy.invalid/v1/judge', {
+    method: 'POST',
+    headers: { Origin: EXT_ORIGIN, 'Content-Type': 'application/json', 'CF-Connecting-IP': ip },
+    body: JSON.stringify(PAGE_BODY),
+  }), e)
+
+describe('폭주 차단기', () => {
+  it('한도 안이면 그냥 지나간다', async () => {
+    mockFetch(() => ok({ model: 'jev-latest', answers: answersFor(PAGE_BODY.items) }))
+    const e = withLimits(150, 110)
+    expect((await judgeFrom(e)).status).toBe(200)
+  })
+
+  it('IP 한도를 넘으면 429 와 Retry-After 를 준다', async () => {
+    // 폭주하는 클라이언트에 200 을 주면 아무것도 배우지 않고 계속 때린다.
+    mockFetch(() => ok({ model: 'jev-latest', answers: answersFor(PAGE_BODY.items) }))
+    const e = withLimits(2, 110)
+    await judgeFrom(e)
+    await judgeFrom(e)
+    const res = await judgeFrom(e)
+    expect(res.status).toBe(429)
+    expect(res.headers.get('Retry-After')).toBe('60')
+    expect(await res.json()).toEqual({ error: 'rate_limited', scope: 'burst' })
+  })
+
+  it('막힌 요청은 Jev 를 부르지 않는다', async () => {
+    mockFetch(() => ok({ model: 'jev-latest', answers: answersFor(PAGE_BODY.items) }))
+    const e = withLimits(1, 110)
+    await judgeFrom(e)
+    calls = []
+    await judgeFrom(e)
+    expect(calls, '막아 놓고 크레딧을 쓰면 안 된다').toHaveLength(0)
+  })
+
+  it('IP 가 다르면 서로 영향을 주지 않는다', async () => {
+    mockFetch(() => ok({ model: 'jev-latest', answers: answersFor(PAGE_BODY.items) }))
+    const e = withLimits(1, 110)
+    expect((await judgeFrom(e, '203.0.113.1')).status).toBe(200)
+    expect((await judgeFrom(e, '203.0.113.1')).status).toBe(429)
+    expect((await judgeFrom(e, '203.0.113.2')).status, '다른 IP 는 멀쩡해야 한다').toBe(200)
+  })
+
+  it('전체 한도는 IP 와 상관없이 걸린다', async () => {
+    mockFetch(() => ok({ model: 'jev-latest', answers: answersFor(PAGE_BODY.items) }))
+    const e = withLimits(150, 2)
+    await judgeFrom(e, '203.0.113.1')
+    await judgeFrom(e, '203.0.113.2')
+    const res = await judgeFrom(e, '203.0.113.3')
+    expect(res.status).toBe(429)
+    expect((await res.json() as { scope?: string }).scope).toBe('budget')
+  })
+
+  it('IP 헤더가 없어도 통과시키지 않는다', async () => {
+    // 비어 있으면 모두를 한 통에 넣는다. 헤더를 빼서 빠져나가지 못하게 한다.
+    mockFetch(() => ok({ model: 'jev-latest', answers: answersFor(PAGE_BODY.items) }))
+    const e = withLimits(1, 110)
+    const call = () => worker.fetch(new Request('https://proxy.invalid/v1/judge', {
+      method: 'POST', headers: { Origin: EXT_ORIGIN, 'Content-Type': 'application/json' },
+      body: JSON.stringify(PAGE_BODY),
+    }), e)
+    expect((await call()).status).toBe(200)
+    expect((await call()).status).toBe(429)
+  })
+
+  it('429 에도 CORS 헤더가 있다', async () => {
+    // 없으면 브라우저가 응답을 막아서 확장은 상태 코드 대신 Failed to fetch 만 받는다.
+    mockFetch(() => ok({ model: 'jev-latest', answers: answersFor(PAGE_BODY.items) }))
+    const e = withLimits(0, 110)
+    const res = await judgeFrom(e)
+    expect(res.status).toBe(429)
+    expect(res.headers.get('Access-Control-Allow-Origin')).toBe(EXT_ORIGIN)
+  })
+
+  it('바인딩이 없으면 통과시킨다', async () => {
+    // 로컬 개발과 테스트. 배포에서 빠지는 것은 wrangler.jsonc 가 막는다.
+    mockFetch(() => ok({ model: 'jev-latest', answers: answersFor(PAGE_BODY.items) }))
+    expect((await judgeFrom(env)).status).toBe(200)
+  })
+})
