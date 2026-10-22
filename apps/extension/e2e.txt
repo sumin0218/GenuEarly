@@ -1,0 +1,125 @@
+
+=== 네이버 ===
+URL: https://n.news.naver.com/article/008/0005430285
+제목: [단독]한국 최초 '달 궤도수송선', 한화에어로스페이스가 만든다
+본문 747자 · 문장 12개
+첫 문장: 2029년 달 궤도로 통신위성을 보낼 국내 첫 '궤도수송선'을 한화에어로스페이스가 개발한다.
+끝 문장: 우주청은 궤도수송선 비행모델 개발에 2026년부터 2029년까지 4년간 국비 700억원을 투입할 계획이다.
+headline_only → 200
+headline_body → 200
+문장 판단 8 / 8
+
+판정: SAFE
+   SAFE          clickbait_headline   0.00
+   SAFE          source_citation      0.00
+   SAFE          headline_body_match  0.00
+   SAFE          spread_inducement    0.00
+   SAFE          emotional_language   0.00
+   SAFE          ai_style_signal      0.14
+   CHECK         unverifiable_claim   0.50
+
+=== 다음 ===
+URL: https://v.daum.net/v/20261022201620774
+제목: [재개발과 외지인] ① 한남3구역 20년 등기 분석
+본문 7853자 · 문장 133개
+첫 문장: 서울 정비사업의 표면적 목적은 주택 공급을 늘리는 것이다.
+
+=== 네이버 ===
+URL: https://n.news.naver.com/article/088/0001035993
+제목: '2026 국제 우주산업 콘퍼런스' 경상국립대학교 칠암캠퍼스에서개최
+본문 1467자 · 문장 15개
+첫 문장: '2026 국제 우주산업 콘퍼런스'가 21일 경상국립대학교 칠암캠퍼스에서 개최됐다.
+끝 문장: 도는 이번 콘퍼런스를 계기로 세계 각국의 우주항공 기관 및 기업과 협력을 강화하고, 도내 기업의 기술 경쟁력 향상과 해외시장 진출을 지원해 경남을 글로벌 우주항공산업 중심지로 발전시켜 나갈 계획이다.
+headline_only → 200
+headline_body → 200
+문장 판단 8 / 8
+
+판정: SAFE
+   SAFE          clickbait_headline   0.00
+   SAFE          source_citation      0.00
+   SAFE          headline_body_match  0.00
+   SAFE          spread_inducement    0.00
+   SAFE          emotional_language   0.00
+   UNDETERMINED  ai_style_signal      확신도가 낮거나 아는 보기 밖
+   SAFE          unverifiable_claim   0.17
+
+=== 다음 ===
+URL: https://v.daum.net/v/20261022201620774
+제목: [재개발과 외지인] ① 한남3구역 20년 등기 분석
+본문 7853자 · 문장 133개
+첫 문장: 서울 정비사업의 표면적 목적은 주택 공급을 늘리는 것이다.
+
+=== 네이버 ===
+URL: https://n.news.naver.com/article/001/0016395302
+제목: 日서 PHP 취약점에 사이트 중단 속출…PHP 의존도 특히 높아
+본문 1935자 · 문장 25개
+첫 문장: 프로그래밍 언어 PHP에서 치명적인 보안 취약점이 발견되자 일본 정부와 주요 기업들의 온라인 사이트 운영에 대규모 차질이 빚어지고 있다.
+끝 문장: (취재보조: 김지수 통신원)
+headline_only → 200
+headline_body → 200
+문장 판단 8 / 8
+
+판정: SAFE
+   SAFE          clickbait_headline   0.00
+   SAFE          source_citation      0.00
+   SAFE          headline_body_match  0.00
+   SAFE          spread_inducement    0.00
+   CHECK         emotional_language   0.32
+   UNDETERMINED  ai_style_signal      확신도가 낮거나 아는 보기 밖
+   SAFE          unverifiable_claim   0.14
+
+=== 다음 ===
+URL: https://v.daum.net/v/20261022201620774
+제목: [재개발과 외지인] ① 한남3구역 20년 등기 분석
+본문 7853자 · 문장 133개
+첫 문장: 서울 정비사업의 표면적 목적은 주택 공급을 늘리는 것이다.
+
+=== 네이버 ===
+URL: https://n.news.naver.com/article/014/0005593283
+제목: 美 국가안보국도 'PHP 취약점' 경고 "즉시 업데이트 못하면 오프라인 전환"
+본문 829자 · 문장 9개
+첫 문장: 전 세계 웹사이트의 70% 이상에서 쓰이는 프로그래밍 언어의 치명적인 보안 취약점이 발견되면서 해킹 비상이 걸리자 미국 당국도 21일(현지시간) 각 웹사이트의 '오프라인 전환'을 당부했다.
+끝 문장: PHP의 보안 취약점을 탐지하는 데는 인공지능(AI) 시스템이 상당한 역할을 한 것으로 파악됐다고 AP 통신 등 미 언론들은 전했다.
+headline_only → 200
+headline_body → 200
+문장 판단 8 / 8
+
+판정: SAFE
+   SAFE          clickbait_headline   0.00
+   SAFE          source_citation      0.00
+   SAFE          headline_body_match  0.00
+   SAFE          spread_inducement    0.00
+   CHECK         emotional_language   0.30
+   UNDETERMINED  ai_style_signal      확신도가 낮거나 아는 보기 밖
+   SAFE          unverifiable_claim   0.29
+
+=== 다음 ===
+URL: https://v.daum.net/v/20261022201620774
+제목: [재개발과 외지인] ① 한남3구역 20년 등기 분석
+본문 7853자 · 문장 133개
+첫 문장: 서울 정비사업의 표면적 목적은 주택 공급을 늘리는 것이다.
+
+=== 네이버 ===
+URL: https://n.news.naver.com/article/009/0005752728
+제목: 美 "즉시 보완 안되면 시스템 꺼라"… 유럽, 정부 사이트 임시 폐쇄
+본문 1277자 · 문장 25개
+첫 문장: 웹사이트의 로그인 보안을 아무리 강화해도 소용없다.
+끝 문장: 지원이 끝난 구버전을 사용하는 사이트는 최신 버전으로 바꾸는 것이 원칙이지만 기존 프로그램이 제대로 작동하지 않을 수 있어 업그레이드에 시간이 걸린다.
+headline_only → 200
+headline_body → 200
+문장 판단 8 / 8
+
+판정: SAFE
+   SAFE          clickbait_headline   0.00
+   SAFE          source_citation      0.00
+   SAFE          headline_body_match  0.00
+   SAFE          spread_inducement    0.00
+   SAFE          emotional_language   0.18
+   UNDETERMINED  ai_style_signal      확신도가 낮거나 아는 보기 밖
+   CAUTION       unverifiable_claim   0.86
+
+=== 다음 ===
+URL: https://v.daum.net/v/20261022203556122
+제목: "변리사 겁주고 사기 알리려"…역삼동 연쇄방화 70대 구속, "도망 우려"(종합)
+본문 1632자 · 문장 24개
+첫 문장: 서울 강남구 역삼동의 특허법인 건물 두 곳에 잇달아 불을 질러 19명을 다치게 한 70대 남성이 22일 구속됐다.
