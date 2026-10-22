@@ -6,17 +6,15 @@
 // **판단 호출은 여기서 하지 않는다.** background 로 보낸다 (lib/protocol.ts 참고).
 import '../assets/content.css'
 import { ARTICLE_MATCHES } from '../match-patterns'
+import content from '../../../packages/content/ui.ko.json'
 import { extractArticle } from '../lib/extract'
 import type { ArticleVerdict, BadgeLevel, Message } from '../lib/protocol'
 
-// TODO(GE-16): 사용자에게 보이는 말은 packages/content 에서 ChatKHU 로 만든다.
-//   지금은 흐름을 확인하려고 임시로 둔다.
-const TEXT: Record<BadgeLevel, { mark: string; label: string }> = {
-  PENDING: { mark: '⋯', label: '살펴보는 중' },
-  SAFE: { mark: '🟢', label: '눈에 띄는 신호 없음' },
-  CHECK: { mark: '🟡', label: '확인해 볼 점이 있음' },
-  CAUTION: { mark: '🔴', label: '주의가 필요한 신호' },
-  UNDETERMINED: { mark: '⚪', label: '판단하지 못함' },
+// **사용자에게 보이는 말은 여기서 쓰지 않는다.** packages/content 가 원본이고
+// 그 글은 ChatKHU 가 썼다 (GE-16, docs/product.md 6절).
+// 여기 두는 것은 **글이 아닌 것** — 표시용 기호뿐이다.
+const MARK: Record<BadgeLevel, string> = {
+  PENDING: '⋯', SAFE: '🟢', CHECK: '🟡', CAUTION: '🔴', UNDETERMINED: '⚪',
 }
 
 /** 배지 DOM 을 만든다. `innerHTML` 을 쓰지 않는다 (docs/security/secure-coding.md 4절). */
@@ -37,14 +35,44 @@ function createBadge() {
 
   function render(level: BadgeLevel, verdict?: ArticleVerdict): void {
     el.dataset.level = level
-    mark.textContent = TEXT[level].mark
-    label.textContent = TEXT[level].label
+    mark.textContent = MARK[level]
+    label.textContent = content.badge[level].name
     detail.replaceChildren()
-    for (const it of verdict?.items ?? []) {
+
+    // **걸린 신호와 판단하지 못한 항목만 보여 준다** (docs/product.md 5절).
+    // 아무 신호 없는 항목까지 늘어놓으면 무엇이 걸렸는지 묻히고, 그 경우의 문구도 없다.
+    const rows = (verdict?.items ?? []).flatMap((it) => {
+      if (it.level === 'SAFE' || it.level === 'PENDING') return []
+      const c = content.items[it.id as keyof typeof content.items] as
+        | { name: string; signal: string; undetermined: string }
+        | undefined
+      if (!c) return []
+      return [{
+        mark: MARK[it.level],
+        level: it.level,
+        name: c.name,
+        text: it.level === 'UNDETERMINED' ? c.undetermined : c.signal,
+      }]
+    })
+
+    if (rows.length === 0) {
+      const note = document.createElement('div')
+      note.className = 'ge-badge__note'
+      note.textContent = content.badge[level].description
+      detail.append(note)
+      return
+    }
+    for (const r of rows) {
       const row = document.createElement('div')
       row.className = 'ge-badge__row'
-      row.dataset.level = it.level
-      row.textContent = `${TEXT[it.level].mark} ${it.id}`
+      row.dataset.level = r.level
+      const head = document.createElement('span')
+      head.className = 'ge-badge__row-name'
+      head.textContent = `${r.mark} ${r.name}`
+      const body = document.createElement('span')
+      body.className = 'ge-badge__row-text'
+      body.textContent = r.text
+      row.append(head, body)
       detail.append(row)
     }
   }
