@@ -1,6 +1,7 @@
 // Jev 호출 공용부. 분당 120건 한도를 넘지 않게 창을 관리한다.
 import { readFileSync } from 'node:fs'
-const SCHEMA = JSON.parse(readFileSync('packages/shared/judgment-items.json', 'utf8'))
+// 어디서 돌려도 되게 이 파일 기준으로 읽는다.
+const SCHEMA = JSON.parse(readFileSync(new URL('../../../packages/shared/judgment-items.json', import.meta.url), 'utf8'))
 const UV = SCHEMA.items.find((i) => i.id === 'unverifiable_claim')
 const COMMON = SCHEMA.common_instructions
 const BASE = process.env.CHATKHU_API_BASE_URL, KEY = process.env.CHATKHU_API_KEY
@@ -37,15 +38,26 @@ const q = (question, field) => ({
   instructions: question.instructions.replaceAll('`sentence` 필드', `\`${field}\` 필드`) + '\n' + COMMON,
 })
 
-/** 문장들을 size 개씩 묶어 부른다. size=1 이면 지금 방식. 반환: [{factual, basis}, ...] 문장 순서대로 */
-export async function judge(sents, size) {
+/**
+ * 문장들을 size 개씩 묶어 부른다.
+ *
+ * `naming` 이 필드 이름을 정한다. 이게 따로 있는 이유는 **묶음 효과와 이름 효과를 가르기 위해서다.**
+ * 처음에는 size=1 일 때만 `sentence`, 아니면 `s1`…`sN` 을 썼는데, 그러면 기준선과 묶음 조건이
+ * 두 가지(묶는 것, 이름) 모두 달라져 "옆 문장이 샌다" 는 결론을 분리할 수 없다.
+ *
+ * - `'sentence'` — `state.sentence`. 제품이 지금 쓰는 방식
+ * - `'indexed'`  — `state.s1`…`sN`. size=1 과 함께 쓰면 **이름만 바꾼 통제 조건**이 된다
+ *
+ * 반환: [{factual_assertion, named_basis}, ...] 문장 순서대로
+ */
+export async function judge(sents, size, naming = size === 1 ? 'sentence' : 'indexed') {
   const res = new Array(sents.length)
   const jobs = []
   for (let off = 0; off < sents.length; off += size) {
     const chunk = sents.slice(off, off + size)
     const state = {}, questions = {}, map = {}
     chunk.forEach((t, k) => {
-      const f = size === 1 ? 'sentence' : `s${k + 1}`
+      const f = naming === 'sentence' ? 'sentence' : `s${k + 1}`
       state[f] = t
       for (const sub of UV.questions) { questions[`${f}_${sub.id}`] = q(sub.question, f); map[`${f}_${sub.id}`] = [off + k, sub.id] }
     })

@@ -11,7 +11,7 @@
     "url": "https://n.news.naver.com/article/055/0001397158",
     "분야": "경제",
     "길이대": "짧음",
-    "문장수": 10
+    "문장수": 9
   },
   {
     "i": 2,
@@ -22,10 +22,10 @@
   },
   {
     "i": 3,
-    "url": "https://n.news.naver.com/article/032/0003477776",
+    "url": "https://n.news.naver.com/article/028/0002828546",
     "분야": "세계",
     "길이대": "보통",
-    "문장수": 22
+    "문장수": 18
   },
   {
     "i": 4,
@@ -36,36 +36,36 @@
   },
   {
     "i": 5,
-    "url": "https://n.news.naver.com/article/003/0014269575",
+    "url": "https://n.news.naver.com/article/138/0002245530",
     "분야": "IT과학",
     "길이대": "보통",
-    "문장수": 21
+    "문장수": 23
   },
   {
     "i": 6,
-    "url": "https://n.news.naver.com/article/011/0004673795",
+    "url": "https://n.news.naver.com/article/296/0000106260",
     "분야": "생활문화",
     "길이대": "보통",
-    "문장수": 21
+    "문장수": 16
   },
   {
     "i": 7,
-    "url": "https://n.news.naver.com/article/014/0005592546",
+    "url": "https://n.news.naver.com/article/018/0006393252",
     "분야": "세계",
     "길이대": "긺",
-    "문장수": 29
+    "문장수": 39
   },
   {
     "i": 8,
-    "url": "https://n.news.naver.com/article/015/0005345171",
+    "url": "https://n.news.naver.com/article/015/0005345168",
     "분야": "경제",
     "길이대": "긺",
-    "문장수": 28
+    "문장수": 33
   },
   {
     "i": 9,
-    "url": "https://n.news.naver.com/article/079/0004200896",
-    "분야": "정치",
+    "url": "https://n.news.naver.com/article/015/0005345171",
+    "분야": "경제",
     "길이대": "긺",
     "문장수": 28
   }

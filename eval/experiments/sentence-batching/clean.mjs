@@ -14,10 +14,13 @@ const text = (h) => h
   .replace(/<[^>]+>/g, '')
   .replace(/&nbsp;/g, ' ').replace(/&quot;/g, '"').replace(/&#39;/g, "'")
   .replace(/&lt;/g, '<').replace(/&gt;/g, '>')
-  .replace(/&#(d+);/g, (_, d) => String.fromCodePoint(+d))
+  // 10진·16진 숫자 엔티티. 이걸 놓치면 &#8220;(") 가 글자 그대로 남아
+  // split.mjs 의 따옴표 추적이 어긋나고 그대로 Jev 에 보내진다.
+  .replace(/&#(\d+);/g, (_, d) => String.fromCodePoint(+d))
   .replace(/&#x([0-9a-f]+);/gi, (_, x) => String.fromCodePoint(parseInt(x, 16)))
-  .replace(/&[a-z]+;/gi, ' ')
+  // &amp; 를 먼저 푼다. 아래 줄이 먼저 돌면 &amp; 가 공백이 되어 이 치환이 돌 일이 없다.
   .replace(/&amp;/g, '&')
+  .replace(/&[a-z]+;/gi, ' ')
 
 // 바이라인: "(서울=연합뉴스) 윤민혁 기자 =" / "[OO일보 김철수 기자]" 등
 const BYLINE = /^[\s\S]{0,400}?[(\[][^)\]]{2,40}[)\]]\s*[가-힣]{2,5}\s*(기자|특파원|객원기자)\s*[=:]\s*/
