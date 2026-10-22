@@ -345,3 +345,74 @@ describe('실패는 오류가 아니라 판단 보류다', () => {
     }
   })
 })
+
+describe('필드를 빼서 보내는 우회 (리뷰 지적)', () => {
+  it('headline_body 인데 body 가 없으면 거절한다', async () => {
+    // 그룹·기능의 짝은 맞는다. 그런데 본문 없이 출처를 묻게 되어
+    // 구조적으로 "출처 부재"(주의)가 나온다. 허용 필드만 봐서는 못 막는다.
+    const res = await judge({
+      feature: 'page', group: 'headline_body',
+      items: ['source_citation'], state: { headline: '제목만' },
+    })
+    expect(res.status).toBe(400)
+    expect(await errorOf(res)).toBe('missing_state_field')
+    expect(calls, 'Jev 를 부르면 안 된다').toHaveLength(0)
+  })
+
+  it('headline_body 인데 headline 이 없으면 ① 에서는 거절한다', async () => {
+    const res = await judge({
+      feature: 'page', group: 'headline_body',
+      items: ['headline_body_match'], state: { body: '본문만' },
+    })
+    expect(res.status).toBe(400)
+    expect(await errorOf(res)).toBe('missing_state_field')
+  })
+
+  it('③ 선택 텍스트는 headline 없이 같은 그룹을 쓴다', async () => {
+    // 같은 그룹이라도 기능마다 필수 필드가 다르다. 여기서는 body 만으로 충분하다.
+    mockFetch(() => ok({
+      model: 'jev-latest',
+      answers: {
+        emotional_language: { type: 'score', score: 1.2, confidence: 0.8 },
+        ai_style_signal: { type: 'score', score: 0.9, confidence: 0.6 },
+      },
+    }))
+    const res = await judge({
+      feature: 'selection', group: 'headline_body',
+      items: ['emotional_language', 'ai_style_signal'], state: { body: '고른 글' },
+    })
+    expect(res.status).toBe(200)
+  })
+
+  it('그 기능이 쓰지 않는 그룹은 거절한다', async () => {
+    // portal_list 는 headline_only 만 쓴다.
+    const res = await judge({
+      feature: 'portal_list', group: 'headline_body',
+      items: ['spread_inducement'], state: { headline: '제목', body: '본문' },
+    })
+    expect(res.status).toBe(400)
+  })
+})
+
+describe('프로토타입 이름이 검사를 통과하지 않는다', () => {
+  it('group 이 constructor 면 거절한다', async () => {
+    expect((await judge({ ...PAGE_BODY, group: 'constructor' })).status).toBe(400)
+  })
+
+  it('항목 id 가 constructor 면 거절한다', async () => {
+    const res = await judge({ ...PAGE_BODY, items: ['constructor'] })
+    expect(res.status).toBe(400)
+    expect(await errorOf(res)).toBe('unknown_item')
+  })
+
+  it('보기 밖의 답이 toString 이어도 판단 보류다', async () => {
+    mockFetch(() => ok({
+      model: 'jev-latest',
+      answers: {
+        source_citation: { type: 'choice', choice: 'toString', confidence: 1 },
+        headline_body_match: { type: 'choice', choice: 'partial', confidence: 1 },
+      },
+    }))
+    expect(await reasonOf(await judge(PAGE_BODY))).toBe('invalid_answer')
+  })
+})

@@ -23,7 +23,7 @@ const SCHEMA = source as unknown as {
   version: string
   model: string
   common_instructions: string
-  request_groups: Record<string, { state_fields: string[] }>
+  request_groups: Record<string, { state_fields: string[]; required?: Record<string, string[]> }>
   items: Item[]
 }
 
@@ -72,8 +72,9 @@ export function buildRequest(body: unknown): Rejection | Accepted {
     return { error: 'invalid_request', detail: 'items must be a non-empty array' }
   if (!isPlainObject(state)) return { error: 'invalid_request', detail: 'state must be an object' }
 
+  // Object.hasOwn 으로 본다. `group in GROUPS` 는 "constructor" 같은 프로토타입 이름에도 참이다.
+  if (!Object.hasOwn(GROUPS, group)) return { error: 'unknown_group', detail: `unknown group: ${group}` }
   const groupDef = GROUPS[group]
-  if (!groupDef) return { error: 'unknown_group', detail: `unknown group: ${group}` }
 
   // --- state: 그룹이 허용한 필드만. 그 밖은 무시가 아니라 거절 ---------------
   const allowed = new Set(groupDef.state_fields)
@@ -87,6 +88,19 @@ export function buildRequest(body: unknown): Rejection | Accepted {
   if (Object.keys(built).length === 0)
     return { error: 'invalid_request', detail: 'state has no field' }
 
+  // **허용한 필드만 보는 것으로는 부족하다.** 필드를 빼고 보내면 그룹·기능의 짝은 맞는데
+  // 판단에 필요한 글이 없는 요청이 통과한다. `headline_body` 에 `headline` 만 넣어
+  // `source_citation` 을 보내면 본문 없이 출처를 묻게 되어 구조적으로 "출처 부재"(주의)가 나온다.
+  // 확장 프로그램이 본문 추출에 실패하고 빈 값 대신 필드를 빼 보내는 버그만으로도 생긴다.
+  const required = groupDef.required && Object.hasOwn(groupDef.required, feature)
+    ? groupDef.required[feature]
+    : null
+  if (!required) return { error: 'group_not_in_feature', detail: `group ${group} is not used by feature ${feature}` }
+  for (const f of required) {
+    if (!Object.hasOwn(built, f))
+      return { error: 'missing_state_field', detail: `state.${f} is required for group ${group} in feature ${feature}` }
+  }
+
   // --- items: 아는 id 만, 그리고 그 기능에서 이 그룹으로 가는 것만 ------------
   const questions: Record<string, Question> = {}
   const criteria: Record<string, Question['criteria']> = {}
@@ -95,7 +109,7 @@ export function buildRequest(body: unknown): Rejection | Accepted {
     const item = ITEMS.get(id)
     // 모르는 id 를 통과시키면 우리 키로 남이 Jev 를 쓰는 셈이 된다.
     if (!item) return { error: 'unknown_item', detail: `unknown item: ${id}` }
-    const belongs = item.request_group[feature]
+    const belongs = Object.hasOwn(item.request_group, feature) ? item.request_group[feature] : undefined
     if (!belongs) return { error: 'item_not_in_feature', detail: `item ${id} is not used by feature ${feature}` }
     if (belongs !== group)
       return { error: 'item_not_in_group', detail: `item ${id} belongs to group ${belongs} in feature ${feature}, not ${group}` }
@@ -136,7 +150,8 @@ export function answersAreValid(
     } else {
       // choice — 정한 보기 안이어야 한다
       if (a.type !== 'choice') return false
-      if (typeof a.choice !== 'string' || !(a.choice in crit)) return false
+      // `in` 은 프로토타입까지 본다. "constructor" 같은 답이 통과하면 안 된다.
+      if (typeof a.choice !== 'string' || !Object.hasOwn(crit, a.choice)) return false
     }
   }
   return true

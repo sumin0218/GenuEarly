@@ -51,10 +51,15 @@ curl http://127.0.0.1:8787/health
 셋뿐이다. **점수로 바꾸거나 해석하지 않는다** — 그건 확장 프로그램의 몫이다.
 
 1. **요청이 우리 것인지 본다** (origin, 크기 상한)
-2. **규약에 맞는지 본다** — 아는 항목 id 인지, 그리고 **항목·그룹·기능의 짝이 맞는지**.
-   id 만 보면 `headline_body` 그룹에 `clickbait_headline` 을 넣어 **제목 판단에 본문을 섞는** 요청이 통과한다
+2. **규약에 맞는지 본다** — 아는 항목 id 인지, **항목·그룹·기능의 짝이 맞는지**,
+   그리고 **그 기능이 요구하는 `state` 필드가 다 있는지**.
+   id 만 보면 `headline_body` 그룹에 `clickbait_headline` 을 넣어 **제목 판단에 본문을 섞는** 요청이 통과하고,
+   짝만 보면 `headline_body` 에 `headline` 만 넣어 **본문 없이 출처를 묻는** 요청이 통과한다
 3. **Jev 로 넘기고 답을 그대로 중계한다.** 항목의 `question` 객체를 그대로 보내고,
    코드가 하는 일은 `instructions` 뒤에 `common_instructions` 를 붙이는 것 하나다
+
+> **`answers` 의 키는 항목 id 가 아니라 질문 id 다.** 대부분 같지만 `unverifiable_claim` 은
+> `factual_assertion` 과 `named_basis` 로 나뉘어 온다 ([docs/architecture.md](../../docs/architecture.md) 4절).
 
 **실패는 오류가 아니라 결과다.** 429·타임아웃·게이트웨이 5xx·보기 밖 응답은 전부
 `200` 에 `{ undetermined: true, reason }` 으로 돌아간다. `reason` 은 로그용이고 사용자에게 보여 주지 않는다.
@@ -87,6 +92,13 @@ node --env-file=<키가 있는 .env> node_modules/vitest/vitest.mjs run --root a
 GE-31 에서 질문 세트 전체가 `400` 으로 돌아온 것이 모의만 보고 있었기 때문이다.
 
 ## 배포
+
+> 🚫 **GE-20(레이트 리밋) 전에는 `wrangler deploy` 하지 않는다.**
+>
+> 이제 `/v1/judge` 가 실제로 키를 쓴다. Origin 검사는 인증이 아니라서
+> `curl -H 'Origin: chrome-extension://x'` 로 **누구나 우리 ChatKHU 키를 쓸 수 있다.**
+> 분당 120건은 고정이고 문구·이미지·판단이 **같은 크레딧**을 쓴다. 남이 그 한도만 채워도
+> 심사위원의 배지가 전부 ⚪ 가 되고 문구·아이콘 생성에 쓸 크레딧까지 사라진다.
 
 ```bash
 npx wrangler login                               # 브라우저 OAuth. 한 번만
