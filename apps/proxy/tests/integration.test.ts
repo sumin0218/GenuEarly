@@ -23,6 +23,10 @@ const env: Env = {
   JEV_MODEL: 'jev-1.13.0',
   JEV_TIMEOUT_MS: '8000',
   MAX_REQUEST_BYTES: '65536',
+  // 실제 잔액으로 감시까지 함께 돌린다.
+  CREDITS_RESERVE: '500',
+  CREDITS_TTL_MS: '60000',
+  CREDITS_TIMEOUT_MS: '3000',
 }
 const ORIGIN = 'chrome-extension://abcdefghijklmnopabcdefghijklmnop'
 

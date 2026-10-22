@@ -7,6 +7,7 @@
 // **점수로 바꾸거나 해석하지 않는다.** 그건 확장 프로그램의 몫이다 (docs/architecture.md 5절).
 import { buildRequest, isRejection, SCHEMA_MODEL, SCHEMA_VERSION } from './schema'
 import { callJev } from './jev'
+import { budgetAllows, isPaused } from './credits'
 
 export interface Env {
   /** ChatKHU API 키. wrangler secret 으로 넣는다. 로그에 남기지 않는다. */
@@ -15,6 +16,11 @@ export interface Env {
   JEV_MODEL: string
   JEV_TIMEOUT_MS: string
   MAX_REQUEST_BYTES: string
+  /** 이만큼은 남겨 둔다. 아래로 내려가면 판단을 멈춘다. 0 이면 감시를 끈다 */
+  CREDITS_RESERVE: string
+  /** 잔액을 다시 묻기까지의 간격(ms) */
+  CREDITS_TTL_MS: string
+  CREDITS_TIMEOUT_MS: string
 }
 
 /**
@@ -95,6 +101,8 @@ export default {
           ok: true,
           // 어느 질문 세트에 맞춘 서버인지 알 수 있게 모델만 밝힌다.
           model: env.JEV_MODEL,
+          // 크레딧 예비분 아래로 내려가 판단을 멈췄는지. **잔액 숫자는 밝히지 않는다.**
+          paused: isPaused(),
         },
         200,
       )
@@ -150,6 +158,13 @@ export default {
       const built = buildRequest(parsed)
       if (isRejection(built)) {
         return reply(origin, { error: built.error, detail: built.detail }, 400)
+      }
+
+      // --- 예산 ------------------------------------------------------------
+      // 레이트 리밋이 아니다. 지키려는 것은 분당 건수가 아니라 **크레딧 잔액**이다.
+      // 한도껏 쓰면 월 할당이 7시간이면 사라지고 다음 달까지 돌아오지 않는다.
+      if (!(await budgetAllows(env))) {
+        return reply(origin, { model: env.JEV_MODEL, undetermined: true, reason: 'budget_exhausted' }, 200)
       }
 
       // --- 호출 -------------------------------------------------------------

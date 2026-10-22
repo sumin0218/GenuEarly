@@ -11,6 +11,10 @@ const env: Env = {
   JEV_MODEL: 'jev-1.13.0',
   JEV_TIMEOUT_MS: '8000',
   MAX_REQUEST_BYTES: '65536',
+  // 여기서는 중계 동작을 본다. 크레딧 감시는 0 으로 꺼 두고 아래에서 따로 켠다.
+  CREDITS_RESERVE: '0',
+  CREDITS_TTL_MS: '60000',
+  CREDITS_TIMEOUT_MS: '3000',
 }
 
 const EXT_ORIGIN = 'chrome-extension://abcdefghijklmnopabcdefghijklmnop'
@@ -22,7 +26,8 @@ describe('헬스 체크', () => {
   it('살아 있으면 200 과 모델 버전을 준다', async () => {
     const res = await call('/health')
     expect(res.status).toBe(200)
-    await expect(res.json()).resolves.toEqual({ ok: true, model: 'jev-1.13.0' })
+    // paused 는 크레딧 예비분 아래로 내려갔는지다. 잔액 숫자는 들어가지 않는다 (GE-20).
+    await expect(res.json()).resolves.toEqual({ ok: true, model: 'jev-1.13.0', paused: false })
   })
 
   it('키나 설정값을 돌려주지 않는다', async () => {
@@ -414,5 +419,155 @@ describe('프로토타입 이름이 검사를 통과하지 않는다', () => {
       },
     }))
     expect(await reasonOf(await judge(PAGE_BODY))).toBe('invalid_answer')
+  })
+})
+
+// ─────────────────────────────────────────────────────────────────────────────
+// 크레딧 잔액 감시 (GE-20)
+// ─────────────────────────────────────────────────────────────────────────────
+
+import { resetCreditCache } from '../src/credits'
+
+/** 감시를 켠 env. 기본 env 는 CREDITS_RESERVE 가 0 이라 감시가 꺼져 있다. */
+const guarded: Env = { ...env, CREDITS_RESERVE: '500' }
+
+const judgeG = (body: unknown = PAGE_BODY) =>
+  worker.fetch(new Request('https://proxy.invalid/v1/judge', {
+    method: 'POST',
+    headers: { Origin: EXT_ORIGIN, 'Content-Type': 'application/json' },
+    body: JSON.stringify(body),
+  }), guarded)
+
+/** 잔액 응답과 판단 응답을 둘 다 내는 mock. */
+const mockWithCredits = (remaining: number | 'fail') =>
+  vi.stubGlobal('fetch', (url: string, init: RequestInit) => {
+    calls.push({ url, init })
+    if (url.endsWith('/credits')) {
+      return Promise.resolve(remaining === 'fail'
+        ? new Response('nope', { status: 500 })
+        : new Response(JSON.stringify({ total: { quota: 4000, used: 4000 - remaining, remaining } }), { status: 200 }))
+    }
+    return Promise.resolve(ok({ model: 'jev-latest', answers: answersFor(PAGE_BODY.items) }))
+  })
+
+const judgeCalls = () => calls.filter((c) => c.url.endsWith('/decisions/'))
+
+describe('크레딧 잔액 감시', () => {
+  beforeEach(() => { resetCreditCache() })
+
+  it('예비분보다 많으면 판단한다', async () => {
+    mockWithCredits(3713)
+    const res = await judgeG()
+    expect(res.status).toBe(200)
+    expect((await res.json() as { answers?: object }).answers).toBeDefined()
+    expect(judgeCalls()).toHaveLength(1)
+  })
+
+  it('예비분 아래면 멈추고 Jev 를 부르지 않는다', async () => {
+    mockWithCredits(400)
+    const res = await judgeG()
+    expect(res.status).toBe(200)
+    expect(await res.json()).toEqual({ model: 'jev-1.13.0', undetermined: true, reason: 'budget_exhausted' })
+    expect(judgeCalls(), '멈췄는데 크레딧을 더 쓰면 안 된다').toHaveLength(0)
+  })
+
+  it('경계값(예비분과 같을 때)에서 멈춘다', async () => {
+    mockWithCredits(500)
+    expect(await reasonOf(await judgeG())).toBe('budget_exhausted')
+  })
+
+  it('TTL 안에서는 잔액을 다시 묻지 않는다', async () => {
+    mockWithCredits(3713)
+    await judgeG()
+    await judgeG()
+    await judgeG()
+    expect(calls.filter((c) => c.url.endsWith('/credits')), '요청마다 물으면 호출이 두 배가 된다').toHaveLength(1)
+    expect(judgeCalls()).toHaveLength(3)
+  })
+
+  it('잔액을 한 번도 못 읽으면 통과시킨다', async () => {
+    // 일시적인 장애로 서비스를 멈추는 것이 이 장치의 목적이 아니다.
+    // 막으려는 것은 지속적인 소진이고, 그건 한 번만 읽히면 잡힌다.
+    mockWithCredits('fail')
+    const res = await judgeG()
+    expect(res.status).toBe(200)
+    expect((await res.json() as { answers?: object }).answers).toBeDefined()
+  })
+
+  it('읽기에 실패해도 지난 값이 있으면 그 값으로 판단한다', async () => {
+    let fail = false
+    vi.stubGlobal('fetch', (url: string, init: RequestInit) => {
+      calls.push({ url, init })
+      if (url.endsWith('/credits')) {
+        return Promise.resolve(fail
+          ? new Response('nope', { status: 500 })
+          : new Response(JSON.stringify({ total: { remaining: 400 } }), { status: 200 }))
+      }
+      return Promise.resolve(ok({ model: 'jev-latest', answers: answersFor(PAGE_BODY.items) }))
+    })
+    const stale: Env = { ...guarded, CREDITS_TTL_MS: '0' }   // 매번 다시 묻게 한다
+    const call1 = await worker.fetch(new Request('https://proxy.invalid/v1/judge', {
+      method: 'POST', headers: { Origin: EXT_ORIGIN, 'Content-Type': 'application/json' },
+      body: JSON.stringify(PAGE_BODY),
+    }), stale)
+    expect(await reasonOf(call1)).toBe('budget_exhausted')
+
+    fail = true
+    const call2 = await worker.fetch(new Request('https://proxy.invalid/v1/judge', {
+      method: 'POST', headers: { Origin: EXT_ORIGIN, 'Content-Type': 'application/json' },
+      body: JSON.stringify(PAGE_BODY),
+    }), stale)
+    expect(await reasonOf(call2), '지난 값이 멈춤이었으면 계속 멈춘다').toBe('budget_exhausted')
+  })
+
+  it('CREDITS_RESERVE 가 0 이면 묻지도 않는다', async () => {
+    mockWithCredits(0)
+    await judge(PAGE_BODY)   // 감시가 꺼진 기본 env
+    expect(calls.filter((c) => c.url.endsWith('/credits'))).toHaveLength(0)
+  })
+
+  it('잔액 숫자가 응답에 새지 않는다', async () => {
+    mockWithCredits(400)
+    const text = await (await judgeG()).text()
+    expect(text).not.toContain('400')
+    expect(text).not.toContain('4000')
+  })
+
+  it('/health 가 멈춤 여부를 알려 주되 잔액은 밝히지 않는다', async () => {
+    mockWithCredits(400)
+    await judgeG()
+    const body = await (await call('/health')).text()
+    expect(JSON.parse(body)).toEqual({ ok: true, model: 'jev-1.13.0', paused: true })
+    expect(body).not.toContain('400')
+  })
+})
+
+describe('열린 프록시가 아니다', () => {
+  it('클라이언트가 준 주소로는 나가지 않는다', async () => {
+    mockFetch(() => ok({ model: 'jev-latest', answers: answersFor(PAGE_BODY.items) }))
+    // 바깥 주소를 넣을 만한 자리에 전부 넣어 본다.
+    await judge({
+      ...PAGE_BODY,
+      url: 'https://evil.example/steal',
+      target: 'https://evil.example/steal',
+      state: { headline: 'https://evil.example/steal', body: 'https://evil.example/steal' },
+    })
+    for (const c of calls) {
+      expect(c.url, '설정한 게이트웨이 말고 다른 곳으로 나가면 안 된다')
+        .toBe('https://example.invalid/v1/gateway/decisions/')
+    }
+  })
+
+  it('state 에 담긴 주소는 글자일 뿐 가져오지 않는다', async () => {
+    // 기사 본문에 링크가 있는 것은 정상이다. 그것을 서버가 따라가면 안 된다.
+    mockFetch(() => ok({ model: 'jev-latest', answers: answersFor(['clickbait_headline']) }))
+    await judge({
+      feature: 'page', group: 'headline_only',
+      items: ['clickbait_headline'], state: { headline: '자세히는 https://evil.example 에서' },
+    })
+    expect(calls).toHaveLength(1)
+    expect(calls[0].url).toBe('https://example.invalid/v1/gateway/decisions/')
+    // 보내기는 한다. state 는 데이터다.
+    expect(calls[0].init.body as string).toContain('evil.example')
   })
 })
