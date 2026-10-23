@@ -83,30 +83,56 @@ export function readAnswer(id, a) {
 }
 
 /**
- * unverifiable_claim 의 문장 하나 → { risk, soft }. 제품의 sentenceScore 와 같은 판정 순서다.
+ * unverifiable_claim 의 문장 하나 → { risk, margin, soft }. 제품의 sentenceScore 와 같은 판정 순서다.
  * risk 1 = 확인할 수 없는 주장으로 셈, 0 = 아님, null = ⚪(두 질문 중 하나가 "모름").
- * 판정 자체가 보류 구간 밖에서만 나오므로 margin 은 risk 가 null 이 아니면 참이다.
+ * margin: 한 질문이 결과를 정한 문장(단정 아님, 근거 있음)은 참. 둘 다 확신 구간이라 combine 으로 가린 문장은
+ * combine 이 0.5 에서 CRITERIA.marginSentence 이상 떨어져 있을 때만 참이다 (3판).
  */
 export function readSentence(answers) {
   const a = answers[UV.combine.a].noul, b = answers[UV.combine.b].noul
   const [lo, hi] = PRODUCT.UNDETERMINED_BAND
   const p = a * (1 - b)
-  let risk
-  if (a < lo || b > hi) risk = 0
-  else if (a <= hi || b >= lo) risk = null
-  else risk = p > 0.5 ? 1 : 0
-  return { risk, margin: risk !== null, soft: p, a, b }
+  let risk, margin
+  if (a < lo || b > hi) { risk = 0; margin = true }
+  else if (a <= hi || b >= lo) { risk = null; margin = false }
+  else { risk = p > 0.5 ? 1 : 0; margin = Math.abs(p - 0.5) >= CRITERIA.marginSentence }
+  return { risk, margin, soft: p, a, b }
+}
+
+// ── 기사 배지. 제품의 toItemScores + verdictFrom 과 같은 규칙이다 (scoring.ts, PR #15). ──
+// ⚪ 항목은 평균에서 빠진다. 그래서 항목 하나가 ⚪로 바뀌어도 배지는 남은 항목 쪽으로 움직인다.
+export const BADGE = { SAFE: 0, CHECK: 1, CAUTION: 2, UNDETERMINED: null }
+const MIN_JUDGED_ITEMS = 2 // scoring.ts 와 같다
+
+/** 항목 하나의 0~1 점수 (⚪ 는 null) */
+export const itemValue = (id, a) => (a ? readAnswer(id, a).v : null)
+
+/** 문장들의 답 → unverifiable_claim 항목 점수. 확인할 수 없는 주장으로 센 문장의 비율. 판정된 문장이 없으면 null */
+export function sentenceValue(perSentence) {
+  let judged = 0, flagged = 0
+  for (const s of perSentence) { const r = readSentence(s); if (r.risk === null) continue; judged++; flagged += r.risk }
+  return judged ? flagged / judged : null
+}
+
+/** 항목 점수들 → { level, total, judged }. level 은 0 🟢, 1 🟡, 2 🔴, null ⚪ */
+export function articleBadge(values) {
+  const judged = Object.values(values).filter((v) => v !== null)
+  if (judged.length < MIN_JUDGED_ITEMS) return { level: null, total: null, judged: judged.length }
+  const total = judged.reduce((x, y) => x + y, 0) / judged.length
+  return { level: level(total), total, judged: judged.length }
 }
 
 /**
- * 판정 기준 (README 2절).
- * 1판(2026-10-23 첫 측정 전)은 경고 값 셋뿐이었다. 2판(2026-10-23 리뷰 뒤)에서 여유 값 둘을 더했다.
- * 바꾼 이유와 시점은 README 2절 "기준의 판" 에 있다.
+ * 판정 기준 (README 2절). 바꾼 이유와 시점은 README 2절 "기준의 판" 에 있다.
+ * 1판(첫 측정 전): 경고 값 셋. 2판(첫 리뷰 뒤): 제품 판독 + Choice·Score 여유.
+ * 3판(2차 리뷰 뒤): 문장 combine 여유 + 기사 배지 판정.
  */
 export const CRITERIA = {
-  version: 2,
+  version: 3,
   marginChoice: 0.2,        // Choice 기준선: 1등과 2등 확률 차가 이 이상일 때만 판정
   marginScore: 0.1,         // Score 기준선: 항목 점수(0~1)가 단계 경계(0.3, 0.6)에서 이만큼 떨어져 있을 때만 판정
+  marginSentence: 0.1,      // 문장 기준선: combine 으로 가린 문장은 combine 이 0.5 에서 이만큼 떨어져 있을 때만 판정
+  marginArticle: 0.1,       // 기사 배지 기준선: 항목 평균이 단계 경계(0.3, 0.6)에서 이만큼 떨어져 있을 때만 판정
   warnChoiceClearProb: 0.2, // Choice: 노린 쪽 보기 확률이 이만큼 움직이면 경고
   warnScoreDrop: 0.5,       // Score: score 가 이만큼 움직이면 경고
   warnSentenceDrop: 0.2,    // unverifiable_claim: combine 값이 이만큼 움직이면 경고
