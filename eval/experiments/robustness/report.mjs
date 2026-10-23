@@ -5,7 +5,7 @@
 // 결과 디렉터리에 summary.json 과 cases.json 을 쓰고, 표를 화면에 찍는다.
 import { readFileSync, writeFileSync, mkdirSync } from 'node:fs'
 import { resolve } from 'node:path'
-import { GROUPS, CHOICE_IDS, INJECTIONS, SCHEMA, CRITERIA, PRODUCT, readAnswer, readSentence, permutations, itemValue, sentenceValue, articleBadge } from './lib.mjs'
+import { GROUPS, CHOICE_IDS, INJECTIONS, SCHEMA, CRITERIA, PRODUCT, readAnswer, readSentence, permutations, itemValue, sentenceValue, sentenceValueWith, articleBadge } from './lib.mjs'
 
 const [W, OUTDIR, ...memo] = process.argv.slice(2).map((x, i) => (i < 2 ? resolve(x) : x))
 const runs = readFileSync(resolve(W, 'runs.jsonl'), 'utf8').split('\n').filter(Boolean).map((l) => JSON.parse(l))
@@ -106,11 +106,11 @@ for (const r of runs) {
 const article = {}
 for (const x of INJECTIONS.items) article[x.id] = { direction: dirOf(x), n: 0, judged: 0, room: 0, fail: 0, held: 0, boundary: 0, unstable: 0, opposite: 0, to_held: 0 }
 const sentKeys = (r) => [...new Set(Object.keys(r.res).filter((k) => k.startsWith('sent:')).map((k) => k.split(':')[1]))]
-function badgeOf(hb, ho, sents) {
+function badgeOf(hb, ho, sents, uv) {
   const v = {}
   for (const id of GROUPS.headline_body) v[id] = itemValue(id, hb?.[id])
   for (const id of GROUPS.headline_only) v[id] = itemValue(id, ho?.[id])
-  v.unverifiable_claim = sents.length ? sentenceValue(sents) : null
+  v.unverifiable_claim = uv !== undefined ? uv : sents.length ? sentenceValue(sents) : null
   return articleBadge(v)
 }
 const farFromEdge = (t) => [PRODUCT.SAFE_BELOW, PRODUCT.CAUTION_AT].every((b) => Math.abs(t - b) >= CRITERIA.marginArticle)
@@ -123,7 +123,12 @@ for (const r of runs) {
   const B = badgeOf(hb, ho, sb), R = badgeOf(hbR, hoR, sr)
   for (const x of INJECTIONS.items) {
     let I
-    if (x.field === 'body') { const t = get(`inj:${x.id}`); if (!t) continue; I = badgeOf(t, ho, sb) }
+    if (x.field === 'body') {
+      const t = get(`inj:${x.id}`); if (!t) continue
+      const added = Object.keys(r.res).filter((k) => k.startsWith(`injsent:${x.id}:`)).map(get)
+      if (!added.length || added.some((y) => !y)) continue
+      I = badgeOf(t, ho, sb, sentenceValueWith(sb, added, r.n_sents ?? sb.length))
+    }
     else if (x.field === 'headline') { const t = get(`inj:${x.id}`); if (!t) continue; I = badgeOf(hb, t, sb) }
     else { const t = idx.map((i) => get(`sent:${i}:${x.id}`)); if (t.some((y) => !y)) continue; I = badgeOf(hb, ho, t) }
     const s = article[x.id], clear = dirOf(x) === 'clear'
@@ -135,7 +140,7 @@ for (const r of runs) {
     s.judged++
     if (clear ? B.level > 0 : B.level < 2) s.room++
     if (I.level === null) {
-      if (clear) { s.fail++; cases.push({ ...base, verdict: 'fail' }) } else s.to_held++
+      if (clear && B.level > 0) { s.fail++; cases.push({ ...base, verdict: 'fail' }) } else s.to_held++
       continue
     }
     const d = clear ? B.level - I.level : I.level - B.level
@@ -156,7 +161,9 @@ const summary = {
   question_set: SCHEMA.version, model_sent: SCHEMA.model, injections: INJECTIONS.version,
   model_response: [...new Set(runs.flatMap((r) => Object.values(r.res).map((x) => x.model)).filter(Boolean))],
   articles: runs.length, by_kind: runs.reduce((m, r) => ((m[r.kind ?? 'unknown'] = (m[r.kind ?? 'unknown'] ?? 0) + 1), m), {}),
-  requests: runs.reduce((a, r) => a + Object.keys(r.res).length, 0), errors,
+  requests: runs.reduce((a, r) => a + Object.keys(r.res).length, 0), // 판정에 쓴 답의 수
+  distinct_request_bodies: new Set(runs.flatMap((r) => Object.entries(r.res).map(([k, x]) => (k.endsWith(':repeat') ? `${r.id}:${k}` : x.h ?? `${r.id}:${k}`)))).size, // 서로 다른 요청 본문 수. 같은 본문은 지금은 한 번만 보낸다 (run.mjs)
+  errors,
   criteria: CRITERIA, product_reading: PRODUCT,
   answers_collected_at: { first: stamps[0] ?? null, last: stamps.at(-1) ?? null, unstamped },
   verdict: orderFail === 0 && injFail === 0 && artFail === 0 && errors === 0 ? 'PASS' : 'FAIL',
