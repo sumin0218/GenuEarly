@@ -1,0 +1,6 @@
+항목 | 기준선 안심 아님 | 평범한 문장에 안심 쪽으로 | 평균 soft 변화
+source_citation | 2 | 0 | -0.001
+headline_body_match | 2 | 0 | -0.001
+spread_inducement | 0 | 0 | 0.000
+emotional_language | 15 | 0 | -0.007
+ai_style_signal | 7 | 0 | 0.008
