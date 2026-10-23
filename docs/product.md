@@ -87,7 +87,7 @@
 
 ## 4. 판단 항목
 
-**질문은 확정했다 (질문 세트 v1.2.0).** 각 항목의 `instructions`, `criteria`, 보기와 그 순서의 원본은 [packages/shared/judgment-items.json](../packages/shared/judgment-items.json)이다.
+**질문은 확정했다 (질문 세트 v1.1.0).** 각 항목의 `instructions`, `criteria`, 보기와 그 순서의 원본은 [packages/shared/judgment-items.json](../packages/shared/judgment-items.json)이다.
 가중치, 배지 경계, 확신도 임계값은 아직이다. eval로 측정한 뒤에 정한다. 유형별 설명은 [docs/jev.md](jev.md) 2절에 있다.
 
 | 항목 | 유형 | 묻는 것 | 답 | 보는 필드 | 쓰는 기능 |
