@@ -2,6 +2,10 @@
 // 결과는 private/ge13/fictional/ 에만 쓴다. 커밋하지 않는다.
 //
 // - 실존 인물·기관·언론사·특정 사건을 쓰지 않는다. 도시는 가상의 '한별시'다
+// - 고유명사는 '한별'에 업종을 붙인 이름만 쓴다 (한별제과, 한별톡 …). 지어낸 그럴듯한 이름은 실존 이름과 겹친다
+//   (첫 생성의 '루미너스', '씽씽바이크', '스타필드 크로니클'이 그랬다). 쓰기 전에 검색해 겹치지 않는지 확인했다
+//   '(주)한별'(유통)과 '한별고'는 실재하므로 '한별' 단독이나 '한별고'는 쓰지 않는다
+// - 인물은 이름을 쓰지 않고 성과 직함으로만 쓴다 (박 감독). 지어낸 이름도 실존 인물과 겹친다
 // - 의료·백신·재난·선거 같은, 믿으면 해가 되는 주제를 쓰지 않는다
 // - target 은 정답이 아니라 만들 때의 의도다. 라벨은 사람이 따로 붙인다
 // - human_rewrite: true 인 5건은 사람이 직접 고쳐 쓴 뒤에 라벨링한다 (AI 문체가 정답과 겹치지 않게)
@@ -32,20 +36,20 @@ const STYLE = {
 }
 const SPECS = [
   ['f-001', 'news', '한별시 시내버스 노선 개편', ['no_source', 'urging']],
-  ['f-002', 'news', '가상 식품기업 "새봄푸드"의 과자 가격 인상', ['contradicts', 'strong_clickbait']],
+  ['f-002', 'news', '과자 회사 "한별제과"의 과자 가격 인상', ['contradicts', 'strong_clickbait']],
   ['f-003', 'news', '한별시 아파트 관리비 인상', ['emotional_3', 'no_source']],
-  ['f-004', 'news', '가상 모바일 메신저 앱 "톡톡이"의 유료화 검토', ['unnamed_source', 'hinting', 'mild_clickbait']],
-  ['f-005', 'news', '가상 프로축구단 "한별 FC"의 주전 선수 이적', ['strong_clickbait', 'emotional_2', 'urging']],
+  ['f-004', 'news', '모바일 메신저 앱 "한별톡"의 유료화 검토', ['unnamed_source', 'hinting', 'mild_clickbait']],
+  ['f-005', 'news', '프로축구단 "한별FC"의 홈경기장 이전', ['strong_clickbait', 'emotional_2', 'urging']],
   ['f-006', 'community', '한별시 공영주차장 요금 인상', ['urging', 'no_source', 'emotional_3']],
-  ['f-007', 'community', '가상 게임 "스타필드 크로니클" 대규모 업데이트', ['unnamed_source', 'partial']],
+  ['f-007', 'community', '온라인 게임 "한별 온라인" 대규모 업데이트', ['unnamed_source', 'partial']],
   ['f-008', 'local', '한별시 동네 전통시장 주말 휴무', ['no_source', 'hinting']],
-  ['f-009', 'blog', '가상 편의점 체인 "하루마트"의 신상품 단종', ['strong_clickbait', 'contradicts']],
-  ['f-010', 'blog', '가상 공유 전기자전거 "씽씽바이크" 요금제 변경', ['unnamed_source', 'emotional_2', 'urging']],
+  ['f-009', 'blog', '편의점 체인 "한별24"의 신상품 단종', ['strong_clickbait', 'contradicts']],
+  ['f-010', 'blog', '공유 전기자전거 "한별바이크" 요금제 변경', ['unnamed_source', 'emotional_2', 'urging']],
   ['f-011', 'draft', '한별시 공공도서관 운영 시간 단축', ['no_source', 'urging']],
-  ['f-012', 'draft', '가상 대학 "한별대" 기숙사비 인상', ['contradicts', 'mild_clickbait']],
-  ['f-013', 'draft', '가상 아이돌 그룹 "루미너스"의 활동 중단설', ['emotional_3', 'unnamed_source']],
+  ['f-012', 'draft', '대학 "한별대" 기숙사비 인상', ['contradicts', 'mild_clickbait']],
+  ['f-013', 'draft', '한별시 가을 시민 축제 취소설', ['emotional_3', 'unnamed_source']],
   ['f-014', 'draft', '한별시 반려견 놀이터 이용 규칙 변경', ['strong_clickbait', 'hinting']],
-  ['f-015', 'draft', '가상 택배회사 "빠른날개"의 주말 배송 축소', ['unnamed_source', 'mild_clickbait']],
+  ['f-015', 'draft', '택배회사 "한별택배"의 주말 배송 축소', ['unnamed_source', 'mild_clickbait']],
 ]
 
 const prompt = (topic, style, target) => `한국어 뉴스의 '주의 신호'를 알려 주는 브라우저 확장 프로그램의 **평가용 데이터**를 만든다.
@@ -61,6 +65,9 @@ ${target.map((t) => `- ${SIGNAL[t]}`).join('\n')}
 
 지킬 것:
 - 모든 인물·기관·회사·언론사·지명은 가상이다. 실존하는 이름(정부 부처, 실제 기업, 실제 도시, 실존 인물)을 쓰지 않는다. 도시는 '한별시'만 쓴다
+- 고유명사는 주제에 나온 이름만 쓴다. 새 회사·단체·장소 이름을 지어내지 않는다. 더 필요하면 '한별시 ○○과', '한별시 ○○동'처럼 '한별'을 붙인다
+- 인물은 이름을 쓰지 않고 성과 직함으로만 쓴다 (예: 박 감독, 김 모 대표, 이 과장)
+- 연예인·정치인·운동선수처럼 실존 인물로 오해받을 수 있는 사람을 글의 중심에 두지 않는다
 - 의료, 건강, 재난, 선거, 범죄 피해 주제로 번지지 않게 한다
 - 본문은 600~1200자
 - 글 안에 '가상', '평가용' 같은 말을 넣지 않는다. 독자가 읽는 글 그대로 쓴다

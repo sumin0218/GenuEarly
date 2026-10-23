@@ -5,6 +5,7 @@
 //   → eval/data/private/ge13/후보선정.xlsx
 import { readFileSync, readdirSync } from 'node:fs'
 import ExcelJS from 'exceljs'
+import { SOURCE_LABEL } from './sheet-meta.mjs'
 
 const REAL = new URL('../data/private/ge13/real/', import.meta.url)
 const latest = readdirSync(REAL).filter((f) => /^articles-.*\.json$/.test(f)).sort().at(-1)
@@ -48,6 +49,8 @@ guide.getColumn(1).width = 110
   "'힌트' 칸은 키워드로 붙인 참고일 뿐 정답이 아니다. 기사를 열어 보고 고른다.",
   '라벨은 여기서 붙이지 않는다. 고르는 사람이 무슨 신호가 있는지 미리 판단해 적지 않는다.',
   '이 파일에는 기사 제목이 들어 있다. 저장소에 커밋하지 않는다 (private/).',
+  '',
+  `${SOURCE_LABEL} ${latest}`,
 ].forEach((t, i) => { guide.getCell(i + 1, 1).value = t })
 guide.getRow(1).font = { bold: true, size: 13 }
 

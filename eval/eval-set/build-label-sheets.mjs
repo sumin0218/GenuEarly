@@ -5,19 +5,27 @@
 //   → private/ge13/라벨-A.xlsx, 라벨-B.xlsx
 //
 // 라벨러 시트에는 묶음(정상·경계·신호 뚜렷)을 보여 주지 않고 순서도 섞는다. 묶음을 알면 판단이 기운다.
+//
+// 라벨러가 본 글(정제 본문, 문장 배열)을 manifest 에 그대로 얼려 둔다. GE-17 은 이 글을 Jev 에 보낸다.
+// 그래야 라벨과 측정이 같은 글을 본다. 확장 프로그램의 추출기 정확도는 따로 잰다.
 import { readFileSync, readdirSync, writeFileSync } from 'node:fs'
+import { execSync } from 'node:child_process'
+import { fileURLToPath } from 'node:url'
 import ExcelJS from 'exceljs'
 import { splitSentences } from '../experiments/sentence-batching/split.mjs'
+import { SOURCE_LABEL } from './sheet-meta.mjs'
 
 const P = new URL('../data/private/ge13/', import.meta.url)
 const SCHEMA = JSON.parse(readFileSync(new URL('../../packages/shared/judgment-items.json', import.meta.url), 'utf8'))
 const REAL = new URL('real/', P)
-const latest = readdirSync(REAL).filter((f) => /^articles-.*\.json$/.test(f)).sort().at(-1)
-const byId = new Map(JSON.parse(readFileSync(new URL(latest, REAL), 'utf8')).map((a) => [a.id, a]))
 
-// 사람이 고른 것 읽기
+// 사람이 고른 것 읽기. 원본 수집 파일은 후보 시트를 만들 때 쓴 것을 쓴다 (최신 파일이 아니라)
 const pick = new ExcelJS.Workbook()
 await pick.xlsx.readFile(new URL('후보선정.xlsx', P))
+let source = null
+pick.getWorksheet('읽어 주세요').eachRow((r) => { const v = String(r.getCell(1).value ?? ''); if (v.startsWith(SOURCE_LABEL)) source = v.slice(SOURCE_LABEL.length).trim() })
+if (!source) throw new Error(`후보선정.xlsx 에 '${SOURCE_LABEL}' 줄이 없다. build-candidates.mjs 로 다시 만든다`)
+const byId = new Map(JSON.parse(readFileSync(new URL(source, REAL), 'utf8')).map((a) => [a.id, a]))
 const rows = (ws) => { const out = []; ws.eachRow((r, i) => { if (i > 1) out.push(r.values) }); return out }
 const GROUP = {
   '경계-자극적 제목': ['borderline', 'sensational_headline'],
@@ -45,14 +53,18 @@ const WANT = [['normal', undefined, 60], ['borderline', 'sensational_headline', 
 for (const [g, t, w] of WANT) if (count(g, t) !== w) console.warn(`${g}${t ? `/${t}` : ''}: ${count(g, t)}건 (목표 ${w})`)
 if (fictional.length !== 15) console.warn(`가상 기사 ${fictional.length}건 (목표 15)`)
 
-// id 부여, 분할, 문장 라벨 대상 — 씨앗 고정
+const missing = [...chosen.map((c) => c.src), ...practice].filter((id) => !byId.has(id))
+if (missing.length) throw new Error(`${source} 에 없는 기사: ${missing.join(', ')}`)
+
+// id 부여, 분할, 문장 라벨 대상 — 씨앗 고정 (data/README.md 1절)
 let seed = 20261024
 const rnd = () => (seed = (seed * 1103515245 + 12345) & 0x7fffffff) / 0x7fffffff
 const shuffle = (a) => a.map((v) => [rnd(), v]).sort((x, y) => x[0] - y[0]).map((x) => x[1])
+// id 를 붙이기 전에 섞는다. 고른 순서대로 붙이면 r-001~060 이 정상이라는 게 번호로 드러난다
 const items = [
-  ...chosen.map((c, i) => {
+  ...shuffle(chosen).map((c, i) => {
     const a = byId.get(c.src)
-    return { id: `r-${String(i + 1).padStart(3, '0')}`, kind: 'real', url: a.url, private_path: `real/${latest}#${a.id}`, group: c.group, borderline_type: c.borderline_type, section: a.section, collected_at: latest.slice(9, 19), body_sha256: a.body_sha256, body_chars: a.body_chars, headline: a.headline, body: a.body }
+    return { id: `r-${String(i + 1).padStart(3, '0')}`, kind: 'real', url: a.url, private_path: `real/${source}#${a.id}`, group: c.group, borderline_type: c.borderline_type, section: a.section, collected_at: source.slice(9, 19), body_sha256: a.body_sha256, body_chars: a.body_chars, headline: a.headline, body: a.body }
   }),
   ...fictional.map((f) => ({ id: f.id, kind: 'fictional', url: null, private_path: `fictional/${f.id}.json`, group: 'fictional', borderline_type: null, section: null, collected_at: f.generated_at.slice(0, 10), body_sha256: null, body_chars: f.body.length, headline: f.headline, body: f.body })),
 ]
@@ -64,9 +76,15 @@ for (const g of ['normal', 'borderline', 'signal', 'fictional']) {
   shuffle(gi).forEach((x, k) => { x.sentence_labels = k < SENT[g] })
 }
 
+// 정제·분리 규칙의 버전 — 마지막으로 바뀐 커밋. 해시가 달라졌을 때 기사가 고쳐진 것인지 규칙이 바뀐 것인지 가른다
+const rev = (rel) => execSync(`git log -1 --format=%h -- "${fileURLToPath(new URL(rel, import.meta.url))}"`).toString().trim() || 'uncommitted'
+for (const x of items) x.sentences = splitSentences(x.body)
 writeFileSync(new URL('manifest.v1.json', P), JSON.stringify({
-  version: 1, created_at: new Date().toISOString(), splitter: 'sentence-batching/split.mjs@83faf82', source_file: latest,
-  practice, items: items.map(({ headline, body, ...m }) => m),
+  version: 1, created_at: new Date().toISOString(), source_file: source,
+  cleaner: `eval/eval-set/clean.mjs@${rev('./clean.mjs')}`,
+  splitter: `eval/experiments/sentence-batching/split.mjs@${rev('../experiments/sentence-batching/split.mjs')}`,
+  note: 'headline·body·sentences 는 라벨러가 본 글 그대로다. 측정은 이 글을 Jev 에 보낸다. 이 파일은 private 이라 커밋하지 않는다',
+  practice, items,
 }, null, 2), 'utf8')
 
 // 라벨러 시트
@@ -131,7 +149,7 @@ for (const who of ['A', 'B']) {
   ss.views = [{ state: 'frozen', ySplit: 1 }]
   let r = 2
   for (const x of order.filter((x) => x.sentence_labels)) {
-    splitSentences(byIdAll.get(x.id).body).forEach((s, i) => {
+    byIdAll.get(x.id).sentences.forEach((s, i) => {
       const row = ss.addRow({ id: x.id, i, s })
       row.alignment = { wrapText: true, vertical: 'top' }
       for (const c of [4, 5]) ss.getCell(r, c).dataValidation = { type: 'list', allowBlank: true, formulae: ['"true,false,na"'] }
@@ -140,5 +158,5 @@ for (const who of ['A', 'B']) {
   }
   await wb.xlsx.writeFile(new URL(`라벨-${who}.xlsx`, P))
 }
-const sentN = items.filter((x) => x.sentence_labels).reduce((t, x) => t + splitSentences(x.body).length, 0)
+const sentN = items.filter((x) => x.sentence_labels).reduce((t, x) => t + x.sentences.length, 0)
 console.log(`세트 ${items.length}건 (튜닝 ${items.filter((x) => x.split === 'tune').length} · 확인 ${items.filter((x) => x.split === 'holdout').length}) · 문장 라벨 ${items.filter((x) => x.sentence_labels).length}건 ${sentN}문장 · 연습 ${practice.length}건`)
