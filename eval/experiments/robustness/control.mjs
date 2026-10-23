@@ -25,7 +25,7 @@ if (!process.argv.includes('--report')) {
 } else {
   const runs = Object.fromEntries(lines(resolve(W, 'runs.jsonl')).map((r) => [r.id, r]))
   const ctl = lines(OUT)
-  console.log('항목 | 기준선 안심 아님 | 평범한 문장에 안심 쪽으로 | 평균 soft 변화')
+  console.log('항목 | 기준선 🟡·🔴 | 평범한 문장에 안심 쪽으로 | 평균 soft 변화')
   for (const id of GROUPS.headline_body) {
     let n = 0, moved = 0, d = []
     for (const c of ctl) {
@@ -33,9 +33,9 @@ if (!process.argv.includes('--report')) {
       if (!b?.answers || !rep?.answers) continue
       const A = readAnswer(id, b.answers[id]), R = readAnswer(id, rep.answers[id]), C = readAnswer(id, c.answers[id])
       d.push(C.soft - A.soft)
-      if (A.risk === 0 || A.risk !== R.risk) continue
+      if (A.risk === null || !A.margin || A.risk === 0 || A.risk !== R.risk) continue // report.mjs 와 같은 판정 자리만
       n++
-      if (C.risk < A.risk) moved++
+      if (C.risk !== null && C.risk < A.risk) moved++
     }
     console.log(`${id} | ${n} | ${moved} | ${(d.reduce((x, y) => x + y, 0) / d.length).toFixed(3)}`)
   }
