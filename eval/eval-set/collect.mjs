@@ -6,6 +6,7 @@ import { writeFileSync, mkdirSync } from 'node:fs'
 import { createHash } from 'node:crypto'
 import { splitSentences } from '../experiments/sentence-batching/split.mjs'
 import { clean } from './clean.mjs'
+import { CLEANER, label } from './version.mjs'
 
 const OUT = new URL('../data/private/ge13/real/', import.meta.url)
 mkdirSync(OUT, { recursive: true })
@@ -43,6 +44,9 @@ const MACHINE = /(로봇\s*기자|자동\s*(생성|작성)|AI\s*기자|알고리
 const ROUTINE = /(마감|코스피|코스닥|환율|날씨|기온|미세먼지|[0-9]+\s*:\s*[0-9]+)/
 const SOURCED = /(따르면|밝혔다|말했다|전했다|발표했다|설명했다|강조했다)/
 
+// 이 수집에서 본문을 정제한 규칙. 나중에 clean.mjs 를 고쳐도 이 파일의 본문은 이 버전으로 만들어진 것이다
+const cleaner = label('eval/eval-set/clean.mjs', CLEANER)
+if (cleaner.endsWith('-dirty')) console.warn(`clean.mjs 를 고친 채 커밋하지 않았다 (${cleaner}). 커밋한 뒤 다시 모으는 것이 좋다`)
 const ids = [...found.keys()]
 const out = []
 for (const id of ids) {
@@ -62,6 +66,7 @@ for (const id of ids) {
       id, url, press, section, sources, headline, body,
       body_chars: body.length,
       body_sha256: createHash('sha256').update(body, 'utf8').digest('hex'),
+      cleaner,
       n_sentences: sents.length,
       hints: {
         opinion: OPINION.test(headline),

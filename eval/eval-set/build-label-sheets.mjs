@@ -9,11 +9,10 @@
 // 라벨러가 본 글(정제 본문, 문장 배열)을 manifest 에 그대로 얼려 둔다. GE-17 은 이 글을 Jev 에 보낸다.
 // 그래야 라벨과 측정이 같은 글을 본다. 확장 프로그램의 추출기 정확도는 따로 잰다.
 import { readFileSync, readdirSync, writeFileSync } from 'node:fs'
-import { execSync } from 'node:child_process'
-import { fileURLToPath } from 'node:url'
 import ExcelJS from 'exceljs'
 import { splitSentences } from '../experiments/sentence-batching/split.mjs'
 import { SOURCE_LABEL } from './sheet-meta.mjs'
+import { SPLITTER, label } from './version.mjs'
 
 const P = new URL('../data/private/ge13/', import.meta.url)
 const SCHEMA = JSON.parse(readFileSync(new URL('../../packages/shared/judgment-items.json', import.meta.url), 'utf8'))
@@ -45,7 +44,8 @@ for (const v of rows(pick.getWorksheet('후보'))) {
 const FIC = new URL('fictional/', P)
 const fictional = readdirSync(FIC).filter((f) => /^f-\d+\.json$/.test(f)).sort().map((f) => JSON.parse(readFileSync(new URL(f, FIC), 'utf8')))
 const notRewritten = fictional.filter((f) => f.human_rewrite && !f.rewritten_by)
-if (notRewritten.length) console.warn(`사람이 고쳐 쓰지 않은 초안: ${notRewritten.map((f) => f.id).join(', ')} (rewritten_by 를 채운다)`)
+// 고쳐 쓰기 전의 초안을 manifest 에 얼리면 나중에 고쳐 쓴 글과 라벨이 어긋난다. 멈춘다
+if (notRewritten.length) throw new Error(`사람이 고쳐 쓰지 않은 초안: ${notRewritten.map((f) => f.id).join(', ')} — 고쳐 쓰고 rewritten_by 를 채운 뒤 다시 돌린다`)
 
 // 건수 확인
 const count = (g, t) => chosen.filter((c) => c.group === g && (t === undefined || c.borderline_type === t)).length
@@ -64,7 +64,7 @@ const shuffle = (a) => a.map((v) => [rnd(), v]).sort((x, y) => x[0] - y[0]).map(
 const items = [
   ...shuffle(chosen).map((c, i) => {
     const a = byId.get(c.src)
-    return { id: `r-${String(i + 1).padStart(3, '0')}`, kind: 'real', url: a.url, private_path: `real/${source}#${a.id}`, group: c.group, borderline_type: c.borderline_type, section: a.section, collected_at: source.slice(9, 19), body_sha256: a.body_sha256, body_chars: a.body_chars, headline: a.headline, body: a.body }
+    return { id: `r-${String(i + 1).padStart(3, '0')}`, src_id: a.id, kind: 'real', url: a.url, private_path: `real/${source}#${a.id}`, group: c.group, borderline_type: c.borderline_type, section: a.section, collected_at: source.slice(9, 19), body_sha256: a.body_sha256, body_chars: a.body_chars, headline: a.headline, body: a.body }
   }),
   ...fictional.map((f) => ({ id: f.id, kind: 'fictional', url: null, private_path: `fictional/${f.id}.json`, group: 'fictional', borderline_type: null, section: null, collected_at: f.generated_at.slice(0, 10), body_sha256: null, body_chars: f.body.length, headline: f.headline, body: f.body })),
 ]
@@ -76,13 +76,17 @@ for (const g of ['normal', 'borderline', 'signal', 'fictional']) {
   shuffle(gi).forEach((x, k) => { x.sentence_labels = k < SENT[g] })
 }
 
-// 정제·분리 규칙의 버전 — 마지막으로 바뀐 커밋. 해시가 달라졌을 때 기사가 고쳐진 것인지 규칙이 바뀐 것인지 가른다
-const rev = (rel) => execSync(`git log -1 --format=%h -- "${fileURLToPath(new URL(rel, import.meta.url))}"`).toString().trim() || 'uncommitted'
+// 정제 규칙 버전은 지금의 clean.mjs 가 아니라 수집할 때 쓴 것을 원본 파일에서 읽는다.
+// 분리는 여기서 하므로 지금의 split.mjs 버전이다. 고친 채 커밋하지 않았으면 얼리지 않는다
+const cleaners = [...new Set(items.filter((x) => x.kind === 'real').map((x) => byId.get(x.src_id)?.cleaner))]
+if (cleaners.length !== 1 || !cleaners[0]) throw new Error(`${source} 의 정제 규칙 버전이 하나가 아니거나 없다: ${cleaners.join(', ')}`)
+const splitter = label('eval/experiments/sentence-batching/split.mjs', SPLITTER)
+if ([cleaners[0], splitter].some((v) => v.endsWith('-dirty') || v.endsWith('@uncommitted'))) throw new Error(`규칙 파일을 커밋한 뒤 돌린다: ${cleaners[0]}, ${splitter}`)
 for (const x of items) x.sentences = splitSentences(x.body)
 writeFileSync(new URL('manifest.v1.json', P), JSON.stringify({
   version: 1, created_at: new Date().toISOString(), source_file: source,
-  cleaner: `eval/eval-set/clean.mjs@${rev('./clean.mjs')}`,
-  splitter: `eval/experiments/sentence-batching/split.mjs@${rev('../experiments/sentence-batching/split.mjs')}`,
+  cleaner: cleaners[0],
+  splitter,
   note: 'headline·body·sentences 는 라벨러가 본 글 그대로다. 측정은 이 글을 Jev 에 보낸다. 이 파일은 private 이라 커밋하지 않는다',
   practice, items,
 }, null, 2), 'utf8')
