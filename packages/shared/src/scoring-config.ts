@@ -73,7 +73,8 @@ export const CONFIDENCE_FLOOR: Record<ItemId, number> = {
 /**
  * 🔴 을 받쳐 주는 항목은 `confidence` 가 이 **이상**이어야 한다.
  * **🔴 은 🟢 보다 높은 확신도를 요구한다** (docs/product.md 5절, docs/jev.md 5절).
- * 바닥선과 이 값 사이는 문서의 "중간" 구간이다. 그 구간의 주의 신호는 🟡 까지만 올린다.
+ * 바닥선과 이 값 사이는 문서의 "중간" 구간이다. 그 구간의 항목은 🟢 도 🔴 도 받치지 못한다.
+ * 이름은 🔴 에서 나왔지만 🟢 의 "확신도 충분" 도 이 값으로 본다 (decideBadge).
  * 0.7 은 바닥선(0.5)과 1 사이를 대략 나눈 자리다. 측정 근거는 없다.
  */
 export const CAUTION_CONFIDENCE: Record<ItemId, number> = {
@@ -128,8 +129,17 @@ export const CAUTION_AT = 0.4
 export const SAFE_BELOW = 0.3
 
 /**
+ * 문장 단위 항목(`unverifiable_claim`)은 판단된 문장이 이만큼 있어야 "확신했다" 로 본다.
+ * Noul 에는 `confidence` 가 없어서 문장 수가 그 자리를 맡는다. 문장 하나는 "모름" 구간 밖이라도
+ * 기사 전체의 주의 신호로는 근거가 얇다. 3 은 측정 근거가 없는 임시값이다.
+ * 이보다 적으면 점수는 내지만 🔴 도 🟢 도 받치지 못한다 (③ 선택 텍스트는 대개 여기 걸린다).
+ */
+export const MIN_CONFIDENT_SENTENCES = 3
+
+/**
  * 판단된 항목이 이보다 적으면 기사 전체를 ⚪ 로 둔다.
  * 항목 하나로 기사 전체를 🟢 이나 🔴 으로 말하면 그 항목 하나의 오판이 그대로 배지가 된다.
  * 🔴 은 `MIN_CAUTION_ITEMS` 가 이미 막지만 🟢 도 근거가 하나뿐이면 단정이다.
+ * 🟢 은 이에 더해 **확신도 높은**(`CAUTION_CONFIDENCE` 이상) 항목이 이만큼 있어야 한다.
  */
 export const MIN_JUDGED_ITEMS = 2

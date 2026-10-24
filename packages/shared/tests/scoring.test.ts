@@ -10,12 +10,14 @@ import {
   ITEM_CAUTION_AT,
   ITEM_WEIGHTS,
   MIN_CAUTION_ITEMS,
+  MIN_CONFIDENT_SENTENCES,
   NOISE,
   SAFE_BELOW,
   SIGNAL_SCORE,
   UNDETERMINED_BAND,
   decideBadge,
   judgeArticle,
+  resolveBand,
   scoreArticle,
   scoreItem,
   scoreSentences,
@@ -214,7 +216,25 @@ describe('scoreSentences — 곱하기 전에 판정한다', () => {
     const r = scoreSentences([sentence(1, 0), sentence(0, 0), sentence(0.5, 0.5)])
     expect(r.score).toBe(0.5)
     expect(r.sentences).toEqual({ total: 3, judged: 2 })
-    expect(r.isConfident).toBe(true)
+  })
+
+  it('판단된 문장이 MIN_CONFIDENT_SENTENCES 이상이어야 확신한 것으로 본다', () => {
+    const many = Array.from({ length: MIN_CONFIDENT_SENTENCES }, () => sentence(0.9, 0.1))
+    expect(scoreSentences(many).isConfident).toBe(true)
+    expect(scoreSentences(many.slice(1)).isConfident).toBe(false)
+    // "모름" 문장이 많아도 판단된 문장 수만 센다
+    expect(scoreSentences([sentence(0.93, 0.05), ...Array(29).fill(sentence(0.5, 0.5))]).isConfident).toBe(false)
+  })
+
+  it('판단된 문장 하나로 🔴 을 받치지 않는다', () => {
+    const v = judgeArticle({
+      items: ['source_citation', 'unverifiable_claim'],
+      answers: { source_citation: choice('no_source') },
+      sentences: [sentence(0.93, 0.05), ...Array(29).fill(sentence(0.5, 0.5))],
+    })
+    expect(v.score!).toBeGreaterThanOrEqual(CAUTION_AT)
+    expect(v.cautionSignals).toBe(1)
+    expect(v.level).toBe('CHECK')
   })
 
   it('모양이 틀린 문장만 있으면 invalid_answer, 문장이 없으면 missing_answer', () => {
@@ -225,6 +245,23 @@ describe('scoreSentences — 곱하기 전에 판정한다', () => {
 
   it('기사 단위 항목을 문장 단위로 부르면 unknown_item', () => {
     expect(scoreSentences([sentence(0.9, 0.1)], 'source_citation').reason).toBe('unknown_item')
+  })
+})
+
+describe('resolveBand — JSON 의 undetermined_band', () => {
+  it('정해진 값이 기본값을 이긴다', () => {
+    expect(resolveBand([0.35, 0.65])).toEqual([0.35, 0.65])
+  })
+
+  it.each([
+    ['null', null],
+    ['뒤집힌 구간', [0.6, 0.4]],
+    ['폭 0', [0.5, 0.5]],
+    ['문자열', ['0.4', '0.6']],
+    ['범위 밖', [-0.1, 0.6]],
+    ['길이가 다름', [0.4]],
+  ])('모양이 틀리면 기본값: %s', (_name, raw) => {
+    expect(resolveBand(raw)).toEqual(UNDETERMINED_BAND)
   })
 })
 
@@ -263,6 +300,15 @@ describe('decideBadge — 단계 경계', () => {
     expect(two.level).toBe('CHECK')
     const three = decideBadge([...ids.slice(0, 3).map((id) => judged(id, 1)), ...clear(ids.slice(3))])
     expect(three.level).toBe('CAUTION')
+  })
+
+  it('확신도가 중간인 항목만으로는 🟢 도 아니다 — 🟡 로 간다', () => {
+    const v = decideBadge(ALL_ITEMS.map((id) => judged(id, 0, false)))
+    expect(v.score).toBe(0)
+    expect(v.level).toBe('CHECK')
+    // 확신도 높은 항목이 MIN_JUDGED_ITEMS 만큼 있으면 🟢
+    const [a, b, ...rest] = ALL_ITEMS
+    expect(decideBadge([judged(a, 0), judged(b, 0), ...rest.map((id) => judged(id, 0, false))]).level).toBe('SAFE')
   })
 
   it('확신도가 중간인 주의 신호는 🔴 을 받치지 못한다 — 🟡 로 간다', () => {

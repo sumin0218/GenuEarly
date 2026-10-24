@@ -12,6 +12,7 @@ import {
   ITEM_CAUTION_AT,
   ITEM_WEIGHTS,
   MIN_CAUTION_ITEMS,
+  MIN_CONFIDENT_SENTENCES,
   MIN_JUDGED_ITEMS,
   SAFE_BELOW,
   SIGNAL_SCORE,
@@ -112,7 +113,6 @@ export function scoreItem(id: string, answer: unknown): ItemResult {
     if (typeof answer.choice !== 'string' || !Object.hasOwn(signals, answer.choice))
       return undetermined(id, 'invalid_answer')
     score = SIGNAL_SCORE[signals[answer.choice]]
-    if (score === undefined) return undetermined(id, 'invalid_answer')
   } else if (def.type === 'score') {
     const grades = Array.isArray(def.question?.criteria) ? def.question.criteria.length : 0
     if (grades < 2) return undetermined(id, 'invalid_answer')
@@ -140,10 +140,16 @@ function noulOf(answer: unknown): number | null {
   return isUnitNumber(answer.noul) ? answer.noul : null
 }
 
-function bandOf(def: ItemDef): readonly [number, number] {
-  // judgment-items.json 에 값이 정해졌으면 그 값이 이긴다. 그 전까지는 기본값.
-  const b = def.undetermined_band
-  return Array.isArray(b) && b.length === 2 ? b : UNDETERMINED_BAND
+/**
+ * "모름" 구간. judgment-items.json 의 `undetermined_band` 가 정해졌으면 그 값이 이긴다.
+ * `null` 이거나 **모양이 틀리면 기본값**이다. 뒤집힌 구간(`[0.6, 0.4]`)을 그대로 쓰면 모든 값이
+ * "모름 밖" 이 되어 0.5 두 개의 곱이 확신한 값으로 쓰인다.
+ */
+export function resolveBand(raw: unknown): readonly [number, number] {
+  if (!Array.isArray(raw) || raw.length !== 2) return UNDETERMINED_BAND
+  const [lo, hi] = raw
+  if (!isUnitNumber(lo) || !isUnitNumber(hi) || lo >= hi) return UNDETERMINED_BAND
+  return [lo, hi]
 }
 
 /**
@@ -161,13 +167,11 @@ function sentenceValue(def: ItemDef, answers: unknown): number | 'uncertain' | '
   const b = noulOf(answers[combine.b])
   if (a === null || b === null) return 'invalid'
 
-  const [lo, hi] = bandOf(def)
-  const aKnown = a < lo || a > hi
-  const bKnown = b < lo || b > hi
+  const [lo, hi] = resolveBand(def.undetermined_band)
   // 1. 하나가 결과를 정하면 다른 질문은 보지 않는다 (의견 문장, 실명 출처가 있는 문장)
   if (a < lo || b > hi) return 0
-  // 2. 그 밖에 하나라도 "모름" 이면 그 문장은 ⚪
-  if (!aKnown || !bKnown) return 'uncertain'
+  // 2. 그 밖에 하나라도 "모름" 이면 그 문장은 ⚪. 1 을 지났으니 a 는 hi 초과, b 는 lo 미만이어야 "앎" 이다
+  if (a <= hi || b >= lo) return 'uncertain'
   // 3. 둘 다 "모름" 밖이면 combine 값
   return a * (1 - b)
 }
@@ -201,8 +205,9 @@ export function scoreSentences(perSentence: readonly unknown[], id = 'unverifiab
     const reason = invalid === total ? 'invalid_answer' : 'uncertain'
     return { ...undetermined(id, reason), sentences: { total, judged } }
   }
-  // Noul 에는 confidence 가 없다. "모름" 구간 밖의 답만 남겼으므로 확신한 것으로 본다.
-  return { id, score: sum / judged, isConfident: true, sentences: { total, judged } }
+  // Noul 에는 confidence 가 없다. 대신 **판단된 문장 수**를 확신도로 본다.
+  // 문장 하나는 "모름" 밖이라도 기사 전체의 주의 신호로는 근거가 얇다.
+  return { id, score: sum / judged, isConfident: judged >= MIN_CONFIDENT_SENTENCES, sentences: { total, judged } }
 }
 
 // --- 기사 하나 -----------------------------------------------------------------------
@@ -233,16 +238,20 @@ export function scoreArticle({ items, answers, sentences = [] }: ArticleAnswers)
  * 1. 판단된 항목이 `MIN_JUDGED_ITEMS` 보다 적으면 ⚪
  * 2. 판단된 항목의 가중평균을 낸다. ⚪ 항목은 분자에도 분모에도 넣지 않는다
  * 3. 평균이 `CAUTION_AT` 이상이고 **확신도 높은 주의 신호**가 `MIN_CAUTION_ITEMS` 이상이면 🔴
- * 4. 평균이 `SAFE_BELOW` 미만이고 주의 신호가 **하나도 없으면** 🟢
+ * 4. 평균이 `SAFE_BELOW` 미만이고, 주의 신호가 **하나도 없고**, 확신도 높은 항목이
+ *    `MIN_JUDGED_ITEMS` 이상이면 🟢
  * 5. 그 밖은 🟡
  *
- * 🔴 만 확신도를 한 번 더 본다. 멀쩡한 기사에 🔴 을 붙이는 쪽이 대가가 크다 (docs/product.md 5절).
- * 확신도가 중간인 주의 신호는 🔴 을 받치지 못하고 🟢 을 막기만 한다 — 문서의 "중간이면 🟡 쪽으로" 다.
+ * 확신도가 중간인 항목은 🟢 도 🔴 도 받치지 못한다 — docs/jev.md 5절의 "중간이면 🟡 쪽으로" 다.
+ * 🔴 은 그에 더해 **주의 신호**가 확신도 높은 것이어야 한다. 멀쩡한 기사에 🔴 을 붙이는 쪽이
+ * 대가가 크다 (docs/product.md 5절). 그래서 🟢 은 "확신한 항목이 충분한가" 만, 🔴 은 "확신한 주의 신호가
+ * 충분한가" 까지 본다.
  */
 export function decideBadge(items: readonly ItemResult[]): Verdict {
   let weightSum = 0
   let weighted = 0
   let judged = 0
+  let confident = 0
   let cautionSignals = 0
   let anyCaution = false
 
@@ -254,6 +263,7 @@ export function decideBadge(items: readonly ItemResult[]): Verdict {
     judged++
     weightSum += w
     weighted += w * it.score
+    if (it.isConfident) confident++
     if (it.score >= ITEM_CAUTION_AT) {
       anyCaution = true
       if (it.isConfident) cautionSignals++
@@ -267,7 +277,7 @@ export function decideBadge(items: readonly ItemResult[]): Verdict {
   const score = weighted / weightSum
   let level: BadgeLevel = 'CHECK'
   if (score >= CAUTION_AT && cautionSignals >= MIN_CAUTION_ITEMS) level = 'CAUTION'
-  else if (score < SAFE_BELOW && !anyCaution) level = 'SAFE'
+  else if (score < SAFE_BELOW && !anyCaution && confident >= MIN_JUDGED_ITEMS) level = 'SAFE'
   return { level, score, cautionSignals, items: [...items] }
 }
 

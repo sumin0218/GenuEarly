@@ -163,21 +163,21 @@ judgeArticle({
 | --- | --- | --- |
 | Choice | 고른 보기의 `signals` 방향. `clear` 0, `neutral` 0.5, `caution` 1 | `confidence` < `CONFIDENCE_FLOOR`, 보기 밖의 답 |
 | Score | `score ÷ (등급 수 − 1)` | `confidence` < `CONFIDENCE_FLOOR`, 0 ~ (등급 수 − 1) 밖의 답 |
-| 문장 단위 (`unverifiable_claim`) | 판단된 문장의 값 평균. 문장 값은 위 "판정 순서" 대로 | 판단된 문장이 하나도 없을 때 |
+| 문장 단위 (`unverifiable_claim`) | 판단된 문장의 값 평균. 문장 값은 위 "판정 순서" 대로. 판단된 문장이 `MIN_CONFIDENT_SENTENCES`(3) 이상이어야 "확신" | 판단된 문장이 하나도 없을 때 |
 
 - **답의 모양을 먼저 본다.** 보기 밖의 답은 확신도가 높아도 쓰지 않는다
 - Choice 는 `probabilities` 로 기댓값을 내지 않는다. 상세 화면에서 "어느 보기가 나왔다" 로 설명할 수 있어야 하고, 분포의 퍼짐은 `confidence` 가 이미 담고 있다
-- 문장 단위 항목의 "모름" 구간은 `undetermined_band` 가 정해지면 그 값을, `null` 이면 `UNDETERMINED_BAND` 기본값을 쓴다
+- 문장 단위 항목의 "모름" 구간은 `undetermined_band` 가 정해지면 그 값을, `null` 이거나 모양이 틀리면(숫자가 아님, `lo ≥ hi`) `UNDETERMINED_BAND` 기본값을 쓴다
 
 ### 항목들 → 배지
 
 1. 판단된 항목이 `MIN_JUDGED_ITEMS`(2) 보다 적으면 ⚪
 2. 판단된 항목의 가중평균. **⚪ 항목은 분자에도 분모에도 넣지 않는다** — 0점으로 끌어내리지 않는다
 3. 평균 ≥ `CAUTION_AT` 이고 **확신도 높은 주의 신호**가 `MIN_CAUTION_ITEMS`(2) 이상이면 🔴
-4. 평균 < `SAFE_BELOW` 이고 주의 신호가 **하나도 없으면** 🟢
+4. 평균 < `SAFE_BELOW` 이고, 주의 신호가 **하나도 없고**, 확신도 높은 항목이 `MIN_JUDGED_ITEMS`(2) 이상이면 🟢
 5. 그 밖은 🟡
 
-- **🔴 만 확신도를 한 번 더 본다** (`CAUTION_CONFIDENCE`). 확신도가 중간인 주의 신호는 🔴 을 받치지 못하고 🟢 을 막기만 한다
+- **확신도가 중간인 항목은 🟢 도 🔴 도 받치지 못한다** (`CAUTION_CONFIDENCE`). docs/jev.md 5절의 "중간이면 🟡 쪽으로" 다. 🔴 은 그에 더해 주의 신호 자체가 확신도 높은 것이어야 한다. 확신도가 중간인 주의 신호는 🟢 을 막기만 한다
 - 주의 신호를 둘 요구하므로 `ai_style_signal` 은 **단독으로 🔴 을 만들 수 없다.** 가중치(0.5)는 다른 신호와 섞일 때의 힘을 줄인다
 - ⚪ 이유(`reason`)는 로그용이다. 사용자에게 구분해 보여 주지 않는다
 
