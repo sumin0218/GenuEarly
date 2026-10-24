@@ -339,6 +339,24 @@ describe('decideBadge — 단계 경계', () => {
     expect(v.level).toBe('UNDETERMINED')
   })
 
+  it('decideBadge 에 같은 항목이 두 번 와도 주의 신호 하나는 하나다', () => {
+    const [x, y] = ALL_ITEMS
+    const v = decideBadge([judged(x, 1), judged(x, 1), judged(y, 1, false)])
+    expect(v.cautionSignals).toBe(1)
+    expect(v.level).toBe('CHECK')
+  })
+
+  it.each([
+    ['NaN', Number.NaN],
+    ['1 초과', 5],
+    ['음수', -1],
+  ])('캐시에서 온 점수가 범위 밖이면 ⚪ 항목으로 본다: %s', (_name, bad) => {
+    const [x, y, z] = ALL_ITEMS
+    const v = decideBadge([judged(x, bad), judged(y, 1), judged(z, 0)])
+    expect(v.score).toBe(0.5)
+    expect(v.level).not.toBe('CAUTION')
+  })
+
   it('같은 항목을 두 번 넣어도 한 번만 센다', () => {
     const items = scoreArticle({ items: ['source_citation', 'source_citation'], answers: fixtures.safe.answers })
     expect(items).toHaveLength(1)

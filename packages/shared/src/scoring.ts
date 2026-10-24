@@ -113,6 +113,8 @@ export function scoreItem(id: string, answer: unknown): ItemResult {
     if (typeof answer.choice !== 'string' || !Object.hasOwn(signals, answer.choice))
       return undetermined(id, 'invalid_answer')
     score = SIGNAL_SCORE[signals[answer.choice]]
+    // JSON 을 `as unknown` 으로 읽어서 타입이 이것을 막지 못한다. 모르는 방향이면 NaN 이 평균으로 샌다.
+    if (score === undefined) return undetermined(id, 'invalid_answer')
   } else if (def.type === 'score') {
     const grades = Array.isArray(def.question?.criteria) ? def.question.criteria.length : 0
     if (grades < 2) return undetermined(id, 'invalid_answer')
@@ -254,12 +256,19 @@ export function decideBadge(items: readonly ItemResult[]): Verdict {
   let confident = 0
   let cautionSignals = 0
   let anyCaution = false
+  const seen = new Set<string>()
 
   for (const it of items) {
-    if (it.score === null) continue
+    // 캐시에서 읽은 결과가 들어오는 자리다. 0~1 의 유한수가 아니면 ⚪ 항목으로 본다.
+    // NaN 이면 평균이 NaN 이 되어 조용히 🟡, 범위 밖 값이면 평균을 끌어올려 🔴 을 만든다.
+    if (!isUnitNumber(it.score)) continue
+    // 같은 항목은 한 번만 센다. 캐시와 새 결과를 합친 호출부가 같은 id 를 두 번 넣으면
+    // 주의 신호 하나가 둘로 세어져 🔴 이 난다. 먼저 온 것을 쓴다.
+    if (seen.has(it.id)) continue
     // 가중치가 없는 id 는 우리가 모르는 항목이다. 판단에 넣지 않는다.
     const w = Object.hasOwn(ITEM_WEIGHTS, it.id) ? ITEM_WEIGHTS[it.id as ItemId] : undefined
     if (w === undefined || w <= 0) continue
+    seen.add(it.id)
     judged++
     weightSum += w
     weighted += w * it.score
