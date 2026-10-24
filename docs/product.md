@@ -88,7 +88,7 @@
 ## 4. 판단 항목
 
 **질문은 확정했다 (질문 세트 v1.1.0).** 각 항목의 `instructions`, `criteria`, 보기와 그 순서의 원본은 [packages/shared/judgment-items.json](../packages/shared/judgment-items.json)이다.
-가중치, 배지 경계, 확신도 임계값은 아직이다. eval로 측정한 뒤에 정한다. 유형별 설명은 [docs/jev.md](jev.md) 2절에 있다.
+가중치, 배지 경계, 확신도 임계값은 **임시값**이 [packages/shared/src/scoring-config.ts](../packages/shared/src/scoring-config.ts)에 들어가 있다. 최종값은 eval로 측정한 뒤에 정한다 (GE-17). 유형별 설명은 [docs/jev.md](jev.md) 2절에 있다.
 
 | 항목 | 유형 | 묻는 것 | 답 | 보는 필드 | 쓰는 기능 |
 | --- | --- | --- | --- | --- | --- |
@@ -115,8 +115,7 @@
 - `ai_style_signal`이 높다고 가짜가 아니다. 기계로 쓴 진짜 기사가 많다. **단독으로 🔴을 만들지 못하게** 가중치를 낮게 둔다.
 - `unverifiable_claim`은 문장 단위다. 문장마다 질문을 보내고 **개수는 코드가 센다.**
 
-> **TODO: 항목별 가중치** — eval 측정 후 [packages/shared](../packages/shared/)에 상수로 넣는다.
-> **TODO: 배지 단계를 가르는 점수 경계** — eval 측정 후 결정한다.
+> **TODO: 항목별 가중치와 배지 단계를 가르는 점수 경계의 최종값** — 지금은 근거를 밝힌 임시값이다 ([scoring-config.ts](../packages/shared/src/scoring-config.ts)). eval 측정 후 정한다 (GE-17).
 > **TODO: 출처 도메인 목록의 출처** — 어떤 목록을 근거로 삼을지, 갱신은 누가 어떻게 할지 정한다.
 
 ## 5. 점수에서 배지까지

@@ -303,7 +303,7 @@ apps/proxy/
 
 packages/shared/
   judgment-items.json 판단 항목 정의 (원본, 언어 중립)
-  (TODO GE-15)        점수 합산, 단계 결정
+  src/scoring*.ts     점수 합산, 단계 결정 (숫자는 scoring-config.ts 한 곳)
 
 packages/content/
   (TODO GE-16)        사용자 문구

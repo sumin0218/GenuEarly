@@ -2,7 +2,7 @@
 
 **판단의 원본이 사는 곳이다.** 판단 항목 정의, Jev 질문의 보기와 그 순서, 가중치, 확신도 임계값, 점수 합산, 배지 단계 결정.
 
-**`judgment-items.json` 은 언어 중립 JSON.** 점수 합산 코드는 TypeScript 로 넣는다 (GE-15).
+**`judgment-items.json` 은 언어 중립 JSON.** 점수 합산 코드는 TypeScript 다 ([src/scoring.ts](src/scoring.ts), 아래 "점수 합산과 배지 단계").
 
 ## 왜 따로 두는가
 
@@ -20,9 +20,9 @@
 | 판단 항목 이름과 질문 유형 | [judgment-items.json](judgment-items.json) | [../../docs/product.md](../../docs/product.md) 4절 |
 | 각 항목의 `instructions`와 `criteria` | [judgment-items.json](judgment-items.json) | [../../docs/jev.md](../../docs/jev.md) 3절 |
 | Choice의 보기와 **그 순서**, Score의 등급 | [judgment-items.json](judgment-items.json) | [../../docs/jev.md](../../docs/jev.md) 3절 ⑧ |
-| 항목별 가중치 | TODO — eval 측정 후 | |
-| 확신도 임계값 | TODO — eval 측정 후 | |
-| 점수 합산과 배지 단계 경계 | TODO — eval 측정 후 | |
+| 항목별 가중치 | [src/scoring-config.ts](src/scoring-config.ts) — **임시값**, GE-17 측정 후 확정 | [../../docs/product.md](../../docs/product.md) 4절 "원칙" |
+| 확신도 임계값 | [src/scoring-config.ts](src/scoring-config.ts) — **임시값**, GE-17 측정 후 확정 | [../../docs/jev.md](../../docs/jev.md) 5절 |
+| 점수 합산과 배지 단계 경계 | 판정 순서는 [src/scoring.ts](src/scoring.ts), 숫자는 [src/scoring-config.ts](src/scoring-config.ts) — **임시값** | [../../docs/product.md](../../docs/product.md) 3·5절 |
 | 출처 도메인 목록과 대조 규칙 | TODO | |
 
 ## 판단 항목 정의 — `judgment-items.json`
@@ -136,6 +136,57 @@ Jev에 보내는 질문의 원본이다. 스택이 정해지지 않아 **언어�
   - **예외 하나.** 판단 내용을 바꾸지 않고 **전송 형식만** 바꾸는 PR은 실제 호출 성공 기록(상태 코드와 받은 답의 수)으로 갈음한다.
     바꾼 것이 "무엇을 묻는가" 가 아니라 "어떻게 보내는가" 일 때만이다.
     **평가 세트가 생기면 그때 첫 측정의 기준선으로 삼는다** (GE-13)
+
+## 점수 합산과 배지 단계 — `src/`
+
+**숫자는 [scoring-config.ts](src/scoring-config.ts) 한 곳에만 있다.** [scoring.ts](src/scoring.ts)에는 판정 순서만 있다.
+지금 숫자는 **GE-17 의 1차 측정 전에 문서의 원칙에서 끌어낸 임시값**이고, 측정으로 정한 것은 `NOISE` 하나다.
+값마다 어느 원칙에서 나왔는지 주석에 적었다. 항목마다 달라질 수 있는 값(가중치, 확신도 임계값)은
+처음부터 항목 id → 값 맵이라 GE-17 은 숫자만 바꾸면 된다.
+
+```ts
+import { judgeArticle } from '@genuearly/shared'
+
+judgeArticle({
+  items: ['source_citation', /* … */ 'unverifiable_claim'], // 이번에 판단하려던 항목
+  answers,    // 기사 단위 요청들의 answers 를 합친 것 (키는 질문 id)
+  sentences,  // 문장마다 받은 answers
+})
+// → { level: 'SAFE' | 'CHECK' | 'CAUTION' | 'UNDETERMINED', score, cautionSignals, items: [...] }
+```
+
+캐시가 항목 단위라면 `scoreArticle`(항목별 결과)과 `decideBadge`(단계)를 따로 불러 그 사이에 저장한다.
+
+### 항목 하나 → 0(안심) ~ 1(주의)
+
+| 유형 | 점수 | ⚪ 가 되는 경우 |
+| --- | --- | --- |
+| Choice | 고른 보기의 `signals` 방향. `clear` 0, `neutral` 0.5, `caution` 1 | `confidence` < `CONFIDENCE_FLOOR`, 보기 밖의 답 |
+| Score | `score ÷ (등급 수 − 1)` | `confidence` < `CONFIDENCE_FLOOR`, 0 ~ (등급 수 − 1) 밖의 답 |
+| 문장 단위 (`unverifiable_claim`) | 판단된 문장의 값 평균. 문장 값은 위 "판정 순서" 대로. 판단된 문장이 `MIN_CONFIDENT_SENTENCES`(3) 이상이어야 "확신" | 판단된 문장이 하나도 없을 때 |
+
+- **답의 모양을 먼저 본다.** 보기 밖의 답은 확신도가 높아도 쓰지 않는다
+- Choice 는 `probabilities` 로 기댓값을 내지 않는다. 상세 화면에서 "어느 보기가 나왔다" 로 설명할 수 있어야 하고, 분포의 퍼짐은 `confidence` 가 이미 담고 있다
+- 문장 단위 항목의 "모름" 구간은 `undetermined_band` 가 정해지면 그 값을, `null` 이거나 모양이 틀리면(숫자가 아님, `lo ≥ hi`) `UNDETERMINED_BAND` 기본값을 쓴다
+
+### 항목들 → 배지
+
+1. 판단된 항목이 `MIN_JUDGED_ITEMS`(2) 보다 적으면 ⚪
+2. 판단된 항목의 가중평균. **⚪ 항목은 분자에도 분모에도 넣지 않는다** — 0점으로 끌어내리지 않는다
+3. 평균 ≥ `CAUTION_AT` 이고 **확신도 높은 주의 신호**가 `MIN_CAUTION_ITEMS`(2) 이상이면 🔴
+4. 평균 < `SAFE_BELOW` 이고, 주의 신호가 **하나도 없고**, 확신도 높은 항목이 `MIN_JUDGED_ITEMS`(2) 이상이면 🟢
+5. 그 밖은 🟡
+
+- **확신도가 중간인 항목은 🟢 도 🔴 도 받치지 못한다** (`CAUTION_CONFIDENCE`). docs/jev.md 5절의 "중간이면 🟡 쪽으로" 다. 🔴 은 그에 더해 주의 신호 자체가 확신도 높은 것이어야 한다. 확신도가 중간인 주의 신호는 🟢 을 막기만 한다
+- 주의 신호를 둘 요구하므로 `ai_style_signal` 은 **단독으로 🔴 을 만들 수 없다.** 가중치(0.5)는 다른 신호와 섞일 때의 힘을 줄인다
+- ⚪ 이유(`reason`)는 로그용이다. 사용자에게 구분해 보여 주지 않는다
+
+테스트는 Jev 응답을 고정값으로 넣는다 ([tests/fixtures/jev-answers.json](tests/fixtures/jev-answers.json)). 모델을 부르지 않는다.
+
+```bash
+npm test -w @genuearly/shared
+npm run compile -w @genuearly/shared
+```
 
 ## 모델 노이즈 바닥 — 임계값을 정할 때 깔고 간다
 

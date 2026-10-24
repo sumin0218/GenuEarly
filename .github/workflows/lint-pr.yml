@@ -85,3 +85,20 @@ jobs:
         run: npm test -w @genuearly/proxy
       - name: 타입 검사
         run: npm run compile -w @genuearly/proxy
+
+  shared:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 22
+          cache: npm
+      - name: 설치
+        run: npm ci -w @genuearly/shared --include-workspace-root
+      # 점수 합산과 단계 결정은 모델 없이 고정 응답으로 검사한다.
+      # 가중치·임계값 표가 judgment-items.json 의 항목과 어긋나는 것도 여기서 막는다.
+      - name: 점수 규칙 테스트
+        run: npm test -w @genuearly/shared
+      - name: 타입 검사
+        run: npm run compile -w @genuearly/shared
