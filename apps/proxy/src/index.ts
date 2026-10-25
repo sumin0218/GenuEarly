@@ -7,6 +7,8 @@
 // **점수로 바꾸거나 해석하지 않는다.** 그건 확장 프로그램의 몫이다 (docs/architecture.md 5절).
 import { buildRequest, isRejection, SCHEMA_MODEL, SCHEMA_VERSION } from './schema'
 import { callJev } from './jev'
+import { budgetAllows, creditGuardOn, isPaused } from './credits'
+import { RETRY_AFTER_S, withinLimits } from './ratelimit'
 
 export interface Env {
   /** ChatKHU API 키. wrangler secret 으로 넣는다. 로그에 남기지 않는다. */
@@ -15,6 +17,14 @@ export interface Env {
   JEV_MODEL: string
   JEV_TIMEOUT_MS: string
   MAX_REQUEST_BYTES: string
+  /** 이만큼은 남겨 둔다. 아래로 내려가면 판단을 멈춘다. 0 이면 감시를 끈다 */
+  CREDITS_RESERVE: string
+  /** 잔액을 다시 묻기까지의 간격(ms) */
+  CREDITS_TTL_MS: string
+  CREDITS_TIMEOUT_MS: string
+  /** 폭주 차단기. ratelimit.ts 를 본다. 없으면 통과시킨다 (로컬·테스트) */
+  RATE_LIMIT_BURST?: RateLimit
+  RATE_LIMIT_BUDGET?: RateLimit
 }
 
 /**
@@ -55,8 +65,13 @@ function json(body: unknown, status: number, extra: Record<string, string> = {})
  * 상태 코드 대신 `TypeError: Failed to fetch` 만 받는다. 429(잠시 후 재시도)와
  * 서버 장애를 구분할 수 없게 된다.
  */
-function reply(origin: string | null, body: unknown, status: number): Response {
-  return json(body, status, corsHeaders(origin))
+function reply(
+  origin: string | null,
+  body: unknown,
+  status: number,
+  extra: Record<string, string> = {},
+): Response {
+  return json(body, status, { ...corsHeaders(origin), ...extra })
 }
 
 /**
@@ -95,6 +110,14 @@ export default {
           ok: true,
           // 어느 질문 세트에 맞춘 서버인지 알 수 있게 모델만 밝힌다.
           model: env.JEV_MODEL,
+          // 크레딧 예비분 아래로 내려가 판단을 멈췄는지. **잔액 숫자는 밝히지 않는다.**
+          paused: isPaused(),
+          // **두 장치가 켜져 있는지.** 바인딩이나 설정값이 빠지면 조용히 꺼진 채 돌아간다.
+          // 배포 직후 여기서 확인한다 (apps/proxy/README.md 배포 절).
+          guards: {
+            ratelimit: Boolean(env.RATE_LIMIT_BURST && env.RATE_LIMIT_BUDGET),
+            credits: creditGuardOn(env),
+          },
         },
         200,
       )
@@ -118,11 +141,20 @@ export default {
         return reply(origin, { error: 'method_not_allowed' }, 405)
       }
 
-      // TODO(GE-20): **레이트 리밋.** Origin 헤더는 누구나 적어 보낼 수 있어서
-      //   위 origin 검사는 인증이 아니다. curl 로 아무 값이나 넣으면 통과한다.
-      //   Workers Rate Limiting 바인딩으로 IP 당 상한을 두고, 전체 상한을
-      //   게이트웨이 한도(분당 120건) 아래로 묶는다. 그래야 남의 호출이 우리 크레딧을
-      //   소진하거나 실제 사용자의 배지를 전부 ⚪ 로 만드는 것을 막을 수 있다.
+      // --- 폭주 차단 --------------------------------------------------------
+      // 본문을 읽기 전에 본다. 폭주면 파싱도 하지 않는다.
+      //
+      // **여기서는 200 이 아니라 429 를 돌려준다.** 다른 실패와 다르다 —
+      // 폭주하는 클라이언트에 200 을 주면 그 클라이언트는 아무것도 배우지 않고 계속 때린다.
+      // 429 와 Retry-After 로 물러서라고 말해야 한다. 확장 프로그램은 이것을 ⚪ 로 보이고
+      // 그 시간만큼 쉰다 (docs/architecture.md 4절).
+      const verdict = await withinLimits(env, request)
+      if (!verdict.ok) {
+        return reply(origin, { error: 'rate_limited', scope: verdict.which }, 429, {
+          'Retry-After': String(RETRY_AFTER_S),
+        })
+      }
+
 
       // --- 크기 상한 --------------------------------------------------------
       // 본문을 읽기 전에 먼저 막는다. 큰 요청으로 CPU 와 크레딧을 태우지 못하게 한다.
@@ -150,6 +182,13 @@ export default {
       const built = buildRequest(parsed)
       if (isRejection(built)) {
         return reply(origin, { error: built.error, detail: built.detail }, 400)
+      }
+
+      // --- 예산 ------------------------------------------------------------
+      // 레이트 리밋이 아니다. 지키려는 것은 분당 건수가 아니라 **크레딧 잔액**이다.
+      // 한도껏 쓰면 월 할당이 7시간이면 사라지고 다음 달까지 돌아오지 않는다.
+      if (!(await budgetAllows(env))) {
+        return reply(origin, { model: env.JEV_MODEL, undetermined: true, reason: 'budget_exhausted' }, 200)
       }
 
       // --- 호출 -------------------------------------------------------------
