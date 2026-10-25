@@ -124,3 +124,27 @@ describe('제출본에 개발용 주소가 없다', () => {
     expect(hit, '제출본에 개발용 주소가 남아 있다').toHaveLength(0)
   })
 })
+
+describe('아이콘 배지와 팝업', () => {
+  // **`action` 키가 없으면 `chrome.action` 자체가 없다.**
+  // judge.ts 가 setBadgeText 를 부르지만 실제 브라우저에서는 전부 실패한다.
+  // 테스트가 `browser.action` 을 모킹해서 **한동안 아무도 못 봤다** — 모의는
+  // 키가 선언됐는지 모른다. 그래서 빌드된 manifest 를 본다.
+  it('action 키가 있다 — 없으면 아이콘 배지가 동작하지 않는다', () => {
+    expect(manifest.action, 'action 키가 없다. 아이콘 배지와 팝업이 둘 다 죽는다').toBeTruthy()
+  })
+
+  it('팝업이 붙어 있다', () => {
+    expect(manifest.action?.default_popup).toBeTruthy()
+  })
+
+  it('팝업 파일이 실제로 나왔다', () => {
+    const popup = manifest.action?.default_popup as string
+    expect(existsSync(resolve(__dirname, '../.output/chrome-mv3', popup))).toBe(true)
+  })
+
+  it('팝업을 붙여도 권한이 늘지 않는다', () => {
+    // action 키는 권한이 아니다. 설치 경고에 뜨지 않는다 (requirements.md 2-1절).
+    expect(permissions).toEqual(['storage'])
+  })
+})
