@@ -746,3 +746,14 @@ describe('잔액 조회가 실패해도 매번 다시 묻지 않는다', () => {
     expect(asked, '한 번만 물어야 한다').toBe(1)
   })
 })
+
+describe('게이트웨이로 나가는 요청의 헤더', () => {
+  it('User-Agent 를 붙인다', async () => {
+    // **빼면 게이트웨이 앞단 WAF 가 403 을 준다.** workerd 는 UA 를 기본으로 붙이지 않는다.
+    // 모의도 node 통합 테스트도 이것을 못 잡아서(node 는 UA 를 붙인다) 여기서 못 박는다.
+    mockFetch(() => ok({ model: 'jev-latest', answers: answersFor(PAGE_BODY.items) }))
+    await judge(PAGE_BODY)
+    const h = calls[0].init.headers as Record<string, string>
+    expect(h['User-Agent'], 'UA 가 없으면 배포 후 전부 403 이 된다').toBeTruthy()
+  })
+})

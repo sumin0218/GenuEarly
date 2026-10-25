@@ -12,6 +12,12 @@ export type JevResult =
   | { ok: true; answers: Record<string, unknown>; upstreamModel: unknown }
   | { ok: false; reason: Reason }
 
+/**
+ * 게이트웨이 앞단 WAF 가 User-Agent 없는 요청을 403 으로 막는다.
+ * 무엇을 적는지는 중요하지 않고 **있는 것이 중요하다.**
+ */
+const USER_AGENT = 'GenuEarly/0.0.0 (+https://github.com/sumin0218/GenuEarly)'
+
 /** 429 를 만났을 때 기다렸다 다시 걸어 볼 최대 시간. */
 const RETRY_BUDGET_MS = 1500
 
@@ -36,7 +42,16 @@ export async function callJev(
     try {
       res = await fetch(`${env.JEV_API_BASE_URL}/decisions/`, {
         method: 'POST',
-        headers: { Authorization: `Bearer ${env.JEV_API_KEY}`, 'Content-Type': 'application/json' },
+        headers: {
+        Authorization: `Bearer ${env.JEV_API_KEY}`,
+        'Content-Type': 'application/json',
+        // **User-Agent 를 빼면 게이트웨이가 403 을 준다.** API 가 아니라 앞단 WAF 가 막는 것이라
+        // 본문이 JSON 이 아니라 HTML 로 온다. workerd 는 UA 를 기본으로 붙이지 않는다.
+        //
+        // 모의 테스트도, node 에서 도는 통합 테스트도 이것을 못 잡는다 — node 는 UA 를 붙인다.
+        // **wrangler dev 로 실제 기사를 한 번 흘려보고서야 드러났다** (2026-10-22).
+        'User-Agent': USER_AGENT,
+      },
         body: payload,
         signal: AbortSignal.timeout(timeout),
       })

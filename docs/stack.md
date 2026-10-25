@@ -130,7 +130,7 @@ ChatKHU 가 생성한 **데이터**지 코드가 아니다.
 
 | 주체 | 모델 ID | 경로 | 역할 |
 | --- | --- | --- | --- |
-| **ChatKHU** | `claude-sonnet-5-5` | Gateway | 사용자 노출 문구 **생성** |
+| **ChatKHU** | `gpt-5.6-luna` | Gateway | 사용자 노출 문구 **생성** |
 | **ChatKHU** | `gpt-image-2.5-sunburst` | Gateway | 확장 아이콘 **생성** |
 | **Jev** | `jev-1.13.0` 으로 보냄 (응답은 `jev-latest`) | **ChatKHU Gateway 경유** | 런타임 판단 |
 | 코드 | — | — | 점수 합산, 배지 단계, 출처 도메인 |

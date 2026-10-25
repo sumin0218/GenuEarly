@@ -1,23 +1,69 @@
-/* Shadow DOM 안에서만 적용된다. 바깥 페이지에 새지 않는다. */
+/* 기사 위에 뜨는 배지. Shadow DOM 안이라 기사 페이지 CSS 와 섞이지 않는다.
+   그래도 폰트·색은 명시한다 — 상속되는 것이 몇 가지 있다. */
+
 .ge-badge {
   position: fixed;
   right: 16px;
   bottom: 16px;
-  z-index: 2147483647;
-
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-
-  padding: 8px 12px;
-  border-radius: 999px;
+  z-index: 2147483000;          /* 포털의 떠 있는 요소보다 위 */
+  max-width: 320px;
+  box-sizing: border-box;
+  padding: 10px 14px;
+  border-radius: 10px;
   border: 1px solid rgba(0, 0, 0, 0.12);
-  background: #ffffff;
-  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.15);
+  background: #fff;
+  color: #202124;
+  font: 14px/1.5 -apple-system, BlinkMacSystemFont, "Segoe UI", "Malgun Gothic", sans-serif;
+  box-shadow: 0 2px 12px rgba(0, 0, 0, 0.15);
+  cursor: pointer;
+  user-select: none;
+}
 
-  font-family: system-ui, -apple-system, "Segoe UI", sans-serif;
-  font-size: 13px;
-  line-height: 1.4;
-  color: #333333;
-  white-space: nowrap;
+.ge-badge__mark { margin-right: 6px; }
+.ge-badge__label { font-weight: 600; }
+
+/* 색만으로 구분하지 않는다. 글자(위 mark·label)가 먼저고 색은 거든다. */
+.ge-badge[data-level="CAUTION"] { border-left: 4px solid #d93025; }
+.ge-badge[data-level="CHECK"]   { border-left: 4px solid #f29900; }
+.ge-badge[data-level="SAFE"]    { border-left: 4px solid #1e8e3e; }
+.ge-badge[data-level="UNDETERMINED"],
+.ge-badge[data-level="PENDING"] { border-left: 4px solid #9aa0a6; }
+
+.ge-badge__detail {
+  margin-top: 8px;
+  padding-top: 8px;
+  border-top: 1px solid rgba(0, 0, 0, 0.08);
+  font-size: 12px;
+  color: #5f6368;
+}
+.ge-badge__row { padding: 1px 0; }
+
+@media (prefers-color-scheme: dark) {
+  .ge-badge {
+    background: #202124;
+    color: #e8eaed;
+    border-color: rgba(255, 255, 255, 0.16);
+  }
+  .ge-badge__detail {
+    color: #9aa0a6;
+    border-top-color: rgba(255, 255, 255, 0.12);
+  }
+}
+
+.ge-badge__row {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  padding: 4px 0;
+}
+.ge-badge__row + .ge-badge__row { border-top: 1px solid rgba(0, 0, 0, 0.06); }
+.ge-badge__row-name { font-weight: 600; color: #3c4043; }
+.ge-badge__row-text { color: #5f6368; }
+.ge-badge__note { color: #5f6368; }
+
+@media (prefers-color-scheme: dark) {
+  .ge-badge__row + .ge-badge__row { border-top-color: rgba(255, 255, 255, 0.1); }
+  .ge-badge__row-name { color: #e8eaed; }
+  .ge-badge__row-text,
+  .ge-badge__note { color: #9aa0a6; }
 }

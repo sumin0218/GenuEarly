@@ -31,7 +31,9 @@ cp .env.example .env    # 값을 채운다. .env 는 커밋되지 않는다
 | --- | --- |
 | `CHATKHU_API_KEY` | 본인 ChatKHU API 키 |
 | `CHATKHU_API_BASE_URL` | `https://factchat-cloud.mindlogic.ai/v1/gateway` |
-| `CHATKHU_MODEL` | `claude-sonnet-5-5` |
+| `CHATKHU_MODEL` | `gpt-5.6-luna` |
+
+**프롬프트는 [prompt.md](prompt.md) 에 있다.** 그것을 ChatKHU 에 붙여 쓰고, 후보 중 고른다.
 
 > **TODO: 생성 스크립트 작성(GE-16)** — 지금은 환경변수만 준비돼 있다.
 > OpenAI 호환 엔드포인트(`POST {BASE_URL}/chat/completions/`)를 쓴다.

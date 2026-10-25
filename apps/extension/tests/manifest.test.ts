@@ -7,7 +7,9 @@
 //
 // 권한 표의 원본은 docs/security/secure-coding.md 2절이고, 이 테스트는 그중
 // "절대 쓰지 않기로 한 것"을 기계가 읽는 형태로 옮긴 것이다.
-import { readFileSync, existsSync } from 'node:fs'
+import { readFileSync, existsSync, readdirSync } from 'node:fs'
+
+declare const process: { env: Record<string, string | undefined> }
 import { resolve } from 'node:path'
 import { describe, expect, it } from 'vitest'
 
@@ -91,5 +93,34 @@ describe('대상 사이트', () => {
     for (const m of contentScriptMatches) {
       expect(hostPermissions, `content_scripts 대상인데 host_permissions 에 없음: ${m}`).toContain(m)
     }
+  })
+})
+
+describe('제출본에 개발용 주소가 없다', () => {
+  // `PROXY_URL` 이 상수였을 때 `localhost` 가 제출본에 그대로 들어갈 뻔했다.
+  // 그러면 심사위원 브라우저에서 **모든 기사가 ⚪** 가 된다.
+  // 주석 하나에 기대지 않고 **빌드 결과**를 본다.
+  //
+  //   WXT_PROXY_URL=https://<배포주소> npm run build -w @genuearly/extension
+  const dir = resolve(__dirname, '../.output/chrome-mv3')
+  const bundled = () =>
+    readdirSync(resolve(dir, 'background.js') ? dir : dir, { recursive: true, encoding: 'utf8' })
+      .filter((f) => typeof f === 'string' && f.endsWith('.js'))
+      .map((f) => readFileSync(resolve(dir, f as string), 'utf8'))
+
+  it('WXT_PROXY_URL 을 주면 그 주소가 들어간다', () => {
+    const url = process.env.WXT_PROXY_URL
+    if (!url) {
+      // 개발 빌드다. 여기서는 localhost 가 들어 있는 것이 정상이라 검사만 건너뛴다.
+      expect(bundled().some((s) => s.includes('localhost:8787'))).toBe(true)
+      return
+    }
+    expect(bundled().some((s) => s.includes(url)), '넣은 주소가 번들에 없다').toBe(true)
+  })
+
+  it('WXT_PROXY_URL 을 준 빌드에는 localhost 가 없다', () => {
+    if (!process.env.WXT_PROXY_URL) return   // 개발 빌드는 건너뛴다
+    const hit = bundled().filter((s) => s.includes('localhost'))
+    expect(hit, '제출본에 개발용 주소가 남아 있다').toHaveLength(0)
   })
 })
