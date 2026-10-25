@@ -6,7 +6,8 @@
 // 제출·심사 기간에 그 일이 나면 판단이 전부 ⚪ 가 되고 문구·아이콘 생성까지 같이 막힌다.
 //
 // 그래서 예비분을 남겨 두고, 그 아래로 내려가면 판단을 멈춘다.
-// 레이트 리밋이 아니다. 레이트 리밋은 TODO(GE-20 후속)로 남아 있다.
+// **이것은 레이트 리밋이 아니다.** 분당 상한은 ratelimit.ts 가 맡는다 — 이 둘이 다른 것을 지킨다.
+// 여기는 **월 예산**, 거기는 **분당 처리량**이다.
 import type { Env } from './index'
 
 type Snapshot = { remaining: number; at: number }
@@ -20,6 +21,9 @@ type Snapshot = { remaining: number; at: number }
  */
 let cache: Snapshot | null = null
 
+/** 다음에 잔액을 물어볼 시각. **실패해도 미룬다** (아래). */
+let nextCheckAt = 0
+
 /** 마지막 판단 결과. `/health` 가 읽는다. 잔액 숫자는 들고 있지 않다. */
 let paused = false
 
@@ -27,6 +31,7 @@ let paused = false
 export function resetCreditCache(): void {
   cache = null
   paused = false
+  nextCheckAt = 0
 }
 
 async function fetchRemaining(env: Env): Promise<number | null> {
@@ -64,19 +69,27 @@ export async function budgetAllows(env: Env): Promise<boolean> {
   if (!Number.isFinite(reserve) || reserve <= 0) return true   // 감시를 끈 설정
 
   const ttl = Number(env.CREDITS_TTL_MS) || 60_000
-  if (!cache || Date.now() - cache.at > ttl) {
+  if (Date.now() >= nextCheckAt) {
     const remaining = await fetchRemaining(env)
+    // **실패해도 다음 조회 시각을 미룬다.** 안 미루면 `/credits` 가 내려가 있는 동안
+    // 들어오는 요청마다 다시 부르고 타임아웃(기본 3초)까지 기다린다 — 배지가 그만큼 늦고,
+    // 죽은 엔드포인트를 요청 수만큼 두드린다.
+    nextCheckAt = Date.now() + ttl
     if (remaining !== null) cache = { remaining, at: Date.now() }
     else if (!cache) return true        // 한 번도 못 읽었다 — 통과시킨다
     // 읽기에 실패했지만 지난 값이 있으면 그 값으로 판단한다
   }
 
-  const ok = (cache as Snapshot).remaining > reserve
+  // 조회를 미루는 동안 아직 한 번도 못 읽었을 수 있다. 그때는 통과시킨다 —
+  // 일시적인 장애로 서비스를 멈추는 것이 이 장치의 목적이 아니다.
+  if (!cache) return true
+
+  const ok = cache.remaining > reserve
   if (ok !== !paused) {
     // 상태가 바뀔 때만 남긴다. 멈춘 동안 매 요청 찍으면 로그가 쓸모없어진다.
     console.warn(JSON.stringify({
       at: 'credits', outcome: ok ? 'resumed' : 'paused',
-      remaining: (cache as Snapshot).remaining, reserve,
+      remaining: cache.remaining, reserve,
     }))
   }
   paused = !ok
@@ -86,4 +99,15 @@ export async function budgetAllows(env: Env): Promise<boolean> {
 /** `/health` 가 쓴다. **잔액 숫자는 밝히지 않는다.** 멈췄는지만 알려 준다. */
 export function isPaused(): boolean {
   return paused
+}
+
+/**
+ * 감시가 켜져 있는가. `/health` 가 쓴다.
+ *
+ * `CREDITS_RESERVE` 가 빠지면 `Number(undefined)` 가 `NaN` 이라 감시가 **조용히 꺼진다.**
+ * "꺼진 줄 모르고 배포" 가 가장 위험한 실패 모드라 배포 직후 확인할 수 있게 한다.
+ */
+export function creditGuardOn(env: Env): boolean {
+  const reserve = Number(env.CREDITS_RESERVE)
+  return Number.isFinite(reserve) && reserve > 0
 }

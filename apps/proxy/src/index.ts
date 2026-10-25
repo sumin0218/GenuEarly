@@ -7,7 +7,7 @@
 // **점수로 바꾸거나 해석하지 않는다.** 그건 확장 프로그램의 몫이다 (docs/architecture.md 5절).
 import { buildRequest, isRejection, SCHEMA_MODEL, SCHEMA_VERSION } from './schema'
 import { callJev } from './jev'
-import { budgetAllows, isPaused } from './credits'
+import { budgetAllows, creditGuardOn, isPaused } from './credits'
 import { RETRY_AFTER_S, withinLimits } from './ratelimit'
 
 export interface Env {
@@ -112,6 +112,12 @@ export default {
           model: env.JEV_MODEL,
           // 크레딧 예비분 아래로 내려가 판단을 멈췄는지. **잔액 숫자는 밝히지 않는다.**
           paused: isPaused(),
+          // **두 장치가 켜져 있는지.** 바인딩이나 설정값이 빠지면 조용히 꺼진 채 돌아간다.
+          // 배포 직후 여기서 확인한다 (apps/proxy/README.md 배포 절).
+          guards: {
+            ratelimit: Boolean(env.RATE_LIMIT_BURST && env.RATE_LIMIT_BUDGET),
+            credits: creditGuardOn(env),
+          },
         },
         200,
       )

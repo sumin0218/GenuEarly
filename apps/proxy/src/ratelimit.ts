@@ -13,12 +13,14 @@ import type { Env } from './index'
 /**
  * 왜 이 값인가.
  *
- * - **BURST (IP당 분당 150)** — 실측상 정상 사용의 최대는 이렇다.
- *   긴 기사 하나가 41건(39문장), 포털 목록 한 화면이 제목 수만큼, 바쁘게 훑는 심사위원이
- *   분당 60~100건이다. 150 은 그 위이고, 폭주(분당 수천)는 한참 아래다.
- *   **정상 사용자를 끊지 않으면서 폭주만 잡는 자리다.**
+ * - **BURST (IP당 분당 60)** — **전체 한도보다 반드시 낮아야 한다.** 높으면 폭주 하나가
+ *   전체 예산을 먼저 비워서 IP 차단기가 걸릴 일이 없다(처음에 150 으로 두어 그렇게 되어 있었다).
+ *   기사 하나가 최대 42건이므로(2 + 문장 상한 40, apps/extension/lib/judge.ts) 60 이면
+ *   **한 사람이 기사 하나를 여유 있게 열고, 두 개를 연달아 열면 걸린다.**
  * - **BUDGET (전체 분당 110)** — 게이트웨이 한도가 분당 120 이다. 그 아래에서 **우리가 먼저**
  *   거절하면 대기 시간을 우리가 정한다. ChatKHU 의 429 는 `retry-after` 가 19초였다.
+ *
+ * **IP 하나를 여러 사람이 쓰면**(전시장, 학내망) 서로의 몫을 깎는다. 알려진 한계다 (README).
  *
  * **카운터는 Cloudflare 지점별로 따로 센다.** 전역 합산이 아니다. 우리 사용자는 대부분
  * 한국이라 한 지점에 몰릴 가능성이 높지만 **가정이지 보장이 아니다.** 엄밀한 전역 한도는
@@ -53,15 +55,18 @@ export async function withinLimits(env: Env, request: Request): Promise<LimitVer
   // IP 가 없으면 모두를 한 통에 넣는다. 비면 통과시키는 것보다 낫다.
   const ip = request.headers.get('CF-Connecting-IP') ?? 'unknown'
 
-  // 전체부터 본다. 예산이 바닥이면 누구의 요청이든 받을 수 없다.
-  if (!(await budget.limit({ key: 'all' })).success) {
-    console.warn(JSON.stringify({ at: 'ratelimit', outcome: 'budget' }))
-    return { ok: false, which: 'budget' }
-  }
+  // **IP 를 먼저 본다.** 전체를 먼저 보면 폭주 하나가 전체 예산을 다 쓰고,
+  // 그 뒤로는 모두가 budget 에서 거절돼 **IP 차단기가 영영 안 걸린다.**
+  // 거절된 요청도 budget 카운터를 소비하므로 폭주가 계속 전체를 막는다.
+  // IP 를 먼저 보면 **폭주한 요청이 전체 예산을 건드리지 않는다.**
   if (!(await burst.limit({ key: ip })).success) {
     // 폭주는 대개 우리 쪽 버그다. 어느 IP 인지 남긴다.
     console.warn(JSON.stringify({ at: 'ratelimit', outcome: 'burst', ip }))
     return { ok: false, which: 'burst' }
+  }
+  if (!(await budget.limit({ key: 'all' })).success) {
+    console.warn(JSON.stringify({ at: 'ratelimit', outcome: 'budget' }))
+    return { ok: false, which: 'budget' }
   }
   return { ok: true }
 }

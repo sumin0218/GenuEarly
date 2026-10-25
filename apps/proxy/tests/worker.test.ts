@@ -27,7 +27,10 @@ describe('헬스 체크', () => {
     const res = await call('/health')
     expect(res.status).toBe(200)
     // paused 는 크레딧 예비분 아래로 내려갔는지다. 잔액 숫자는 들어가지 않는다 (GE-20).
-    await expect(res.json()).resolves.toEqual({ ok: true, model: 'jev-1.13.0', paused: false })
+    await expect(res.json()).resolves.toEqual({
+      ok: true, model: 'jev-1.13.0', paused: false,
+      guards: { ratelimit: false, credits: false },   // 이 env 는 둘 다 꺼져 있다
+    })
   })
 
   it('키나 설정값을 돌려주지 않는다', async () => {
@@ -537,7 +540,7 @@ describe('크레딧 잔액 감시', () => {
     mockWithCredits(400)
     await judgeG()
     const body = await (await call('/health')).text()
-    expect(JSON.parse(body)).toEqual({ ok: true, model: 'jev-1.13.0', paused: true })
+    expect(JSON.parse(body)).toMatchObject({ ok: true, model: 'jev-1.13.0', paused: true })
     expect(body).not.toContain('400')
   })
 })
@@ -673,5 +676,73 @@ describe('폭주 차단기', () => {
     // 로컬 개발과 테스트. 배포에서 빠지는 것은 wrangler.jsonc 가 막는다.
     mockFetch(() => ok({ model: 'jev-latest', answers: answersFor(PAGE_BODY.items) }))
     expect((await judgeFrom(env)).status).toBe(200)
+  })
+})
+
+describe('차단기 검사 순서 (리뷰 지적)', () => {
+  it('IP 한도를 전체보다 먼저 본다 — 안 그러면 IP 차단기가 영영 안 걸린다', async () => {
+    // 전체를 먼저 보면 폭주 하나가 전체 예산을 다 써서 모두가 budget 에서 거절되고,
+    // IP 카운터는 전체 한도에서 멈춰 자기 한도에 닿지 않는다.
+    mockFetch(() => ok({ model: 'jev-latest', answers: answersFor(PAGE_BODY.items) }))
+    const e = withLimits(2, 100)   // IP 2, 전체 100
+    await judgeFrom(e)
+    await judgeFrom(e)
+    const res = await judgeFrom(e)
+    expect(res.status).toBe(429)
+    expect(await res.json(), 'IP 에서 걸려야 한다').toEqual({ error: 'rate_limited', scope: 'burst' })
+  })
+
+  it('IP 에서 걸린 요청은 전체 예산을 쓰지 않는다', async () => {
+    const burst = fakeLimiter(1)
+    const budget = fakeLimiter(100)
+    const e: Env = { ...env, RATE_LIMIT_BURST: burst as unknown as RateLimit, RATE_LIMIT_BUDGET: budget as unknown as RateLimit }
+    mockFetch(() => ok({ model: 'jev-latest', answers: answersFor(PAGE_BODY.items) }))
+    await judgeFrom(e)          // 통과 — 전체 1 소비
+    await judgeFrom(e)          // IP 에서 거절
+    await judgeFrom(e)          // IP 에서 거절
+    expect(budget.keys.get('all'), '거절된 요청이 전체를 깎으면 안 된다').toBe(1)
+  })
+
+  it('설정값이 IP < 전체 라야 한다', async () => {
+    // 값이 뒤집히면 위 보호가 무너진다. 설정 파일을 직접 본다.
+    // @ts-expect-error node:fs 는 Workers 타입에 없다. 이 검사만 설정 파일을 직접 읽는다.
+    const { readFileSync } = await import('node:fs')
+    const raw = readFileSync('wrangler.jsonc', 'utf8')
+    const nums = [...raw.matchAll(/"limit":\s*(\d+)/g)].map((m) => Number(m[1]))
+    expect(nums, 'ratelimits 가 둘이어야 한다').toHaveLength(2)
+    const [perIp, global] = nums as [number, number]
+    expect(perIp, `IP당(${perIp})이 전체(${global})보다 낮아야 한다`).toBeLessThan(global)
+  })
+})
+
+describe('/health 가 장치가 켜졌는지 알려 준다', () => {
+  it('바인딩과 예비분이 있으면 둘 다 true', async () => {
+    const e: Env = { ...env, CREDITS_RESERVE: '500', RATE_LIMIT_BURST: fakeLimiter(9) as unknown as RateLimit, RATE_LIMIT_BUDGET: fakeLimiter(9) as unknown as RateLimit }
+    const res = await worker.fetch(new Request('https://proxy.invalid/health'), e)
+    expect(await res.json()).toMatchObject({ guards: { ratelimit: true, credits: true } })
+  })
+
+  it('설정이 빠지면 false — 꺼진 줄 모르고 배포하는 것을 막는다', async () => {
+    const res = await worker.fetch(new Request('https://proxy.invalid/health'), { ...env, CREDITS_RESERVE: '' })
+    expect(await res.json()).toMatchObject({ guards: { ratelimit: false, credits: false } })
+  })
+})
+
+describe('잔액 조회가 실패해도 매번 다시 묻지 않는다', () => {
+  it('실패해도 TTL 만큼 미룬다', async () => {
+    // 안 미루면 /credits 가 내려가 있는 동안 요청마다 타임아웃까지 기다린다.
+    resetCreditCache()
+    let asked = 0
+    vi.stubGlobal('fetch', (url: string) => {
+      if (url.endsWith('/credits')) { asked++; return Promise.resolve(new Response('nope', { status: 500 })) }
+      return Promise.resolve(ok({ model: 'jev-latest', answers: answersFor(PAGE_BODY.items) }))
+    })
+    const guardedEnv: Env = { ...env, CREDITS_RESERVE: '500' }
+    const call = () => worker.fetch(new Request('https://proxy.invalid/v1/judge', {
+      method: 'POST', headers: { Origin: EXT_ORIGIN, 'Content-Type': 'application/json' },
+      body: JSON.stringify(PAGE_BODY),
+    }), guardedEnv)
+    await call(); await call(); await call()
+    expect(asked, '한 번만 물어야 한다').toBe(1)
   })
 })
