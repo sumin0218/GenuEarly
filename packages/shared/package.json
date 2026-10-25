@@ -1,0 +1,20 @@
+{
+  "name": "@genuearly/shared",
+  "description": "GenuEarly 판단 항목 정의, 점수 합산, 배지 단계 결정",
+  "private": true,
+  "version": "0.0.0",
+  "type": "module",
+  "exports": {
+    ".": "./src/index.ts",
+    "./judgment-items.json": "./judgment-items.json"
+  },
+  "scripts": {
+    "compile": "tsc --noEmit",
+    "test": "vitest run",
+    "test:watch": "vitest"
+  },
+  "devDependencies": {
+    "typescript": "^5.9.3",
+    "vitest": "^5.0.4"
+  }
+}
