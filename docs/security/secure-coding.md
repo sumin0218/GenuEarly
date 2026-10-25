@@ -34,15 +34,22 @@
 | --- | --- | --- | --- |
 | `contextMenus` | ③ 선택 텍스트 검사 | 오른쪽 클릭 메뉴를 만드는 유일한 방법이다 | 필요 |
 | `storage` | 설정, 피드백 동의 여부, 판단 결과 캐시 | service worker가 종료돼도 남아야 한다 | 필요 |
-| `scripting` | ③ 선택 텍스트 결과 표시 | ③은 임의의 사이트에 UI를 띄운다. `activeTab`은 접근 권한만 주고, 그 탭에 UI를 넣으려면 `chrome.scripting.executeScript`가 필요하다 | 필요 (GE-24) |
-| `activeTab` | ③ 선택 텍스트 검사 | 사용자가 메뉴를 누른 그 탭에만, 그 순간에만 접근한다. `<all_urls>`를 피하기 위해서다 | 필요 (GE-24) |
 | `host_permissions` (포털·언론사 도메인) | ① ② | 그 사이트의 DOM을 읽어야 판단할 내용이 나온다 | 필요 — **도메인을 명시해서** 받는다. 현재 `n.news.naver.com/article/*`, `v.daum.net/v/*` |
-| `notifications` | ④ 공유 직전 알림 | 페이지 안 알림으로 충분하면 쓰지 않는다 | 검토 중 |
+| `notifications` | — | OS 알림을 띄울 권한이다. **아이콘 배지와 페이지 안 알림으로 대신한다.** 둘 다 권한이 필요 없고, OS 알림은 윈도우에서 알림 센터로 들어가 놓치기 쉽다 | **쓰지 않는다** |
+| `scripting` / `activeTab` | — | ③의 결과를 **선택한 글 근처**에 띄우려면 임의의 사이트에 UI를 주입해야 해서 둘 다 필요했다. **결과를 확장 팝업으로 옮겨 주입 자체를 없앴다** ([requirements.md](../requirements.md) 5-1절) | **쓰지 않는다** |
 | `tabs` | — | 전체 탭의 URL과 제목을 읽을 수 있다. 필요 없다 | **쓰지 않는다** |
 | `<all_urls>` | — | 모든 사이트의 내용을 읽겠다는 뜻이다 | **쓰지 않는다** |
 | `webRequest` / `declarativeNetRequest` | — | 우리는 네트워크 요청을 가로채거나 바꾸지 않는다 | **쓰지 않는다** |
 | `cookies` | — | 쿠키를 읽을 이유가 없다 | **쓰지 않는다** |
 | `history` / `bookmarks` | — | 열람 기록을 보지 않는다 | **쓰지 않는다** |
+
+### 권한이 아닌 것 — `action` 키
+
+아이콘 배지(`setBadgeText`), 팝업(`default_popup`), 팝업 열기(`openPopup()`)는 **권한이 필요 없다.**
+`manifest.json` 에 `action` 키만 선언한다. 설치 경고에도 뜨지 않는다.
+
+**③의 결과 자리를 팝업으로 옮긴 것이 권한 두 개를 없앴다.** 기능을 줄여서가 아니라
+같은 기능을 권한 없는 수단으로 바꾼 것이다 ([requirements.md](../requirements.md) 2-1절).
 
 **목록의 원본은 [`apps/extension/match-patterns.ts`](../../apps/extension/match-patterns.ts)다.** `host_permissions`와
 `content_scripts`의 `matches`가 그 상수를 함께 쓴다. **MV3에서 `matches`는 그 자체로 사이트 접근 권한이고
