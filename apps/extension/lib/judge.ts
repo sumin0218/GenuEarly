@@ -20,6 +20,18 @@ import {
   isUndetermined,
 } from './protocol'
 
+/**
+ * 기사 하나에서 문장 판단에 쓸 최대 문장 수.
+ *
+ * 문장마다 요청 하나라 상한이 없으면 긴 기사가 서버 전체 한도를 넘긴다 —
+ * 실제로 **133문장짜리 기사(요청 135건)** 를 봤고, 그 1분 동안 **다른 모든 사용자의 요청까지** 막힌다.
+ * 중계 서버의 IP 당 한도가 분당 60 이라 `2 + 40 = 42` 가 그 안에 든다.
+ *
+ * GE-11 에서 "정확도를 지키려고 문장 수를 줄이지 않는다" 고 정했지만 **그때 본 표본은 9~39문장**이었다.
+ * 100문장이 넘는 기사는 그 결정이 다루지 않은 영역이다 (docs/requirements.md 8-1절).
+ */
+const MAX_SENTENCES = 40
+
 /** 기능별로 어느 항목이 어느 요청 그룹에 들어가는지. 원본은 judgment-items.json 이다. */
 function plan(feature: string) {
   const groups = new Map<string, string[]>()
@@ -56,8 +68,19 @@ async function callProxy(body: JudgeRequest): Promise<JudgeResponse | null> {
   }
 }
 
+/**
+ * 아이콘 배지에 넣는 글자.
+ *
+ * **여기에 사용자에게 보이는 말을 쓰지 않는다.** 한때 `'안심'` 이라고 적어 두었는데,
+ * ChatKHU 가 쓴 문구는 SAFE 를 일부러 **"눈에 띄는 신호 없음"** 으로 썼다 —
+ * 우리는 신호를 못 찾은 것이지 안심해도 된다고 말한 적이 없다 (docs/product.md 2절).
+ *
+ * 배지 칸은 네 글자 남짓이라 문구를 그대로 넣을 수 없다. **글자 대신 기호를 쓰고 색으로 가른다.**
+ * 색만으로는 색각 이상에서 구분되지 않으므로 기호 모양을 서로 다르게 둔다.
+ * 짧은 이름을 ChatKHU 로 따로 받으면 그때 `ui.ko.json` 에서 읽는다 (requirements.md 2-1절 TODO).
+ */
 const BADGE_TEXT: Record<BadgeLevel, string> = {
-  PENDING: '…', SAFE: '안심', CHECK: '확인', CAUTION: '주의', UNDETERMINED: '?',
+  PENDING: '…', SAFE: '○', CHECK: '△', CAUTION: '!', UNDETERMINED: '?',
 }
 const BADGE_COLOR: Record<BadgeLevel, string> = {
   PENDING: '#9aa0a6', SAFE: '#1e8e3e', CHECK: '#f29900', CAUTION: '#d93025', UNDETERMINED: '#5f6368',
@@ -104,9 +127,10 @@ export async function judgeArticle(msg: Extract<Message, { kind: 'judge-article'
       return callProxy({ feature: 'page', group, items: [...items], state })
     })
 
-  // 문장 항목은 쪼갤 수 없다 — 캐시에 없으면 문장을 전부 다시 묻는다.
+  // 문장 항목은 쪼갤 수 없다 — 캐시에 없으면 문장을 **상한까지** 다시 묻는다.
+  const sentences = msg.sentences.slice(0, MAX_SENTENCES)
   const sentenceJobs = sentenceItem && missing.has(sentenceItem)
-    ? msg.sentences.map((sentence) =>
+    ? sentences.map((sentence) =>
         callProxy({ feature: 'page', group: 'sentence', items: [sentenceItem], state: { sentence } }))
     : []
 
@@ -121,14 +145,21 @@ export async function judgeArticle(msg: Extract<Message, { kind: 'judge-article'
     Object.assign(answers, r.answers)
   }
   const perSentence: Record<string, JevAnswer>[] = []
+  let sentenceFailed = false
   for (const r of sentenceOut) {
-    if (!r || isUndetermined(r)) continue
+    if (!r || isUndetermined(r)) { sentenceFailed = true; continue }
     perSentence.push(r.answers)
   }
 
-  // 새로 얻은 것만 캐시에 쌓고, 캐시에 있던 것과 합쳐 판정한다.
   const fresh = toItemScores(answers, perSentence)
-  await writeScores(msg.url, fresh)
+
+  // **문장이 하나라도 실패했으면 그 항목을 캐시하지 않는다.**
+  // 성공한 문장만으로 낸 비율을 "완성된 판단" 으로 6시간 들고 있으면,
+  // 판단 범위가 조용히 줄어든 결과가 고정된다. 이번 판정에서만 쓰고 다음에 다시 묻는다.
+  // (requirements.md 3-6절 "실패한 판단은 캐시하지 않는다")
+  const toCache = { ...fresh }
+  if (sentenceFailed && sentenceItem) delete toCache[sentenceItem]
+  await writeScores(msg.url, toCache)
 
   const verdict = verdictFrom({ ...cached, ...fresh })
   setIconBadge(tabId, verdict.level)

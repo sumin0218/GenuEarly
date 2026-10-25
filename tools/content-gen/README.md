@@ -31,7 +31,7 @@ cp .env.example .env    # 값을 채운다. .env 는 커밋되지 않는다
 | --- | --- |
 | `CHATKHU_API_KEY` | 본인 ChatKHU API 키 |
 | `CHATKHU_API_BASE_URL` | `https://factchat-cloud.mindlogic.ai/v1/gateway` |
-| `CHATKHU_MODEL` | `claude-sonnet-5-5` |
+| `CHATKHU_MODEL` | `gpt-5.6-luna` |
 
 **프롬프트는 [prompt.md](prompt.md) 에 있다.** 그것을 ChatKHU 에 붙여 쓰고, 후보 중 고른다.
 

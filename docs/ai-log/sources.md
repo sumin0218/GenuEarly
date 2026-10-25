@@ -22,7 +22,8 @@
 | 자료명·출처 | 저작권자·제공처 | 이용 조건 | 활용 내용 |
 | --- | --- | --- | --- |
 | **ChatKHU API Gateway** (`factchat-cloud.mindlogic.ai/v1/gateway`) | 경희대학교 | **대회 결과물 단계 이용 허용** (2026-10-21 확인). 사용자 트래픽 대행 가능, 공개 배포 가능, 보낸 내용 미보관, 분당 120건 고정, 출처 표기는 권장(의무 아님). **대회 이후 일반 배포는 재확인 필요** ([../jev.md](../jev.md) 6-1절) | 하나의 키로 여러 제공사 모델을 호출한다. 아래 세 줄이 전부 이 경로다 |
-| ├ `claude-sonnet-5-5` (Anthropic) | ChatKHU 경유 | 위와 같음 | 사용자 노출 문구 생성 ([`tools/content-gen`](../../tools/content-gen/)), 인젝션 검사의 유도 문장 발상 ([`eval/experiments/robustness`](../../eval/experiments/robustness/)) |
+| ├ `gpt-5.6-luna` (OpenAI) | ChatKHU 경유 | 위와 같음 | **사용자 노출 문구 생성** ([`packages/content/ui.ko.json`](../../packages/content/ui.ko.json), 2026-10-22) |
+| ├ `claude-sonnet-5-5` (Anthropic) | ChatKHU 경유 | 위와 같음 | 인젝션 검사의 유도 문장 발상 ([`eval/experiments/robustness`](../../eval/experiments/robustness/)) |
 | ├ `gpt-image-2.5-sunburst` (OpenAI) | ChatKHU 경유 | 위와 같음 | 확장 프로그램 아이콘 생성 |
 | └ `jev-latest` (TypeSafe) | ChatKHU 경유 | 위와 같음 | **런타임 판단 호출 (v1.0.0 확정 경로).** 2026-10-16 동작 확인, 2026-10-21 질문 세트 전체로 재확인 |
 | **Jev 1.13** (`jev-1.13.0`) — TypeSafe 직접 | TypeSafe (<https://docs.typesafe.ai>) | 약관 미확인. 계정 미발급 | **v1.0.0 에서 쓰지 않는다.** 게이트웨이 경유로 확정 (2026-10-21). 대회 이후 일반 배포 시 다시 본다 ([../jev.md](../jev.md) 6-1절) |

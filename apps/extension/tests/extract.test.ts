@@ -168,3 +168,40 @@ describe('부제 — 바이라인 없이 본문 앞에 나열되는 매체', () 
     expect(extractArticle()?.sentences[0]).toBe('첫 문장이다.')
   })
 })
+
+describe('리뷰에서 나온 추출 경계', () => {
+  const 긴글 = '본문 문장이다. '.repeat(20)
+  const body = (inner: string) => {
+    load('n.news.naver.com', `<h2 id="title_area">제목</h2><article id="dic_area">${inner}</article>`)
+    return extractArticle()?.body ?? ''
+  }
+
+  it('따옴표로 끝나는 인용 리드를 부제로 오해하지 않는다', () => {
+    // 종결부호 뒤에 닫는 따옴표가 와서 마지막 글자만 보면 부제로 걸러진다.
+    // 첫 문장은 대개 기사의 핵심 주장이라 통째로 사라지면 판단이 달라진다.
+    const out = body(`"이번 조치는 효과가 없다."<br>${긴글}`)
+    expect(out).toContain('이번 조치는 효과가 없다')
+  })
+
+  it('작은따옴표·괄호로 끝나도 같다', () => {
+    expect(body(`그는 '어렵다'고 말했다.<br>${긴글}`)).toContain('어렵다')
+  })
+
+  it('본문 끝에 이어 붙은 괄호 크레딧을 걷어낸다', () => {
+    // 줄 단위 필터는 따로 한 줄일 때만 걸러서, 이어 붙으면 한 문장으로 남는다.
+    const a = body(`${긴글}(취재보조: 김지수 통신원)`)
+    expect(a).not.toContain('취재보조')
+    expect(a).not.toContain('김지수')
+  })
+
+  it('본문 중간의 괄호는 건드리지 않는다', () => {
+    // 끝에 있는 것만 크레딧으로 본다.
+    const out = body(`회의(기자 간담회)가 열렸다. ${긴글}`)
+    expect(out).toContain('기자 간담회')
+  })
+
+  it('이름만 있는 줄에 통신원도 걸러진다', () => {
+    const out = body(`${긴글}<br>김지수 통신원`)
+    expect(out).not.toContain('김지수')
+  })
+})

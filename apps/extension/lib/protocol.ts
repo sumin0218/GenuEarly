@@ -3,8 +3,18 @@
 // **중계 호출은 background 가 한다.** 콘텐츠 스크립트의 fetch 는 기사 페이지의 origin 으로
 // 나가서 우리 서버가 거절한다 (서버는 chrome-extension:// 만 받는다).
 
-/** 중계 서버 주소. 배포하면 바꾼다 (GE-20). */
-export const PROXY_URL = 'http://localhost:8787'
+/**
+ * 중계 서버 주소. **빌드할 때 넣는다.**
+ *
+ * 상수로 두었더니 `localhost` 가 제출본에 그대로 들어갈 뻔했다 — 그러면 심사위원 브라우저에서
+ * 모든 기사가 ⚪ 가 된다. 주석 하나에 기대지 않고 **빌드 결과를 검사**한다
+ * (apps/extension/tests/manifest.test.ts 의 "제출본에 localhost 가 없다").
+ *
+ *   WXT_PROXY_URL=https://<배포주소> npm run build -w @genuearly/extension
+ *
+ * 개발에서는 값을 안 주면 로컬 중계를 본다.
+ */
+export const PROXY_URL: string = import.meta.env.WXT_PROXY_URL ?? 'http://localhost:8787'
 
 export type Feature = 'page' | 'portal_list' | 'selection'
 

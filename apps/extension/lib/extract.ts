@@ -65,6 +65,16 @@ const BYLINE_IN_BRACKET = new RegExp(String.raw`^\s*[([][^)\]]{2,40}${ROLE}[)\]]
 
 const TAIL = /(무단\s*전재|재배포\s*금지|저작권자|ⓒ|Copyright|▶|☞)/i
 
+/**
+ * 본문 **끝**에 이어 붙은 괄호 크레딧. `(취재보조: 김지수 통신원)` 같은 것.
+ *
+ * 줄 단위 필터는 크레딧이 **따로 한 줄**일 때만 걸러서, 마지막 문단 끝에 붙어 있으면
+ * 줄을 합친 뒤 한 문장으로 남는다. 그러면 요청 하나를 쓰고 문장 비율 점수에도 섞인다.
+ */
+const CREDIT_TAIL = new RegExp(
+  String.raw`\s*[([（][^)\]）]{0,40}(?:취재\s*보조|사진|영상|그래픽|기자|특파원|통신원)[^)\]）]{0,20}[)\]）]\s*$`,
+)
+
 /** 맨 앞에서 부제로 보고 버릴 수 있는 최대 줄 수. 넘으면 본문으로 본다. */
 const MAX_SUBTITLE_LINES = 4
 /** 이보다 길면 부제가 아니라 본문으로 본다. */
@@ -109,7 +119,10 @@ export function extractArticle(): Article | null {
   let head = 0
   while (head < lines.length && head < MAX_SUBTITLE_LINES) {
     const l = lines[head] ?? ''
-    if (/[.!?…]$/.test(l) || l.length > SUBTITLE_MAX_CHARS) break
+    // 종결부호 뒤에 닫는 따옴표·괄호가 올 수 있다. 마지막 글자만 보면
+    // 한국 기사에 흔한 인용 리드("이번 조치는 효과가 없다.")가 부제로 오인돼
+    // **본문 첫 문장이 통째로 버려진다.** 첫 문장은 대개 기사의 핵심 주장이다.
+    if (/[.!?…]["'”’)\]]*$/.test(l) || l.length > SUBTITLE_MAX_CHARS) break
     head++
   }
   if (head < lines.length) lines = lines.slice(head)
@@ -117,13 +130,14 @@ export function extractArticle(): Article | null {
   let body = lines
     .filter((l) => !TAIL.test(l))
     .filter((l) => !/^[[(][^\])]{0,40}[\])]$/.test(l))       // [사진] 한 줄
-    .filter((l) => !/^[가-힣]{2,5}\s*(기자|특파원)$/.test(l)) // 이름만 있는 줄
+    .filter((l) => !/^[가-힣]{2,5}\s*(기자|특파원|통신원)$/.test(l)) // 이름만 있는 줄
     .filter((l) => !/@[\w.]+\.(com|co\.kr|net|kr)/.test(l))   // 메일 줄
     .join(' ')
     .replace(/\s+/g, ' ')
     .trim()
     .replace(BYLINE, '')
     .replace(BYLINE_IN_BRACKET, '')
+    .replace(CREDIT_TAIL, '')
 
   if (!headline || body.length < 150) return null
   return { headline, body, sentences: splitSentences(body) }
