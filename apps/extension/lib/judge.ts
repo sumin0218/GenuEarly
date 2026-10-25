@@ -6,13 +6,15 @@
 //
 // 엔트리포인트(entrypoints/background.ts)가 아니라 여기 둔 이유는 **테스트에서 부르기 위해서다.**
 // 엔트리포인트는 WXT 의 defineBackground 로 감싸여 있어 그대로는 불러올 수 없다.
-import schema from '../../../packages/shared/judgment-items.json'
-import { readScores, sweepExpired, writeScores } from './cache'
-import { toItemScores, verdictFrom } from './scoring'
+// **점수 규칙은 여기 없다.** `@genuearly/shared` 하나가 원본이고 중계 서버와 함께 쓴다 (GE-15).
+// 두 벌을 두면 조용히 갈라진다.
+import { decideBadge, scoreArticle, type ItemResult } from '@genuearly/shared'
+import schema from '@genuearly/shared/judgment-items.json'
+import { readScores, sweepExpired, writeScores, type ItemScores } from './cache'
 import {
   PROXY_URL,
   type ArticleVerdict,
-  type BadgeLevel,
+  type DisplayLevel,
   type JevAnswer,
   type JudgeRequest,
   type JudgeResponse,
@@ -79,15 +81,15 @@ async function callProxy(body: JudgeRequest): Promise<JudgeResponse | null> {
  * 색만으로는 색각 이상에서 구분되지 않으므로 기호 모양을 서로 다르게 둔다.
  * 짧은 이름을 ChatKHU 로 따로 받으면 그때 `ui.ko.json` 에서 읽는다 (requirements.md 2-1절 TODO).
  */
-const BADGE_TEXT: Record<BadgeLevel, string> = {
+const BADGE_TEXT: Record<DisplayLevel, string> = {
   PENDING: '…', SAFE: '○', CHECK: '△', CAUTION: '!', UNDETERMINED: '?',
 }
-const BADGE_COLOR: Record<BadgeLevel, string> = {
+const BADGE_COLOR: Record<DisplayLevel, string> = {
   PENDING: '#9aa0a6', SAFE: '#1e8e3e', CHECK: '#f29900', CAUTION: '#d93025', UNDETERMINED: '#5f6368',
 }
 
 /** 아이콘 배지. 권한이 필요 없다 — action 키만 선언한다 (requirements.md 2-1절). */
-function setIconBadge(tabId: number | undefined, level: BadgeLevel) {
+function setIconBadge(tabId: number | undefined, level: DisplayLevel) {
   if (tabId === undefined) return
   // 탭마다 따로 둔다. 다른 탭의 기사 상태가 섞이면 안 된다.
   void browser.action.setBadgeText({ tabId, text: BADGE_TEXT[level] })
@@ -106,7 +108,7 @@ export async function judgeArticle(msg: Extract<Message, { kind: 'judge-article'
 
   if (missing.size === 0) {
     // 다 있다. **PENDING 을 거치지 않고 바로 보여 준다.**
-    const verdict = verdictFrom(cached)
+    const verdict = decideBadge(toResults(cached))
     setIconBadge(tabId, verdict.level)
     return verdict
   }
@@ -151,17 +153,34 @@ export async function judgeArticle(msg: Extract<Message, { kind: 'judge-article'
     perSentence.push(r.answers)
   }
 
-  const fresh = toItemScores(answers, perSentence)
+  // 이번에 물어본 항목만 채점한다. 캐시에 있던 것은 그대로 쓴다.
+  const fresh = scoreArticle({ items: [...missing], answers, sentences: perSentence })
+
+  // **모델이 내린 판단만 캐시한다.**
+  // `scoreArticle` 은 답이 안 온 항목도 ⚪ 로 돌려준다 — 중계가 끊겼을 때와
+  // 모델이 "모르겠다" 고 했을 때가 같은 모양이 된다. 앞의 것을 6시간 들고 있으면
+  // **서버가 돌아온 뒤에도 기사 전체가 계속 ⚪ 로 보인다.**
+  // `low_confidence`·`uncertain` 은 모델이 답을 주고 확신이 낮았던 경우라 캐시한다.
+  const JUDGED: readonly (string | undefined)[] = [undefined, 'low_confidence', 'uncertain']
 
   // **문장이 하나라도 실패했으면 그 항목을 캐시하지 않는다.**
   // 성공한 문장만으로 낸 비율을 "완성된 판단" 으로 6시간 들고 있으면,
   // 판단 범위가 조용히 줄어든 결과가 고정된다. 이번 판정에서만 쓰고 다음에 다시 묻는다.
   // (requirements.md 3-6절 "실패한 판단은 캐시하지 않는다")
-  const toCache = { ...fresh }
-  if (sentenceFailed && sentenceItem) delete toCache[sentenceItem]
+  const toCache: ItemScores = {}
+  for (const r of fresh) {
+    if (sentenceFailed && r.id === sentenceItem) continue
+    if (!JUDGED.includes(r.reason)) continue
+    toCache[r.id] = { score: r.score, isConfident: r.isConfident, reason: r.reason }
+  }
   await writeScores(msg.url, toCache)
 
-  const verdict = verdictFrom({ ...cached, ...fresh })
+  const verdict = decideBadge([...toResults(cached), ...fresh])
   setIconBadge(tabId, verdict.level)
   return verdict
+}
+
+/** 캐시에서 읽은 것을 `decideBadge` 가 받는 모양으로 되돌린다. */
+function toResults(cached: ItemScores): ItemResult[] {
+  return Object.entries(cached).map(([id, c]) => ({ id, ...c }))
 }

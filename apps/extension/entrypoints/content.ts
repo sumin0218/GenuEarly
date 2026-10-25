@@ -8,13 +8,26 @@ import '../assets/content.css'
 import { ARTICLE_MATCHES } from '../match-patterns'
 import content from '../../../packages/content/ui.ko.json'
 import { extractArticle } from '../lib/extract'
-import type { ArticleVerdict, BadgeLevel, Message } from '../lib/protocol'
+import { ITEM_CAUTION_AT, SIGNAL_SCORE, type ItemResult } from '@genuearly/shared'
+import type { ArticleVerdict, DisplayLevel, Message } from '../lib/protocol'
 
 // **사용자에게 보이는 말은 여기서 쓰지 않는다.** packages/content 가 원본이고
 // 그 글은 ChatKHU 가 썼다 (GE-16, docs/product.md 6절).
 // 여기 두는 것은 **글이 아닌 것** — 표시용 기호뿐이다.
-const MARK: Record<BadgeLevel, string> = {
+const MARK: Record<DisplayLevel, string> = {
   PENDING: '⋯', SAFE: '🟢', CHECK: '🟡', CAUTION: '🔴', UNDETERMINED: '⚪',
+}
+
+/**
+ * 항목 하나를 화면에 어떻게 보일지.
+ *
+ * `@genuearly/shared` 는 **기사 단계만** 정하고 항목별 단계는 두지 않는다 — 판정에 쓰이지 않기 때문이다.
+ * 여기서만 쓰는 표시용 구분이라 같은 상수(`ITEM_CAUTION_AT`, 중간 보기 값)를 보고 가른다.
+ */
+function itemLevel(r: ItemResult): DisplayLevel {
+  if (r.score === null) return 'UNDETERMINED'
+  if (r.score >= ITEM_CAUTION_AT) return 'CAUTION'
+  return r.score >= SIGNAL_SCORE.neutral ? 'CHECK' : 'SAFE'
 }
 
 /** 배지 DOM 을 만든다. `innerHTML` 을 쓰지 않는다 (docs/security/secure-coding.md 4절). */
@@ -33,7 +46,7 @@ function createBadge() {
   el.append(mark, label, detail)
   el.addEventListener('click', () => { detail.hidden = !detail.hidden })
 
-  function render(level: BadgeLevel, verdict?: ArticleVerdict): void {
+  function render(level: DisplayLevel, verdict?: ArticleVerdict): void {
     el.dataset.level = level
     mark.textContent = MARK[level]
     label.textContent = content.badge[level].name
@@ -47,9 +60,10 @@ function createBadge() {
         const c = content.items[it.id as keyof typeof content.items] as
           | { name: string; safe: string; signal: string; undetermined: string }
           | undefined
-        if (!c || it.level === 'PENDING') return []
-        const text = it.level === 'UNDETERMINED' ? c.undetermined : it.level === 'SAFE' ? c.safe : c.signal
-        return [{ mark: MARK[it.level], level: it.level, name: c.name, text }]
+        if (!c) return []
+        const lv = itemLevel(it)
+        const text = lv === 'UNDETERMINED' ? c.undetermined : lv === 'SAFE' ? c.safe : c.signal
+        return [{ mark: MARK[lv], level: lv, name: c.name, text }]
       })
       .sort((a, b) => (ORDER[a.level] ?? 9) - (ORDER[b.level] ?? 9))
 

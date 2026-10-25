@@ -3,8 +3,12 @@
 // 중계 서버를 가짜로 세우고 **호출 횟수를 센다.** 캐시가 도는지는 그것으로만 알 수 있다.
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { judgeArticle } from '../lib/judge'
-import { writeScores } from '../lib/cache'
+import { writeScores, type CachedItem } from '../lib/cache'
+
+/** 캐시 값이 숫자에서 항목 결과 조각으로 바뀌었다. 테스트에서 짧게 쓰려고 둔다. */
+const item = (score: number | null, isConfident = true): CachedItem => ({ score, isConfident })
 import type { JudgeRequest } from '../lib/protocol'
+import schema from '@genuearly/shared/judgment-items.json'
 
 const store = new Map<string, unknown>()
 const badge: { text: string[]; } = { text: [] }
@@ -33,6 +37,25 @@ function stubBrowser() {
   })
 }
 
+/**
+ * 항목 하나에 대한 **스키마가 실제로 받아들이는** 답.
+ *
+ * 전에는 보기 이름을 손으로 적어 두어 `clickbait_headline` 말고는 모르는 보기가 갔고,
+ * 점수가 전부 ⚪ 로 떨어져도 캐시 동작은 같다고 보고 넘겼다. 지금은 **중계가 실패한 항목을
+ * 캐시하지 않으므로** 가짜 답이 틀리면 캐시가 통째로 비어 테스트가 캐시를 못 본다.
+ * 보기 이름을 스키마에서 읽어 두 번 다시 갈라지지 않게 한다.
+ */
+function answerFor(id: string) {
+  const def = (schema.items as { id: string; type: string; signals?: Record<string, string>; question: { criteria?: unknown } }[])
+    .find((i) => i.id === id)
+  if (!def) throw new Error(`스키마에 없는 항목: ${id}`)
+  if (def.type === 'score') return { type: 'score', score: 1, confidence: 0.9 }
+  // 'clear' 쪽 보기를 고른다 — 캐시가 도는지를 보는 테스트라 어느 쪽이든 되지만 하나로 고정한다.
+  const choice = Object.entries(def.signals ?? {}).find(([, dir]) => dir === 'clear')?.[0]
+  if (!choice) throw new Error(`clear 보기가 없는 항목: ${id}`)
+  return { type: 'choice', choice, confidence: 0.9 }
+}
+
 /** 모든 질문에 그럴듯한 답을 돌려주는 가짜 중계 서버. */
 function stubProxy() {
   vi.stubGlobal('fetch', (_url: string, init: RequestInit) => {
@@ -43,14 +66,8 @@ function stubProxy() {
       answers.factual_assertion = { type: 'noul', noul: 0.9 }
       answers.named_basis = { type: 'noul', noul: 0.05 }
     } else {
-      for (const id of body.items) {
-        answers[id] = id === 'emotional_language' || id === 'ai_style_signal'
-          ? { type: 'score', score: 0.5, confidence: 0.9 }
-          : { type: 'choice', choice: id === 'source_citation' ? 'named_source' : 'plain', confidence: 0.9 }
-      }
+      for (const id of body.items) answers[id] = answerFor(id)
     }
-    // clickbait_headline 의 'plain' 과 달리 보기 이름이 항목마다 달라서,
-    // 아는 보기가 아니면 점수가 null 이 된다. 그래도 캐시 동작은 같다.
     return Promise.resolve(new Response(JSON.stringify({ model: 'jev-1.13.0', answers }), { status: 200 }))
   })
 }
@@ -124,7 +141,7 @@ describe('같은 기사를 다시 열 때', () => {
 describe('② 가 제목 항목만 채워 둔 상태', () => {
   it('① 은 나머지만 묻는다', async () => {
     // ② 포털 목록이 제목만 보는 항목을 채워 뒀다고 두자.
-    await writeScores(article.url, { clickbait_headline: 1, spread_inducement: 0 })
+    await writeScores(article.url, { clickbait_headline: item(1), spread_inducement: item(0) })
 
     await judgeArticle(article, 1)
     const asked = sent.flatMap((r) => r.items)
@@ -135,13 +152,13 @@ describe('② 가 제목 항목만 채워 둔 상태', () => {
 
   it('제목만 있는 캐시로 "캐시 있음" 처리하지 않는다', async () => {
     // 이걸 놓치면 제목만 본 결과가 6시간 동안 기사 배지로 나간다.
-    await writeScores(article.url, { clickbait_headline: 1, spread_inducement: 0 })
+    await writeScores(article.url, { clickbait_headline: item(1), spread_inducement: item(0) })
     await judgeArticle(article, 1)
     expect(sent.length, '본문·문장 판단을 건너뛰면 안 된다').toBeGreaterThan(0)
   })
 
   it('헤드라인 그룹은 통째로 건너뛴다', async () => {
-    await writeScores(article.url, { clickbait_headline: 1 })
+    await writeScores(article.url, { clickbait_headline: item(1) })
     await judgeArticle(article, 1)
     // headline_only 그룹에는 clickbait_headline 하나뿐이다. 다 찼으면 요청이 없어야 한다.
     expect(sent.some((r) => r.group === 'headline_only')).toBe(false)

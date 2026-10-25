@@ -23,7 +23,7 @@ export default defineBackground(() => {
       .then(sendResponse)
       .catch((e) => {
         console.warn('[GenuEarly] 판단 실패', e)
-        sendResponse({ level: 'UNDETERMINED', items: [], reason: 'error' } satisfies ArticleVerdict)
+        sendResponse({ level: 'UNDETERMINED', score: null, cautionSignals: 0, items: [], reason: 'not_enough_items' } satisfies ArticleVerdict)
       })
     return true   // 비동기로 답한다
   })

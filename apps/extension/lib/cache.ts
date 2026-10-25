@@ -8,13 +8,23 @@
 //   - 키는 **정규화한 URL 의 SHA-256**. 원문을 두지 않는다
 //   - **판단 시각 대신 만료 시각만** 둔다. 언제 읽었는지가 남지 않는다
 //   - 값은 **항목별 점수**까지다. 기사 글은 한 글자도 넣지 않는다
-import schema from '../../../packages/shared/judgment-items.json'
+import type { ItemResult } from '@genuearly/shared'
+import schema from '@genuearly/shared/judgment-items.json'
 
 /** 유효 기간. 기사는 수정된다. 근거가 약한 값이라 실제 사용을 보고 조정한다 (requirements.md 3-6). */
 const TTL_MS = 6 * 60 * 60 * 1000
 
-/** 항목별 점수. 0(안심) ~ 1(주의), `null` 은 판단 보류. */
-export type ItemScores = Record<string, number | null>
+/**
+ * 캐시에 담는 항목 결과. `@genuearly/shared` 의 `ItemResult` 에서 **저장할 것만** 추린다.
+ *
+ * `isConfident` 가 꼭 있어야 한다 — `decideBadge` 가 🔴·🟢 을 가를 때 쓴다.
+ * 점수만 저장하면 캐시에서 읽은 항목이 전부 "확신하지 못한 것" 으로 취급돼
+ * **같은 기사가 두 번째 열 때 다른 배지를 준다.**
+ */
+export type CachedItem = Pick<ItemResult, 'score' | 'isConfident' | 'reason'>
+
+/** 항목 id → 결과. */
+export type ItemScores = Record<string, CachedItem>
 
 interface Entry {
   /** 질문 세트 버전. 다르면 버린다 — 다른 기준으로 낸 판단이다 */

@@ -14,6 +14,10 @@
  *
  * 개발에서는 값을 안 주면 로컬 중계를 본다.
  */
+import type { BadgeLevel, Verdict } from '@genuearly/shared'
+
+export type { BadgeLevel, Verdict }
+
 export const PROXY_URL: string = import.meta.env.WXT_PROXY_URL ?? 'http://localhost:8787'
 
 export type Feature = 'page' | 'portal_list' | 'selection'
@@ -55,12 +59,13 @@ export interface JudgeArticleMessage {
 
 export type Message = JudgeArticleMessage
 
-export type BadgeLevel = 'PENDING' | 'SAFE' | 'CHECK' | 'CAUTION' | 'UNDETERMINED'
+/**
+ * 화면에 뜨는 단계.
+ *
+ * `PENDING` 은 **판단 결과가 아니라 화면 상태**다 — 요청을 보내 놓고 기다리는 중이다.
+ * 그래서 `@genuearly/shared` 의 `BadgeLevel` 에는 없고 여기서만 더한다.
+ */
+export type DisplayLevel = BadgeLevel | 'PENDING'
 
-export interface ArticleVerdict {
-  level: BadgeLevel
-  /** 어느 항목이 어떻게 나왔는지. 팝업 상세와 디버깅에 쓴다 */
-  items: { id: string; level: BadgeLevel; note: string }[]
-  /** 전부 ⚪ 일 때의 이유. 사용자에게 보여 주지 않는다 */
-  reason?: string
-}
+/** 판단 결과. `@genuearly/shared` 의 `Verdict` 를 그대로 쓴다. */
+export type ArticleVerdict = Verdict

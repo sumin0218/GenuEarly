@@ -112,9 +112,11 @@ export function scoreItem(id: string, answer: unknown): ItemResult {
     // `in` 은 프로토타입까지 본다. "constructor" 같은 답이 통과하면 안 된다.
     if (typeof answer.choice !== 'string' || !Object.hasOwn(signals, answer.choice))
       return undetermined(id, 'invalid_answer')
-    score = SIGNAL_SCORE[signals[answer.choice]]
     // JSON 을 `as unknown` 으로 읽어서 타입이 이것을 막지 못한다. 모르는 방향이면 NaN 이 평균으로 샌다.
-    if (score === undefined) return undetermined(id, 'invalid_answer')
+    const dir = signals[answer.choice]
+    const mapped = dir === undefined ? undefined : SIGNAL_SCORE[dir as keyof typeof SIGNAL_SCORE]
+    if (mapped === undefined) return undetermined(id, 'invalid_answer')
+    score = mapped
   } else if (def.type === 'score') {
     const grades = Array.isArray(def.question?.criteria) ? def.question.criteria.length : 0
     if (grades < 2) return undetermined(id, 'invalid_answer')

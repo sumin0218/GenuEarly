@@ -4,7 +4,10 @@
 // **② 가 채운 제목 항목만 보고 ① 이 "캐시 있음" 으로 넘어가지 않는가** 둘이다.
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import schema from '../../../packages/shared/judgment-items.json'
-import { CACHE_TTL_MS, normalizeUrl, readScores, sweepExpired, writeScores } from '../lib/cache'
+import { CACHE_TTL_MS, normalizeUrl, readScores, sweepExpired, writeScores, type CachedItem } from '../lib/cache'
+
+/** 캐시에 넣는 항목 결과를 짧게 만든다. `isConfident` 가 빠지면 decideBadge 가 다르게 읽는다. */
+const item = (score: number | null, isConfident = true): CachedItem => ({ score, isConfident })
 
 /** chrome.storage.local 을 메모리로 흉내 낸다. */
 const store = new Map<string, unknown>()
@@ -50,7 +53,7 @@ describe('URL 정규화 — 같은 기사가 여러 키로 갈라지지 않게',
 
 describe('캐시가 열람 기록이 되지 않는다', () => {
   it('키에 URL 원문이 들어가지 않는다', async () => {
-    await writeScores(URL1, { clickbait_headline: 1 })
+    await writeScores(URL1, { clickbait_headline: item(1) })
     const keys = [...store.keys()]
     expect(keys).toHaveLength(1)
     expect(keys[0]).toMatch(/^judgment:[0-9a-f]{64}$/)
@@ -58,7 +61,7 @@ describe('캐시가 열람 기록이 되지 않는다', () => {
   })
 
   it('값에 URL 도 기사 글도 들어가지 않는다', async () => {
-    await writeScores(URL1, { clickbait_headline: 1, source_citation: 0 })
+    await writeScores(URL1, { clickbait_headline: item(1), source_citation: item(0) })
     const dumped = JSON.stringify([...store.entries()])
     expect(dumped).not.toContain('naver')
     expect(dumped).not.toContain('article')
@@ -66,7 +69,7 @@ describe('캐시가 열람 기록이 되지 않는다', () => {
 
   it('판단 시각이 아니라 만료 시각만 둔다', async () => {
     const before = Date.now()
-    await writeScores(URL1, { clickbait_headline: 1 })
+    await writeScores(URL1, { clickbait_headline: item(1) })
     const e = [...store.values()][0] as Record<string, number>
     // 저장된 시각 값은 만료 하나뿐이고, 그 값에서 "언제 읽었는지" 를 바로 읽을 수 없다.
     const times = Object.values(e).filter((v) => typeof v === 'number')
@@ -78,7 +81,7 @@ describe('캐시가 열람 기록이 되지 않는다', () => {
 describe('항목 단위로 쌓는다', () => {
   it('②가 제목 항목만 채워도 ①이 속지 않는다', async () => {
     // ② 포털 목록은 제목만 보는 항목만 판단한다.
-    await writeScores(URL1, { clickbait_headline: 1, spread_inducement: 0 })
+    await writeScores(URL1, { clickbait_headline: item(1), spread_inducement: item(0) })
     const got = await readScores(URL1)
 
     // ① 이 필요로 하는 항목들
@@ -89,45 +92,45 @@ describe('항목 단위로 쌓는다', () => {
   })
 
   it('나중 것이 앞 것 위에 쌓인다', async () => {
-    await writeScores(URL1, { clickbait_headline: 1 })
-    await writeScores(URL1, { source_citation: 0 })
-    expect(await readScores(URL1)).toEqual({ clickbait_headline: 1, source_citation: 0 })
+    await writeScores(URL1, { clickbait_headline: item(1) })
+    await writeScores(URL1, { source_citation: item(0) })
+    expect(await readScores(URL1)).toEqual({ clickbait_headline: item(1), source_citation: item(0) })
   })
 
   it('판단 보류(null)도 결과로 저장한다', async () => {
     // null 은 "안 물어봤다" 가 아니라 "물어봤는데 모르겠다" 다. 다시 묻지 않는다.
-    await writeScores(URL1, { ai_style_signal: null })
+    await writeScores(URL1, { ai_style_signal: item(null, false) })
     const got = await readScores(URL1)
     expect('ai_style_signal' in got).toBe(true)
-    expect(got.ai_style_signal).toBeNull()
+    expect(got.ai_style_signal?.score).toBeNull()
   })
 })
 
 describe('버리는 조건', () => {
   it('만료되면 비어 있다', async () => {
     vi.useFakeTimers()
-    await writeScores(URL1, { clickbait_headline: 1 })
+    await writeScores(URL1, { clickbait_headline: item(1) })
     vi.advanceTimersByTime(CACHE_TTL_MS + 1000)
     expect(await readScores(URL1)).toEqual({})
   })
 
   it('질문 세트 버전이 다르면 버린다', async () => {
     // 다른 기준으로 낸 판단이다.
-    await writeScores(URL1, { clickbait_headline: 1 })
+    await writeScores(URL1, { clickbait_headline: item(1) })
     const [k, v] = [...store.entries()][0] as [string, Record<string, unknown>]
     store.set(k, { ...v, v: '0.0.1-old' })
     expect(await readScores(URL1)).toEqual({})
   })
 
   it('모델이 바뀌면 버린다', async () => {
-    await writeScores(URL1, { clickbait_headline: 1 })
+    await writeScores(URL1, { clickbait_headline: item(1) })
     const [k, v] = [...store.entries()][0] as [string, Record<string, unknown>]
     store.set(k, { ...v, m: 'jev-99' })
     expect(await readScores(URL1)).toEqual({})
   })
 
   it('지금 질문 세트로 쓴 것은 읽힌다', async () => {
-    await writeScores(URL1, { clickbait_headline: 1 })
+    await writeScores(URL1, { clickbait_headline: item(1) })
     const v = [...store.values()][0] as Record<string, unknown>
     expect(v.v).toBe(schema.version)
     expect(v.m).toBe(schema.model)
@@ -135,15 +138,15 @@ describe('버리는 조건', () => {
 
   it('만료된 것을 비운다 — 남겨 두면 그 자체가 기록이다', async () => {
     vi.useFakeTimers()
-    await writeScores(URL1, { clickbait_headline: 1 })
-    await writeScores('https://n.news.naver.com/article/001/0002', { clickbait_headline: 0 })
+    await writeScores(URL1, { clickbait_headline: item(1) })
+    await writeScores('https://n.news.naver.com/article/001/0002', { clickbait_headline: item(0) })
     vi.advanceTimersByTime(CACHE_TTL_MS + 1000)
     expect(await sweepExpired()).toBe(2)
     expect(store.size).toBe(0)
   })
 
   it('살아 있는 것은 비우지 않는다', async () => {
-    await writeScores(URL1, { clickbait_headline: 1 })
+    await writeScores(URL1, { clickbait_headline: item(1) })
     expect(await sweepExpired()).toBe(0)
     expect(store.size).toBe(1)
   })
@@ -157,7 +160,7 @@ describe('저장소가 말을 안 들어도 판단을 막지 않는다', () => {
 
   it('쓰기 실패해도 던지지 않는다', async () => {
     vi.stubGlobal('browser', { storage: { local: { ...fakeStorage, set: () => Promise.reject(new Error('quota')) } } })
-    await expect(writeScores(URL1, { clickbait_headline: 1 })).resolves.toBeUndefined()
+    await expect(writeScores(URL1, { clickbait_headline: item(1) })).resolves.toBeUndefined()
   })
 
   it('빈 결과는 쓰지 않는다', async () => {
