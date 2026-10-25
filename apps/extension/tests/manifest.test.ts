@@ -31,7 +31,17 @@ const contentScriptMatches: string[] = (manifest.content_scripts ?? []).flatMap(
 )
 
 /** docs/security/secure-coding.md 2절의 "쓰지 않는다" 목록 */
-const 금지_권한 = ['tabs', 'webRequest', 'declarativeNetRequest', 'cookies', 'history', 'bookmarks']
+// 원본은 docs/security/secure-coding.md 2절 권한 표다. 표를 고치면 여기도 같은 PR 에서 고친다.
+//
+// notifications·scripting·activeTab 은 한때 "필요" 였다가 빠졌다.
+// ③ 선택 텍스트 결과를 **확장 팝업**으로 옮겨 임의의 사이트에 UI 를 주입할 일이 없어졌고,
+// OS 알림 대신 아이콘 배지를 쓰기로 했다. 셋 다 권한이 필요 없는 수단으로 바뀐 것이지
+// 기능을 줄인 것이 아니다 (requirements.md 2-1절, 5-1절).
+// **다시 넣으려면 그 결정을 먼저 뒤집어야 한다. 이 목록이 그것을 막는다.**
+const 금지_권한 = [
+  'tabs', 'webRequest', 'declarativeNetRequest', 'cookies', 'history', 'bookmarks',
+  'notifications', 'scripting', 'activeTab',
+]
 
 /** 호스트가 비어 있는 패턴. https://news.naver.com/* 같은 경로 와일드카드는 허용한다. */
 const 와일드카드_호스트 = /^(\*|https?|\*:\/\/\*)(:\/\/)?(\*\/|\*$|\/\*)/
