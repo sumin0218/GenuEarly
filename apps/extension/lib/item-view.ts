@@ -16,6 +16,25 @@ export const MARK: Record<DisplayLevel, string> = {
 }
 
 /**
+ * **글자가 들어갈 자리가 없는 곳**에서 쓰는 기호와 색.
+ *
+ * 아이콘 배지(네 글자 남짓)와 포털 목록 동그라미(제목 옆 한 칸)가 함께 쓴다.
+ * 배지 상세·팝업처럼 설명 문구를 옆에 붙일 수 있는 곳은 위의 `MARK` 를 쓴다.
+ *
+ * **여기에 사용자에게 보이는 말을 쓰지 않는다.** 한때 아이콘 배지에 `'안심'` 이라고 적어
+ * 두었는데, ChatKHU 가 쓴 문구는 SAFE 를 일부러 **"눈에 띄는 신호 없음"** 으로 썼다 —
+ * 우리는 신호를 못 찾은 것이지 안심해도 된다고 말한 적이 없다 (docs/product.md 2절).
+ *
+ * **모양이 서로 다르다.** 색만으로는 색각 이상에서 구분되지 않는다.
+ */
+export const GLYPH: Record<DisplayLevel, string> = {
+  PENDING: '…', SAFE: '○', CHECK: '△', CAUTION: '!', UNDETERMINED: '?',
+}
+export const LEVEL_COLOR: Record<DisplayLevel, string> = {
+  PENDING: '#9aa0a6', SAFE: '#1e8e3e', CHECK: '#f29900', CAUTION: '#d93025', UNDETERMINED: '#5f6368',
+}
+
+/**
  * 항목 하나를 화면에 어떻게 보일지.
  *
  * `@genuearly/shared` 는 **기사 단계만** 정하고 항목별 단계는 두지 않는다 — 판정에 쓰이지 않기 때문이다.

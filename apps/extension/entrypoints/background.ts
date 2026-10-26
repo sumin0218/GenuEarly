@@ -6,9 +6,9 @@
 // **여기는 배선만 둔다.** 판단 흐름은 lib/judge.ts 에 있다 — 테스트에서 부를 수 있게.
 import content from '../../../packages/content/ui.ko.json'
 import { sweepExpired } from '../lib/cache'
-import { callProxy, judgeArticle, setIconBadge } from '../lib/judge'
+import { callProxy, judgeArticle, judgeHeadline, setIconBadge } from '../lib/judge'
 import { judgeSelection, putSelectionPending, putSelectionResult } from '../lib/selection'
-import type { ArticleVerdict, Message } from '../lib/protocol'
+import type { ArticleVerdict, HeadlineVerdict, Message } from '../lib/protocol'
 
 /** 오른쪽 클릭 메뉴의 id. 문자열을 두 곳에 적지 않는다. */
 const MENU_ID = 'genuearly-check-selection'
@@ -74,10 +74,37 @@ export default defineBackground(() => {
     })()
   })
 
+  // --- 탭이 다른 페이지로 가면 아이콘 배지를 지운다 -------------------------
+  //
+  // `setBadgeText({ tabId })` 로 둔 값은 **탭이 닫힐 때만** 지워진다. 같은 탭에서 다른 곳으로
+  // 가도 남아서, 🔴 기사를 보다가 포털 목록으로 넘어가면 **그 목록이 주의 대상인 것처럼 보인다**
+  // (requirements.md 2-1절). 기사 페이지면 콘텐츠 스크립트가 곧 다시 채운다.
+  //
+  // **`tabs` 권한이 필요 없다.** 권한을 요구하는 것은 `Tab.url`·`title`·`favIconUrl` 이고
+  // 우리는 `changeInfo.status` 하나만 본다 (tests/manifest.test.ts 의 금지 권한 목록).
+  browser.tabs.onUpdated.addListener((tabId, changeInfo) => {
+    if (changeInfo.status !== 'loading') return
+    void browser.action.setBadgeText({ tabId, text: '' })
+  })
+
   browser.runtime.onMessage.addListener((raw, sender, sendResponse) => {
     const msg = raw as Message
     // **보낸 곳을 확인한다.** 우리 콘텐츠 스크립트가 아니면 받지 않는다.
     if (!sender.tab || sender.id !== browser.runtime.id) return false
+
+    // ② 목록의 제목 하나. **아이콘 배지를 건드리지 않는다** — 목록 페이지에는 기사가
+    // 서른 개 있고, 그중 하나의 판정을 탭 전체의 상태로 올리면 그 페이지가 주의 대상처럼
+    // 보인다 (requirements.md 2-1절).
+    if (msg?.kind === 'judge-headline') {
+      judgeHeadline(msg)
+        .then(sendResponse)
+        .catch((e) => {
+          console.warn('[GenuEarly] 제목 판단 실패', e)
+          sendResponse({ level: 'UNDETERMINED', basis: 'headline' } satisfies HeadlineVerdict)
+        })
+      return true
+    }
+
     if (msg?.kind !== 'judge-article') return false
 
     judgeArticle(msg, sender.tab.id)

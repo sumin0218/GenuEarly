@@ -154,3 +154,38 @@ describe('아이콘 배지와 팝업', () => {
     expect(permissions).toEqual(['storage', 'contextMenus'])
   })
 })
+
+describe('② 포털 목록 (GE-23)', () => {
+  // **등록되지 않은 콘텐츠 스크립트는 빌드되기만 하고 돌지 않는다.**
+  // WXT 는 entrypoints/portal.ts 를 "unlisted script" 로 보고 조용히 manifest 밖에 둔다.
+  // 파일 이름을 portal.content.ts 로 바꿔야 등록된다 — 그 사실을 아무도 알려 주지 않는다.
+  // `action` 키가 없던 것과 같은 함정이라 빌드 결과를 본다.
+  const portal = (manifest.content_scripts ?? []).find((cs: any) =>
+    (cs.matches ?? []).some((m: string) => m.includes('news.naver.com/section')))
+
+  it('목록 페이지에 콘텐츠 스크립트가 등록돼 있다', () => {
+    expect(portal, '포털 목록 콘텐츠 스크립트가 manifest 에 없다. 파일 이름이 *.content.ts 인가').toBeTruthy()
+  })
+
+  it('등록된 파일이 실제로 나왔다', () => {
+    const js: string[] = portal?.js ?? []
+    expect(js.length).toBeGreaterThan(0)
+    for (const f of js) {
+      expect(existsSync(resolve(__dirname, '../.output/chrome-mv3', f)), `${f} 가 없다`).toBe(true)
+    }
+  })
+
+  it('목록 페이지는 기사 페이지와 다른 스크립트가 맡는다', () => {
+    // 목록에 기사용 배지 스크립트가 붙으면 목록 전체에 배지가 하나 뜬다.
+    const article = (manifest.content_scripts ?? []).find((cs: any) =>
+      (cs.matches ?? []).some((m: string) => m.includes('n.news.naver.com')))
+    expect(article?.js?.[0]).not.toBe(portal?.js?.[0])
+  })
+
+  it('목록 페이지 권한이 섹션 경로로 좁혀져 있다', () => {
+    // news.naver.com 전체를 받으면 포털 첫 화면·댓글·마이뉴스까지 들어간다.
+    const list = hostPermissions.filter((h) => h.includes('news.naver.com/'))
+    expect(list.some((h) => h === 'https://news.naver.com/*')).toBe(false)
+    expect(hostPermissions).toContain('https://news.naver.com/section/*')
+  })
+})

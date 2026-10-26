@@ -1,0 +1,166 @@
+// @vitest-environment happy-dom
+//
+// ② 포털 목록 동그라미.
+//
+// 여기서 보는 것은 **무엇을 기사 제목으로 보는가**와 **근거가 다른 것을 다르게 그리는가**다.
+// 실제 스크롤 추적과 DOM 삽입은 entrypoints/portal.content.ts 에 있다.
+import { describe, expect, it } from 'vitest'
+import { MIN_HEADLINE_CHARS, collectTitles, createMark, markLook } from '../lib/portal'
+import { ARTICLE_MATCHES, isArticleUrl, matchPatternToRegExp } from '../match-patterns'
+
+/** 목록 한 조각. 포털의 클래스 이름을 흉내 내지 않는다 — 우리는 주소로 찾는다. */
+function listWith(links: { href: string; text: string }[]): HTMLElement {
+  const root = document.createElement('div')
+  for (const l of links) {
+    const a = document.createElement('a')
+    a.href = l.href
+    a.textContent = l.text
+    root.append(a)
+  }
+  document.body.replaceChildren(root)
+  return root
+}
+
+const NAVER = 'https://n.news.naver.com/mnews/article/001/0012345678'
+const 제목 = '정부, 내년 예산안 발표했다'
+
+describe('match pattern 을 정규식으로', () => {
+  it('경로의 * 만 와일드카드다', () => {
+    const re = matchPatternToRegExp('https://n.news.naver.com/article/*')
+    expect(re.test('https://n.news.naver.com/article/001/0012345678')).toBe(true)
+    expect(re.test('https://n.news.naver.com/mnews/article/001/0012345678')).toBe(false)
+  })
+
+  it('점을 글자 그대로 본다 — 아무 글자나 되면 다른 도메인이 통과한다', () => {
+    const re = matchPatternToRegExp('https://v.daum.net/v/*')
+    expect(re.test('https://vXdaum.net/v/abc'), '점이 와일드카드가 되면 안 된다').toBe(false)
+  })
+
+  it('호스트 와일드카드는 거절한다 — 쓰지 않기로 한 모양이다', () => {
+    expect(() => matchPatternToRegExp('https://*.naver.com/')).toThrow()
+  })
+})
+
+describe('어떤 링크가 기사인가', () => {
+  // **①이 판단할 수 있는 기사에만 동그라미를 단다.** 어긋나면 사용자가 목록에서
+  // 표시를 보고 눌러 들어갔는데 아무것도 없는 상태가 된다.
+  it('match pattern 과 같은 것을 받아들인다', () => {
+    for (const p of ARTICLE_MATCHES) {
+      const sample = p.replace('*', '001/0012345678')
+      expect(isArticleUrl(sample), `${p} 가 기사로 안 보인다`).toBe(true)
+    }
+  })
+
+  it('쿼리가 붙어도 기사다 — 포털 목록 링크에는 늘 붙어 있다', () => {
+    expect(isArticleUrl(`${NAVER}?sid=100&cds=news_edit`)).toBe(true)
+  })
+
+  it('목록·섹션 페이지는 기사가 아니다', () => {
+    expect(isArticleUrl('https://news.naver.com/section/100')).toBe(false)
+  })
+
+  it('https 가 아니면 기사가 아니다', () => {
+    // javascript: 같은 스킴을 여기서 떨어뜨린다 (secure-coding.md 4절).
+    expect(isArticleUrl('javascript:alert(1)')).toBe(false)
+    expect(isArticleUrl('http://n.news.naver.com/article/001/0012345678')).toBe(false)
+  })
+
+  it('주소가 아니면 던지지 않고 거짓을 준다', () => {
+    expect(isArticleUrl('#')).toBe(false)
+    expect(isArticleUrl('')).toBe(false)
+  })
+})
+
+describe('목록에서 제목을 고른다', () => {
+  it('기사 링크만 고른다', () => {
+    const root = listWith([
+      { href: NAVER, text: 제목 },
+      { href: 'https://news.naver.com/section/100', text: '정치 섹션 더보기' },
+      { href: 'https://blog.naver.com/someone', text: '관련 없는 아주 긴 링크 글자' },
+    ])
+    expect(collectTitles(root).map((t) => t.headline)).toEqual([제목])
+  })
+
+  it('같은 기사를 가리키는 링크가 여럿이면 글자가 가장 긴 것을 쓴다', () => {
+    // 포털은 썸네일과 제목을 따로 건다. 썸네일에 동그라미를 달면 이미지 위에 점이 뜬다.
+    const root = listWith([
+      { href: NAVER, text: '사진' },
+      { href: NAVER, text: 제목 },
+    ])
+    const got = collectTitles(root)
+    expect(got).toHaveLength(1)
+    expect(got[0]?.headline).toBe(제목)
+  })
+
+  it('경로가 달라도 같은 기사면 하나로 본다', () => {
+    // normalizeUrl 이 /mnews/article/ 과 /article/ 을 같은 키로 모은다 (lib/cache.ts).
+    const root = listWith([
+      { href: NAVER, text: 제목 },
+      { href: 'https://n.news.naver.com/article/001/0012345678?sid=100', text: `${제목} 전문` },
+    ])
+    expect(collectTitles(root)).toHaveLength(1)
+  })
+
+  it('글자가 거의 없는 링크는 제목이 아니다', () => {
+    const root = listWith([{ href: NAVER, text: '사진' }])
+    expect(collectTitles(root)).toEqual([])
+  })
+
+  it(`${MIN_HEADLINE_CHARS}자 미만을 버린다`, () => {
+    const root = listWith([{ href: NAVER, text: 'ㄱ'.repeat(MIN_HEADLINE_CHARS - 1) }])
+    expect(collectTitles(root)).toEqual([])
+    const ok = listWith([{ href: NAVER, text: 'ㄱ'.repeat(MIN_HEADLINE_CHARS) }])
+    expect(collectTitles(ok)).toHaveLength(1)
+  })
+
+  it('원래 주소를 그대로 들고 간다 — 판단과 캐시가 그것을 쓴다', () => {
+    const withQuery = `${NAVER}?sid=100`
+    const root = listWith([{ href: withQuery, text: 제목 }])
+    expect(collectTitles(root)[0]?.url).toBe(withQuery)
+  })
+})
+
+describe('근거가 다르면 다르게 그린다', () => {
+  // requirements.md 4-3절. 제목만 보고 낸 판단과 본문까지 보고 낸 판단은
+  // 같은 🔴 이라도 무게가 다르다. 같게 그리면 "모르면 모른다고 한다" 를 어긴다.
+  it('제목만 본 것은 옅고, 본문까지 본 것은 진하다', () => {
+    expect(markLook('CAUTION', 'headline').filled).toBe(false)
+    expect(markLook('CAUTION', 'full').filled).toBe(true)
+  })
+
+  it('판단 중은 근거가 없으므로 진해지지 않는다', () => {
+    expect(markLook('PENDING', 'full').filled).toBe(false)
+  })
+
+  it('단계를 색이 아니라 모양이 가른다 — 색각 이상에서도 구분된다', () => {
+    const glyphs = (['SAFE', 'CHECK', 'CAUTION', 'UNDETERMINED'] as const)
+      .map((l) => markLook(l, 'headline').glyph)
+    expect(new Set(glyphs).size, '모양이 겹치면 색으로만 구분된다').toBe(4)
+  })
+})
+
+describe('동그라미를 페이지에 넣을 때', () => {
+  it('Shadow DOM 안에 둔다 — 포털이 읽지도 망가뜨리지도 못한다', () => {
+    const mark = createMark(document)
+    // mode: 'closed' 라 바깥에서 shadowRoot 가 보이지 않는다 (secure-coding.md 4절).
+    expect(mark.host.shadowRoot).toBeNull()
+    expect(mark.host.childNodes).toHaveLength(0)
+  })
+
+  it('페이지와 겹치지 않는 이름을 쓴다', () => {
+    expect(createMark(document).host.className).toContain('genuearly')
+  })
+
+  it('화면을 읽어 주는 도구에도 글로 알려 준다', () => {
+    const mark = createMark(document)
+    mark.render('CAUTION', 'headline', '주의할 신호 있음')
+    expect(mark.host.getAttribute('role')).toBe('img')
+    expect(mark.host.getAttribute('aria-label')).toBe('주의할 신호 있음')
+  })
+
+  it('판정 점수가 DOM 에 새지 않는다', () => {
+    const mark = createMark(document)
+    mark.render('CAUTION', 'full', '주의할 신호 있음')
+    expect(mark.host.outerHTML).not.toMatch(/0\.\d|\d+%|\d+점/)
+  })
+})
