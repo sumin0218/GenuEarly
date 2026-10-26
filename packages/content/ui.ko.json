@@ -1,13 +1,13 @@
 {
   "$comment": "사용자에게 보이는 문구. **ChatKHU 가 쓴 글이다** — 코딩 도구가 쓰지 않는다. 고칠 때는 README.md 의 규칙을 먼저 보고, 고친 내용을 docs/ai-log/ 에 남긴다. 금지어·길이·말투는 apps/extension/tests/content.test.ts 가 검사한다.",
-  "version": "1.0.0",
+  "version": "1.1.0",
   "locale": "ko",
   "source": {
     "tool": "ChatKHU",
     "model": "gpt-5.6-luna",
     "date": "2026-10-22",
     "prompt": "tools/content-gen/prompt.md",
-    "note": "항목마다 후보 3개를 받아 사람이 골랐다. 고른 내용은 ChatKHU 출력 그대로이고 손대지 않았다. 신호 없음(safe) 문구는 2차로 따로 받았다.",
+    "note": "항목마다 후보 3개를 받아 사람이 골랐다. 고른 내용은 ChatKHU 출력 그대로이고 손대지 않았다. 신호 없음(safe) 문구는 2차로, ③ 선택 글 문구는 3차로 따로 받았다.",
     "rounds": [
       {
         "date": "2026-10-22",
@@ -16,6 +16,10 @@
       {
         "date": "2026-10-22",
         "what": "항목별 신호 없음(safe) 문구"
+      },
+      {
+        "date": "2026-10-26",
+        "what": "③ 오른쪽 클릭 메뉴, 선택 글 결과 꼬리표, 길이 초과 안내, 기사 페이지가 아닐 때"
       }
     ]
   },
@@ -88,6 +92,18 @@
   "undetermined": {
     "title": "아직 판단하지 못함",
     "description": "확인할 수 있는 정보가 충분하지 않아 주의 신호를 판단하기 어렵습니다."
+  },
+  "selection": {
+    "menu": "GenuEarly로 글 살펴보기",
+    "title": "선택한 글에 대한 결과",
+    "tooLong": {
+      "title": "글을 줄여 주세요",
+      "description": "{limit}자까지 선택하면 살펴볼 수 있습니다."
+    }
+  },
+  "notArticle": {
+    "title": "아직 살펴보지 않았습니다",
+    "description": "뉴스 기사를 열거나 글을 선택해 검사해 보세요."
   },
   "share": {
     "message": "이 기사에는 확인해 볼 신호가 있습니다. 내용을 살펴본 뒤 공유하세요.",

@@ -7,16 +7,17 @@
 // 화면에 **있으면 안 되는 것이 새어 나오지 않는가**다.
 import { beforeEach, describe, expect, it } from 'vitest'
 import content from '../../../packages/content/ui.ko.json'
-import { render } from '../entrypoints/popup/main'
+import { render, renderTooLong } from '../entrypoints/popup/main'
 import type { TabState } from '../lib/protocol'
 
 /** 팝업 문서의 뼈대. entrypoints/popup/index.html 과 id 가 같아야 한다. */
 function mountDocument(): void {
   document.body.dataset.level = ''
   document.body.replaceChildren()
-  for (const [tag, id] of [['span', 'mark'], ['h1', 'name'], ['p', 'desc'], ['ul', 'items']] as const) {
+  for (const [tag, id] of [['span', 'mark'], ['h1', 'name'], ['p', 'desc'], ['p', 'scope'], ['ul', 'items']] as const) {
     const el = document.createElement(tag)
     el.id = id
+    if (id === 'scope') (el as HTMLElement).hidden = true
     document.body.append(el)
   }
 }
@@ -90,10 +91,63 @@ describe('항목 목록', () => {
     expect(row).not.toContain(content.items.clickbait_headline.signal)
   })
 
-  it('판단한 항목이 없으면 그렇다고 말한다 — 빈 화면을 두지 않는다', () => {
-    render({ level: 'UNDETERMINED' })
+  it('판단했는데 항목이 없으면 그렇다고 말한다 — 빈 화면을 두지 않는다', () => {
+    render(verdict([], 'UNDETERMINED'))
     expect(document.querySelector('.ge-popup__note')?.textContent)
       .toBe(content.undetermined.description)
+  })
+})
+
+describe('판단한 적이 없는 경우', () => {
+  // 기사 페이지가 아닌 곳에서 아이콘을 눌렀다. 우리는 아무것도 하지 않았다.
+  it('"해 보고 실패했다" 가 아니라 "아직 안 했다" 로 말한다', () => {
+    render({ level: 'UNDETERMINED' })
+    expect(document.getElementById('name')?.textContent).toBe(content.notArticle.title)
+    expect(document.getElementById('desc')?.textContent).toBe(content.notArticle.description)
+  })
+
+  it('무엇을 하면 되는지 알려 준다 — 막다른 화면을 두지 않는다', () => {
+    render({ level: 'UNDETERMINED' })
+    expect(content.notArticle.description).toMatch(/기사|선택/)
+  })
+
+  it('판단 결과가 있으면 ⚪ 라도 notArticle 문구를 쓰지 않는다', () => {
+    // 판단했는데 ⚪ 인 것과 판단한 적이 없는 것은 다른 상태다.
+    render(verdict([item('source_citation', null)], 'UNDETERMINED'))
+    expect(document.getElementById('name')?.textContent).toBe(content.badge.UNDETERMINED.name)
+  })
+
+  it('말이 겹치지 않는다 — 머리말과 같은 뜻을 밑에 또 쓰지 않는다', () => {
+    render({ level: 'UNDETERMINED' })
+    expect(document.querySelector('.ge-popup__note')).toBeNull()
+  })
+})
+
+describe('③ 선택한 글의 결과', () => {
+  it('무엇에 대한 판단인지 밝힌다 — 지금 페이지로 읽히면 안 된다', () => {
+    render(verdict([item('emotional_language', 1)]), document, 'selection')
+    const scope = document.getElementById('scope') as HTMLElement
+    expect(scope.hidden).toBe(false)
+    expect(scope.textContent).toBe(content.selection.title)
+  })
+
+  it('페이지 결과에는 꼬리표를 달지 않는다', () => {
+    render(verdict([item('emotional_language', 1)]), document, 'page')
+    expect((document.getElementById('scope') as HTMLElement).hidden).toBe(true)
+  })
+
+  it('고른 글이 너무 길면 판정이 아니라 거절로 보여 준다', () => {
+    renderTooLong(4000)
+    expect(document.getElementById('name')?.textContent).toBe(content.selection.tooLong.title)
+    expect(document.body.dataset.level, '거절은 판정이 아니다').toBe('UNDETERMINED')
+    expect(document.querySelectorAll('.ge-popup__item')).toHaveLength(0)
+  })
+
+  it('거절 안내에 실제 상한 글자 수가 들어간다', () => {
+    renderTooLong(4000)
+    const desc = document.getElementById('desc')?.textContent ?? ''
+    expect(desc).toContain('4000')
+    expect(desc, '{limit} 가 그대로 새면 안 된다').not.toContain('{limit}')
   })
 })
 
