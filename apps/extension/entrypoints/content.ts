@@ -7,6 +7,7 @@
 import '../assets/content.css'
 import { ARTICLE_MATCHES } from '../match-patterns'
 import content from '../../../packages/content/ui.ko.json'
+import { findEvidence } from '@genuearly/shared'
 import { extractArticle } from '../lib/extract'
 import { createIcon } from '../lib/icon'
 import { LEVEL_ICON, LEVEL_INK, LEVEL_INK_DARK } from '../lib/item-view'
@@ -113,16 +114,38 @@ export default defineContentScript({
       // **답만** 돌려준다. 기사를 못 읽었으면 물어볼 것도 없다.
       if (raw?.kind === 'explain-item') {
         if (!article) return Promise.resolve(null)
+        const itemId = raw.itemId
+
+        // **코드가 찾는 것은 여기서 끝난다.** 바깥에 묻지 않는다 — 글자가 거기 있는지는
+        // 문자열 찾기지 판단이 아니다 (docs/jev.md 3절 "피해야 할 것").
+        const spans: Record<string, string[]> = {}
+        for (const e of findEvidence(itemId, { headline: article.headline, body: article.body })) {
+          spans[e.id] = e.spans.map((x) => x.text)
+        }
+
         const ask: Message = {
           kind: 'judge-explain',
           url: location.href,
           body: article.body,
-          itemId: raw.itemId,
+          itemId,
+          // 판정은 **이미 나와 있다.** 바깥에 다시 묻는 것이 아니라 적어 보낼 뿐이다.
+          level: raw.level,
         }
-        return browser.runtime.sendMessage(ask).catch((e) => {
-          console.warn('[GenuEarly] 심층 분석을 받지 못했다', e)
-          return null
-        })
+        return browser.runtime
+          .sendMessage(ask)
+          .catch((e) => {
+            // Jev 쪽이 실패해도 **코드가 찾은 것은 보여 준다.**
+            console.warn('[GenuEarly] 심층 분석을 받지 못했다', e)
+            return null
+          })
+          .then((res) => {
+            const out = res as { found?: Record<string, boolean>; quotes?: string[] } | null
+            if (!out && Object.keys(spans).length === 0) return null
+            // **집어 온 글자를 여기서 또 대조한다.** 중계 서버와 background 에 이어 셋째다.
+            // 본문을 들고 있는 것은 우리뿐이라, 마지막으로 거를 수 있는 자리이기도 하다.
+            const quotes = (out?.quotes ?? []).filter((q) => article.body.includes(q))
+            return { itemId, found: out?.found ?? {}, spans, ...(quotes.length ? { quotes } : {}) }
+          })
       }
       return
     })

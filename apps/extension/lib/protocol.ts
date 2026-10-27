@@ -88,12 +88,39 @@ export interface ExplainMessage {
   body: string
   /** 설명할 판단 항목. `explain_items[].explain_for` 와 같은 값 */
   itemId: string
+  /** 이미 나온 판정. **중계 서버가 프롬프트에 적어 준다** — 모델은 이것을 바꾸지 않는다 */
+  level: ExplainLevel
 }
 
-/** 하위 질문 id → 찾았는가. 확률이 아니라 **예/아니오로 접어서** 준다. */
+/**
+ * 심층 분석을 할 수 있는 판정.
+ *
+ * 🟢·⚪ 는 없다. 설명할 것이 없고, 크레딧을 쓸 이유도 없다.
+ * 중계 서버도 같은 둘만 받는다 (apps/proxy/src/pinpoint.ts).
+ */
+export type ExplainLevel = 'CAUTION' | 'CHECK'
+
+/**
+ * 심층 분석 결과. **두 곳에서 온다.**
+ *
+ * - `found` — Jev 가 **잰** 것. 하위 질문 id → 그런가. 확률은 접어서 준다
+ * - `spans` — 코드가 **찾은** 것. 규칙 id → 본문에서 떼어 온 글자
+ * - `quotes` — LLM 이 **집어 온** 것. 목록으로 담을 수 없는 항목(출처·근거)만
+ *
+ * Jev 는 "이 글이 어떤가" 는 재지만 "이 표현이 있는가" 는 못 센다 (docs/jev.md 8절).
+ * 코드는 **정해진 표현**만 찾을 수 있다. 남는 것 — 기관명·실명처럼 목록이 없는 것 —
+ * 만 LLM 이 집어 오고, **집어 온 것은 본문과 글자 대조해 거른다.**
+ *
+ * **셋 다 사람에게 하는 말을 쓰지 않는다.** 화면의 문장은 전부 ChatKHU 가 미리 쓴
+ * 문구이고, 여기 담기는 것은 본문에서 떼어 온 글자뿐이다.
+ */
 export interface ExplainResult {
   itemId: string
   found: Record<string, boolean>
+  /** **원문 그대로다.** 화면에 인용한다 */
+  spans: Record<string, string[]>
+  /** **원문 그대로다.** 항목 전체에 붙는 인용이라 하위 질문으로 나뉘지 않는다 */
+  quotes?: string[]
 }
 
 export type Message = JudgeArticleMessage | JudgeHeadlineMessage | ExplainMessage
@@ -121,6 +148,8 @@ export interface TabStateMessage {
 export interface ExplainRequestMessage {
   kind: 'explain-item'
   itemId: string
+  /** 팝업이 그리고 있는 그 항목의 판정. 콘텐츠 스크립트가 그대로 넘긴다 */
+  level: ExplainLevel
 }
 
 /** 콘텐츠 스크립트가 지금 그리고 있는 상태. 팝업은 이것을 그대로 그린다. */

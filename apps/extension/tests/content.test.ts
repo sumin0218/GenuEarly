@@ -6,6 +6,7 @@
 import { describe, expect, it } from 'vitest'
 import content from '../../../packages/content/ui.ko.json'
 import schema from '../../../packages/shared/judgment-items.json'
+import { evidenceRuleIds } from '@genuearly/shared'
 
 /** 문구 안의 모든 문자열을 자리 이름과 함께 편다. */
 function strings(node: unknown, path = ''): [string, string][] {
@@ -190,6 +191,18 @@ describe('설명 문구가 질문과 짝이 맞는다', () => {
     expect(이미받음, '문구를 받았으면 대기 목록에서 지운다').toEqual([])
   })
 
+  it('코드가 찾는 규칙마다 "찾았다"와 "못 찾았다"가 둘 다 있다', () => {
+    // 규칙은 있는데 문구가 없으면 화면에 빈 줄이 생긴다.
+    const parts: Record<string, { present?: string; absent?: string }> = {}
+    for (const copy of Object.values(content.explain as unknown as Record<string, { parts?: Record<string, { present?: string; absent?: string }> }>)) {
+      Object.assign(parts, copy?.parts ?? {})
+    }
+    for (const id of evidenceRuleIds()) {
+      expect(parts[id]?.present, `${id}.present`).toBeTruthy()
+      expect(parts[id]?.absent, `${id}.absent`).toBeTruthy()
+    }
+  })
+
   it('하위 질문마다 "찾았다"와 "못 찾았다"가 둘 다 있다', () => {
     for (const item of explainItems) {
       if (문구_대기.includes(item.explain_for)) continue
@@ -203,7 +216,12 @@ describe('설명 문구가 질문과 짝이 맞는다', () => {
   })
 
   it('쓰지 않는 문구가 남아 있지 않다', () => {
-    const 질문 = new Set(explainItems.flatMap((i) => i.questions.map((q) => q.id)))
+    // **짝의 출처가 둘이다.** Jev 가 재는 하위 질문과, 코드가 찾는 규칙
+    // (packages/shared 의 evidence.ts). 어느 쪽에도 없는 문구는 영영 안 보인다.
+    const 질문 = new Set([
+      ...explainItems.flatMap((i) => i.questions.map((q) => q.id)),
+      ...evidenceRuleIds(),
+    ])
     for (const [itemId, copy] of Object.entries(content.explain as unknown as Record<string, unknown>)) {
       if (itemId.startsWith('$')) continue
       const parts = (copy as { parts?: Record<string, unknown> }).parts ?? {}
@@ -216,7 +234,7 @@ describe('설명 문구가 질문과 짝이 맞는다', () => {
   it('찾았다와 못 찾았다가 서로 다른 말이다', () => {
     for (const [itemId, copy] of Object.entries(content.explain as unknown as Record<string, unknown>)) {
       if (itemId.startsWith('$')) continue
-      const parts = (copy as { parts: Record<string, { present: string; absent: string }> }).parts
+      const parts = (copy as { parts?: Record<string, { present: string; absent: string }> }).parts ?? {}
       for (const [id, v] of Object.entries(parts)) {
         expect(v.present, `${id}`).not.toBe(v.absent)
       }
