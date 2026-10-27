@@ -87,22 +87,37 @@ export function createScreen(schema: ScreenSchema): (text: string) => Screened {
   const screenLine = (line: string): { text: string; removed: number } => {
     let removed = 0
     // 1. 역할 태그 묶음은 문장 경계와 상관없이 통째로 걷어낸다.
-    //    문장으로 나누면 `[/SYSTEM]` 뒤에 붙은 진짜 첫 문장까지 같이 지워진다
-    let rest = line.replace(ROLE_BLOCK, () => { removed++; return ' ' })
-    if (removed) rest = rest.replace(/\s{2,}/g, ' ').trim()
+    //    문장으로 나누면 `[/SYSTEM]` 뒤에 붙은 진짜 첫 문장까지 같이 지워진다.
+    //    묶음 앞뒤 공백도 같이 지운다. 줄 가운데였으면 공백 하나를 남긴다
+    let rest = line.replace(ROLE_BLOCK, () => { removed++; return '\u0000' })
+    if (removed) {
+      rest = rest.replace(/\s*\u0000\s*/g, (m, off: number, str: string) =>
+        off === 0 || off + m.length === str.length ? '' : ' ')
+    }
 
-    // 2. 문장 단위
-    const kept: string[] = []
+    // 2. 문장 단위. 나눈 자리의 공백을 그대로 들고 다녀서, 남은 문장 사이의 공백은 원래 글과 같다.
+    //    걷어낸 문장은 **앞의** 공백과 함께 지운다 (첫 문장이면 뒤의 공백과 함께).
+    //    그래서 끝에 심은 문장을 걷어내면 심기 전 글과 글자 하나까지 같아진다
+    const parts = rest.split(new RegExp(`(${SENTENCE_END.source})`))
+    let out = ''
     let dropped = 0
-    for (const s of rest.split(SENTENCE_END)) {
-      if (!s) continue
+    let cut = false
+    for (let i = 0; i < parts.length; i += 2) {
+      const s = parts[i]
+      const sep = parts[i + 1] ?? ''
       // 닫는 태그가 나오면 그 문장부터 문단 끝까지다
-      if (CLOSE_TAG.test(s)) { dropped++; break }
-      if (ROLE_TOKEN.test(s) || SPOOF.test(s)) { dropped++; continue }
-      kept.push(s)
+      if (!cut && s && CLOSE_TAG.test(s)) { cut = true; dropped++ }
+      if (cut || (s && (ROLE_TOKEN.test(s) || SPOOF.test(s)))) {
+        if (!cut) dropped++
+        if (out) out = out.replace(/\s+$/, '')   // 앞의 공백과 함께 지운다
+        if (cut) break
+        continue
+      }
+      out += out && /\S$/.test(out) && !/^\s/.test(s) ? ' ' + s : s
+      out += sep
     }
     if (!removed && !dropped) return { text: line, removed: 0 }
-    return { text: kept.join(' '), removed: removed + dropped }
+    return { text: dropped ? out.replace(/\s+$/, '') : out, removed: removed + dropped }
   }
 
   return (text: string): Screened => {
