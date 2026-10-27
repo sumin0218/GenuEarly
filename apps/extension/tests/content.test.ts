@@ -158,3 +158,52 @@ describe('출처를 밝힌다', () => {
     expect(content.source.prompt).toBeTruthy()
   })
 })
+
+describe('설명 문구가 질문과 짝이 맞는다', () => {
+  // 질문을 더해 놓고 문구를 안 쓰면 화면에 빈 줄이 생기고,
+  // 문구만 써 놓고 질문을 안 보내면 영영 안 보인다.
+  const explainItems = ((schema as { explain_items?: unknown[] }).explain_items ?? []) as {
+    id: string
+    explain_for: string
+    questions: { id: string }[]
+  }[]
+
+  it('설명 항목마다 문구 묶음이 있다', () => {
+    for (const item of explainItems) {
+      const copy = (content.explain as unknown as Record<string, unknown>)[item.explain_for]
+      expect(copy, `${item.explain_for} 의 설명 문구가 없다`).toBeTruthy()
+    }
+  })
+
+  it('하위 질문마다 "찾았다"와 "못 찾았다"가 둘 다 있다', () => {
+    for (const item of explainItems) {
+      const parts = (content.explain as unknown as Record<string, { parts: Record<string, { present?: string; absent?: string }> }>)
+        [item.explain_for]?.parts ?? {}
+      for (const q of item.questions) {
+        expect(parts[q.id]?.present, `${q.id}.present`).toBeTruthy()
+        expect(parts[q.id]?.absent, `${q.id}.absent`).toBeTruthy()
+      }
+    }
+  })
+
+  it('쓰지 않는 문구가 남아 있지 않다', () => {
+    const 질문 = new Set(explainItems.flatMap((i) => i.questions.map((q) => q.id)))
+    for (const [itemId, copy] of Object.entries(content.explain as unknown as Record<string, unknown>)) {
+      if (itemId.startsWith('$')) continue
+      const parts = (copy as { parts?: Record<string, unknown> }).parts ?? {}
+      for (const id of Object.keys(parts)) {
+        expect(질문.has(id), `${id} 문구는 있는데 묻는 질문이 없다`).toBe(true)
+      }
+    }
+  })
+
+  it('찾았다와 못 찾았다가 서로 다른 말이다', () => {
+    for (const [itemId, copy] of Object.entries(content.explain as unknown as Record<string, unknown>)) {
+      if (itemId.startsWith('$')) continue
+      const parts = (copy as { parts: Record<string, { present: string; absent: string }> }).parts
+      for (const [id, v] of Object.entries(parts)) {
+        expect(v.present, `${id}`).not.toBe(v.absent)
+      }
+    }
+  })
+})
