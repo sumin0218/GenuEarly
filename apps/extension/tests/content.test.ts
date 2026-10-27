@@ -175,13 +175,7 @@ describe('설명 문구가 질문과 짝이 맞는다', () => {
    * (tools/content-gen/README.md). 문구가 없는 항목은 화면에 펼침이 붙지 않는다.
    * **이 목록은 줄어들기만 해야 한다.**
    */
-  const 문구_대기 = [
-    'clickbait_headline',
-    'headline_body_match',
-    'spread_inducement',
-    'emotional_language',
-    'ai_style_signal',
-  ]
+  const 문구_대기: string[] = []
 
   it('설명 항목마다 문구가 있거나, 대기 목록에 있다', () => {
     const 빠진것 = explainItems
