@@ -246,6 +246,13 @@ describe('심층 분석 답을 들고 있는다 — 같은 기사엔 같은 답'
     expect(await readExplain(URL1, 'source_citation', 'CAUTION')).toBeUndefined()
   })
 
+  it('점수를 다시 써도 적어 둔 답이 살아남는다', async () => {
+    // 기사를 다시 열면 점수가 먼저 쓰인다. 거기서 지워지면 받아 둔 답이
+    // **한 번도 살아남지 못한다.**
+    await writeExplain(URL1, 'source_citation', 적힌답)
+    await writeScores(URL1, { clickbait_headline: item(1) })
+    expect(await readExplain(URL1, 'source_citation', 'CAUTION')).toBeDefined()
+  })
   it('점수와 같은 칸에 들어가고 같이 지워진다', async () => {
     await writeScores(URL1, { clickbait_headline: item(1) })
     await writeExplain(URL1, 'source_citation', 적힌답)

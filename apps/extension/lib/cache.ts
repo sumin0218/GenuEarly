@@ -219,14 +219,15 @@ export async function writeScores(url: string, items: ItemScores): Promise<void>
     const key = await keyFor(url)
     const got = (await browser.storage.local.get(key)) as Record<string, Entry | undefined>
     const old = got[key]
-    const keep = old && old.v === schema.version && old.m === schema.model && old.exp > Date.now()
-      ? old.items
-      : {}
+    const live = old && old.v === schema.version && old.m === schema.model && old.exp > Date.now()
     const entry: Entry = {
       v: schema.version,
       m: schema.model,
       exp: Date.now() + TTL_MS,
-      items: { ...keep, ...items },
+      items: { ...(live ? old.items : {}), ...items },
+      // **심층 분석 답을 함께 들고 간다.** 빠뜨리면 점수를 쓸 때마다 지워진다 —
+      // 기사를 다시 열 때마다 점수가 먼저 쓰이므로, 받아 둔 답이 한 번도 살아남지 못한다.
+      ...(live && old.explain ? { explain: old.explain } : {}),
     }
     await browser.storage.local.set({ [key]: entry })
   } catch {
