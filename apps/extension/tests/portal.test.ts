@@ -36,8 +36,21 @@ describe('match pattern 을 정규식으로', () => {
     expect(re.test('https://vXdaum.net/v/abc'), '점이 와일드카드가 되면 안 된다').toBe(false)
   })
 
-  it('호스트 와일드카드는 거절한다 — 쓰지 않기로 한 모양이다', () => {
-    expect(() => matchPatternToRegExp('https://*.naver.com/')).toThrow()
+  it('맨 앞 `*.` 는 그 도메인과 하위 도메인을 함께 받는다', () => {
+    const re = matchPatternToRegExp('https://*.naver.com/*article*')
+    expect(re.test('https://n.news.naver.com/mnews/ranking/article/422/0000919981')).toBe(true)
+    expect(re.test('https://m.entertain.naver.com/home/article/076/0004459769')).toBe(true)
+    expect(re.test('https://m.sports.naver.com/kbaseball/article/076/0004459867')).toBe(true)
+    // 도메인 자신도 받는다 (MV3 규칙).
+    expect(re.test('https://naver.com/article/1')).toBe(true)
+    // 다른 도메인에 붙여 넣은 것은 안 된다.
+    expect(re.test('https://naver.com.evil.example/article/1')).toBe(false)
+    expect(re.test('https://notnaver.com/article/1')).toBe(false)
+  })
+
+  it('가운데 와일드카드는 거절한다 — `*.com` 이 조용히 통과한다', () => {
+    expect(() => matchPatternToRegExp('https://*.*.com/*')).toThrow()
+    expect(() => matchPatternToRegExp('https://n.*.naver.com/*')).toThrow()
   })
 })
 
@@ -46,9 +59,36 @@ describe('어떤 링크가 기사인가', () => {
   // 표시를 보고 눌러 들어갔는데 아무것도 없는 상태가 된다.
   it('match pattern 과 같은 것을 받아들인다', () => {
     for (const p of ARTICLE_MATCHES) {
-      const sample = p.replace('*', '001/0012345678')
+      // 호스트의 `*.` 와 경로의 `*` 를 그럴듯한 값으로 채워 본다.
+      const sample = p
+        .replace('https://*.', 'https://n.news.')
+        .replace('/*article*', '/mnews/article/001/0012345678')
+        .replace('*', '001/0012345678')
       expect(isArticleUrl(sample), `${p} 가 기사로 안 보인다`).toBe(true)
     }
+  })
+
+  it('article 이 든 네이버 주소는 호스트를 가리지 않고 받는다', () => {
+    // 호스트를 하나씩 세다 보면 반드시 빠뜨린다 (GE-42).
+    for (const u of [
+      'https://n.news.naver.com/mnews/ranking/article/422/0000919981',
+      'https://n.news.naver.com/mnews/hotissue/article/001/0001',
+      'https://m.entertain.naver.com/home/article/076/0004459769',
+      'https://m.sports.naver.com/kbaseball/article/076/0004459867',
+    ]) {
+      expect(isArticleUrl(u), `${u} 가 기사로 안 보인다`).toBe(true)
+    }
+  })
+
+  it('article 이 없으면 받지 않는다', () => {
+    expect(isArticleUrl('https://news.naver.com/section/100')).toBe(false)
+    expect(isArticleUrl('https://www.naver.com/')).toBe(false)
+  })
+
+  it('댓글 페이지는 받지 않는다 — 주소에 article 이 있지만 본문이 없다', () => {
+    expect(isArticleUrl('https://n.news.naver.com/mnews/article/comment/422/0000919981')).toBe(
+      false,
+    )
   })
 
   it('쿼리가 붙어도 기사다 — 포털 목록 링크에는 늘 붙어 있다', () => {

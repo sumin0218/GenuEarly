@@ -4,7 +4,18 @@
 // **② 가 채운 제목 항목만 보고 ① 이 "캐시 있음" 으로 넘어가지 않는가** 둘이다.
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import schema from '../../../packages/shared/judgment-items.json'
-import { CACHE_TTL_MS, normalizeUrl, readScores, sweepExpired, writeScores, type CachedItem } from '../lib/cache'
+import {
+  CACHE_TTL_MS,
+  normalizeUrl,
+  packPicks,
+  readExplain,
+  readScores,
+  sweepExpired,
+  unpackPicks,
+  writeExplain,
+  writeScores,
+  type CachedItem,
+} from '../lib/cache'
 
 /** 캐시에 넣는 항목 결과를 짧게 만든다. `isConfident` 가 빠지면 decideBadge 가 다르게 읽는다. */
 const item = (score: number | null, isConfident = true): CachedItem => ({ score, isConfident })
@@ -205,5 +216,84 @@ describe('저장소가 말을 안 들어도 판단을 막지 않는다', () => {
   it('빈 결과는 쓰지 않는다', async () => {
     await writeScores(URL1, {})
     expect(store.size).toBe(0)
+  })
+})
+
+describe('심층 분석 답을 들고 있는다 — 같은 기사엔 같은 답', () => {
+  // 생성 모델은 같은 글에도 매번 다르게 답한다. 눌렀다 접었다 할 때마다 짚는 문장이
+  // 바뀌면 사용자는 어느 쪽을 믿어야 할지 알 수 없다. **캐시가 곧 재현성이다.**
+  const BODY = '앞말. 한 관계자는 더 오를 것이라고 말했다. 뒷말.'
+  const PICKS = [{ text: '한 관계자는 더 오를 것이라고 말했다', why: 'src_group_only' }]
+
+  it('적어 둔 답을 그대로 돌려준다', async () => {
+    await writeExplain(URL1, 'source_citation', {
+      lv: 'CAUTION',
+      f: {},
+      p: await packPicks(BODY, PICKS),
+    })
+    const hit = await readExplain(URL1, 'source_citation', 'CAUTION')
+    expect(hit).toBeDefined()
+    expect(await unpackPicks(BODY, hit!.p)).toEqual(PICKS)
+  })
+
+  it('**기사 글자를 저장하지 않는다** — 캐시가 열람 기록이 되면 안 된다', async () => {
+    // 이 파일 머리말의 규칙을 심층 분석에서도 지킨다. 자리와 지문만 둔다.
+    await writeExplain(URL1, 'source_citation', {
+      lv: 'CAUTION',
+      f: {},
+      p: await packPicks(BODY, PICKS),
+    })
+    const dumped = JSON.stringify([...store.entries()])
+    expect(dumped).not.toContain('한 관계자는')
+    expect(dumped).not.toContain(URL1)
+  })
+
+  it('기사가 고쳐져 자리가 밀리면 버린다 — 엉뚱한 인용은 지어낸 인용과 같다', async () => {
+    const packed = await packPicks(BODY, PICKS)
+    expect(await unpackPicks(`덧붙은 머리말. ${BODY}`, packed)).toEqual([])
+  })
+
+  it('본문에 없는 글자는 적어 두지도 않는다', async () => {
+    expect(await packPicks(BODY, [{ text: '한국은행은', why: 'src_none' }])).toEqual([])
+  })
+
+  it('판정이 달라지면 다시 묻는다 — 판정이 프롬프트에 들어간다', async () => {
+    await writeExplain(URL1, 'source_citation', { lv: 'CAUTION', f: {}, p: [] })
+    expect(await readExplain(URL1, 'source_citation', 'CHECK')).toBeUndefined()
+  })
+
+  it('다른 항목의 답을 쓰지 않는다', async () => {
+    await writeExplain(URL1, 'source_citation', { lv: 'CAUTION', f: {}, p: [] })
+    expect(await readExplain(URL1, 'unverifiable_claim', 'CAUTION')).toBeUndefined()
+  })
+
+  it('점수와 같은 칸에 들어가고 같이 지워진다', async () => {
+    await writeScores(URL1, { clickbait_headline: item(1) })
+    await writeExplain(URL1, 'source_citation', { lv: 'CAUTION', f: {}, p: [] })
+    // 점수가 살아 있어야 한다 — 심층 분석을 적는다고 점수를 밀어내면 안 된다.
+    expect(await readScores(URL1)).toHaveProperty('clickbait_headline')
+
+    vi.useFakeTimers()
+    vi.advanceTimersByTime(CACHE_TTL_MS + 1000)
+    expect(await sweepExpired()).toBe(1)
+    expect(await readExplain(URL1, 'source_citation', 'CAUTION')).toBeUndefined()
+  })
+
+  it('심층 분석을 눌러도 만료가 미뤄지지 않는다', async () => {
+    // 미뤄지면 점수까지 함께 오래 남는다. 점수를 받은 그 시각이 기준이다.
+    await writeScores(URL1, { clickbait_headline: item(1) })
+    const before = ([...store.values()][0] as { exp: number }).exp
+    await writeExplain(URL1, 'source_citation', { lv: 'CAUTION', f: {}, p: [] })
+    expect(([...store.values()][0] as { exp: number }).exp).toBe(before)
+  })
+
+  it('읽기·쓰기 실패는 답 없음으로 본다', async () => {
+    vi.stubGlobal('browser', {
+      storage: { local: { ...fakeStorage, get: () => Promise.reject(new Error('nope')) } },
+    })
+    expect(await readExplain(URL1, 'source_citation', 'CAUTION')).toBeUndefined()
+    await expect(
+      writeExplain(URL1, 'source_citation', { lv: 'CAUTION', f: {}, p: [] }),
+    ).resolves.toBeUndefined()
   })
 })
