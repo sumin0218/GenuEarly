@@ -37,6 +37,7 @@ export function createIcon(doc: Document, name: IconName, opts: IconOptions): SV
     d: string
     evenodd?: boolean
     opacity?: number
+    stroke?: boolean
   }[]
 
   const svg = doc.createElementNS(SVG_NS, 'svg')
@@ -53,6 +54,16 @@ export function createIcon(doc: Document, name: IconName, opts: IconOptions): SV
   for (const p of paths) {
     const el = doc.createElementNS(SVG_NS, 'path')
     el.setAttribute('d', p.d)
+    if (p.stroke) {
+      // 선으로 그리는 모양. 채우면 삼각형이 된다. 값은 원본 그대로다.
+      el.setAttribute('fill', 'none')
+      el.setAttribute('stroke', opts.color ?? 'currentColor')
+      el.setAttribute('stroke-width', '1.5')
+      el.setAttribute('stroke-linecap', 'round')
+      el.setAttribute('stroke-linejoin', 'round')
+      svg.append(el)
+      continue
+    }
     el.setAttribute('fill', opts.color ?? 'currentColor')
     if (p.evenodd) {
       el.setAttribute('fill-rule', 'evenodd')

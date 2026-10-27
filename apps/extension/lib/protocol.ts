@@ -20,7 +20,7 @@ export type { BadgeLevel, Verdict }
 
 export const PROXY_URL: string = import.meta.env.WXT_PROXY_URL ?? 'http://localhost:8787'
 
-export type Feature = 'page' | 'portal_list' | 'selection'
+export type Feature = 'page' | 'portal_list' | 'selection' | 'explain'
 
 export interface JudgeRequest {
   feature: Feature
@@ -76,7 +76,27 @@ export interface HeadlineVerdict {
   basis: 'headline' | 'full'
 }
 
-export type Message = JudgeArticleMessage | JudgeHeadlineMessage
+/**
+ * 심층 분석. **점수에 들어가지 않는다** — 판정은 이미 났고 그 이유만 묻는다.
+ *
+ * 사용자가 누를 때만 나간다. 기사를 여는 것만으로는 한 건도 나가지 않는다
+ * (judgment-items.json 의 `explain_items`, GE-44).
+ */
+export interface ExplainMessage {
+  kind: 'judge-explain'
+  url: string
+  body: string
+  /** 설명할 판단 항목. `explain_items[].explain_for` 와 같은 값 */
+  itemId: string
+}
+
+/** 하위 질문 id → 찾았는가. 확률이 아니라 **예/아니오로 접어서** 준다. */
+export interface ExplainResult {
+  itemId: string
+  found: Record<string, boolean>
+}
+
+export type Message = JudgeArticleMessage | JudgeHeadlineMessage | ExplainMessage
 
 // ── 팝업이 콘텐츠 스크립트에 보내는 것 ──────────────────────────────────────
 //
@@ -88,6 +108,19 @@ export type Message = JudgeArticleMessage | JudgeHeadlineMessage
 // (docs/security/secure-coding.md 6절).
 export interface TabStateMessage {
   kind: 'get-tab-state'
+}
+
+/**
+ * 심층 분석을 **콘텐츠 스크립트에** 시킨다.
+ *
+ * **팝업은 본문을 받지 않는다** (secure-coding.md 6절, tests/popup.test.ts).
+ * 그래서 팝업이 본문을 들고 중계 서버로 보낼 수 없다. 본문을 들고 있는 것은
+ * 콘텐츠 스크립트뿐이라, 팝업은 "이 항목을 설명해 달라" 고만 하고
+ * 콘텐츠 스크립트가 background 를 거쳐 물어본 뒤 **답만** 돌려준다.
+ */
+export interface ExplainRequestMessage {
+  kind: 'explain-item'
+  itemId: string
 }
 
 /** 콘텐츠 스크립트가 지금 그리고 있는 상태. 팝업은 이것을 그대로 그린다. */

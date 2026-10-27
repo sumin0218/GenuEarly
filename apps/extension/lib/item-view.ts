@@ -48,6 +48,17 @@ export const LEVEL_ICON: Record<DisplayLevel, IconName> = {
 }
 
 /**
+ * 단계와 무관한 **화면 장치**용 아이콘. 판정을 말하지 않는다.
+ *
+ * 색을 주지 않는다 — 색은 단계가 쓰는 것이고, 장치가 색을 가지면
+ * 화면에서 색이 차지하는 몫만 늘어난다 (docs/design.md 3절).
+ */
+export const UI_ICON = {
+  /** 눌러서 펼칠 수 있다는 표시 */
+  expand: 'chevron-down',
+} as const satisfies Record<string, IconName>
+
+/**
  * **글자밖에 못 넣는 곳**에서 쓰는 기호.
  *
  * 지금은 한 곳뿐이다 — 크롬 툴바의 아이콘 배지. `chrome.action.setBadgeText` 는
