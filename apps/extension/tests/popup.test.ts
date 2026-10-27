@@ -487,6 +487,24 @@ describe('왜 이 판정인가 — 항목별 설명', () => {
     expect(line.quotes).toEqual(quotes)
   })
 
+  it('같은 id 면 Jev 가 낸 줄에 코드가 찾은 글자가 붙는다', () => {
+    // 제목 표현은 **둘이 나눠 맡는다** — Jev 가 "큰 수식어가 있는가" 를 재고,
+    // 코드가 그게 어느 낱말인지 찾는다. id 가 같아서 한 줄로 합쳐진다.
+    const lines = explainLines('clickbait_headline', {
+      itemId: 'clickbait_headline',
+      found: { clk_inflating: true, clk_hiding: false },
+      spans: { clk_inflating: ['충격'] },
+    })
+    expect(lines).toContainEqual({
+      text: content.explain.clickbait_headline.parts.clk_inflating.present,
+      quotes: ['충격'],
+    })
+    // 코드가 맡지 않는 쪽은 Jev 의 답만 글로 남는다. 인용이 붙지 않는다.
+    expect(lines).toContainEqual({
+      text: content.explain.clickbait_headline.parts.clk_hiding.absent,
+    })
+  })
+
   it('점수 숫자가 설명에 새지 않는다', () => {
     const lines = explainLines('emotional_language', {
       itemId: 'emotional_language',

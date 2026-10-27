@@ -10,6 +10,25 @@ import { evidenceRuleIds, findEvidence, hasCodeEvidence } from '../src/evidence'
 const found = (itemId: string, input: { headline?: string; body?: string }, id: string): string[] =>
   findEvidence(itemId, input).find((e) => e.id === id)?.spans.map((s) => s.text) ?? []
 
+describe('제목 표현', () => {
+  // **Jev 와 나눠 맡는 유일한 항목이다.** Jev 가 "큰 수식어가 있는가" 를 재고
+  // (0.77, docs/jev.md 8절), 코드는 그게 어느 낱말인지 찾아 같은 줄에 붙인다.
+  it('사안보다 큰 수식어를 **제목에서** 찾는다', () => {
+    expect(found('clickbait_headline', { headline: '충격 … 전면 백지화' }, 'clk_inflating'))
+      .toEqual(['충격'])
+  })
+
+  it('본문은 보지 않는다 — 이 질문의 판단 범위가 제목이다', () => {
+    expect(found('clickbait_headline', { body: '충격적인 결과였다.' }, 'clk_inflating')).toEqual([])
+  })
+
+  it('말줄임표·물음표는 규칙을 두지 않았다', () => {
+    // 따옴표 안에 물음표 하나가 덩그러니 놓이는 것은 설명이 아니다. Jev 에 맡긴다.
+    const ids = findEvidence('clickbait_headline', { headline: '그 이유는?' }).map((e) => e.id)
+    expect(ids).toEqual(['clk_inflating'])
+  })
+})
+
 describe('공유 유도', () => {
   it('공유를 직접 요구하는 말을 찾는다 — Jev 가 0.12 를 준 바로 그 글이다', () => {
     expect(found('spread_inducement', { body: '이 소식을 꼭 공유해 주세요.' }, 'spr_urging'))
@@ -92,8 +111,11 @@ describe('무엇을 설명할 수 있는가', () => {
     expect(hasCodeEvidence('spread_inducement')).toBe(true)
     expect(hasCodeEvidence('emotional_language')).toBe(true)
     expect(hasCodeEvidence('ai_style_signal')).toBe(true)
-    // 제목 표현은 Jev 가 맞힌다. 출처 표시는 사전이 없어 코드로 못 한다.
-    expect(hasCodeEvidence('clickbait_headline')).toBe(false)
+    // 제목 표현은 Jev 와 나눠 맡는다 — 재는 것은 Jev, 어느 낱말인지는 코드.
+    expect(hasCodeEvidence('clickbait_headline')).toBe(true)
+    // 제목과 본문이 어긋나는 자리는 낱말이 아니라 **관계**라 떼어 올 글자가 없다.
+    expect(hasCodeEvidence('headline_body_match')).toBe(false)
+    // 출처 표시는 기관명·실명이라 사전이 있어야 하고, 우리에게 없다 — LLM 몫이다.
     expect(hasCodeEvidence('source_citation')).toBe(false)
   })
 
