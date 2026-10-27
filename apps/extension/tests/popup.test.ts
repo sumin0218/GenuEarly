@@ -7,7 +7,7 @@
 // 화면에 **있으면 안 되는 것이 새어 나오지 않는가**다.
 import { beforeEach, describe, expect, it } from 'vitest'
 import content from '../../../packages/content/ui.ko.json'
-import { drawChrome, render, renderTooLong } from '../entrypoints/popup/main'
+import { drawChrome, explainLines, render, renderTooLong } from '../entrypoints/popup/main'
 import type { TabState } from '../lib/protocol'
 
 /** 팝업 문서의 뼈대. entrypoints/popup/index.html 과 id 가 같아야 한다. */
@@ -405,5 +405,129 @@ describe('4차 문구가 실제로 쓰인다', () => {
     expect(content.app.coverage.sentences).toContain('{judged}')
     expect(content.app.criteria).toContain('{version}')
     expect(content.app.criteria).toContain('{model}')
+  })
+})
+
+describe('왜 이 판정인가 — 항목별 설명', () => {
+  // Jev 는 이유를 돌려주지 않는다. 그 항목의 criteria 를 쪼갠 질문들을 따로 물어
+  // "무엇이 있고 무엇이 없어서 그렇게 봤는지" 를 보여 준다 (GE-44).
+  const parts = content.explain.source_citation.parts
+
+  it('찾은 것과 못 찾은 것을 그대로 말한다', () => {
+    const lines = explainLines('source_citation', {
+      itemId: 'source_citation',
+      found: { src_named_org: false, src_unnamed_only: true },
+    })
+    expect(lines).toEqual([parts.src_named_org.absent, parts.src_unnamed_only.present])
+  })
+
+  it('물어본 것이 전부 아니오면 한 줄로 말한다', () => {
+    // 다섯 줄을 "못 찾았습니다" 로 늘어놓는 것보다 낫다.
+    const lines = explainLines('source_citation', {
+      itemId: 'source_citation',
+      found: { src_named_org: false, src_named_person: false, src_document: false },
+    })
+    expect(lines).toEqual([content.explain.source_citation.none])
+  })
+
+  it('모름은 줄을 만들지 않는다', () => {
+    // judgeExplain 이 모름 구간 안의 질문을 빼고 준다. 억지로 채우지 않는다.
+    const lines = explainLines('source_citation', {
+      itemId: 'source_citation',
+      found: { src_named_org: true },
+    })
+    expect(lines).toHaveLength(1)
+  })
+
+  it('답이 없으면 아무 줄도 만들지 않는다', () => {
+    expect(explainLines('source_citation', null)).toEqual([])
+    expect(explainLines('source_citation', { itemId: 'source_citation', found: {} })).toEqual([])
+  })
+
+  it('설명 문구가 없는 항목은 줄을 만들지 않는다', () => {
+    expect(explainLines('clickbait_headline', {
+      itemId: 'clickbait_headline',
+      found: { whatever: true },
+    })).toEqual([])
+  })
+
+  it('점수 숫자가 설명에 새지 않는다', () => {
+    const lines = explainLines('source_citation', {
+      itemId: 'source_citation',
+      found: { src_named_org: false, src_unnamed_only: true },
+    })
+    expect(lines.join(' ')).not.toMatch(/0\.\d|\d+%|\d+점/)
+  })
+})
+
+describe('펼침은 걸린 항목에만 붙는다', () => {
+  // 일곱 줄이 전부 눌리는 것처럼 보이면 안 된다.
+  const opens = () => document.querySelectorAll('.ge-popup__item-open')
+
+  it('🔴·🟡 이고 설명할 말이 있는 항목에만 붙는다', () => {
+    render(verdict([
+      item('source_citation', 0.9),      // 🔴 + 설명 있음 → 붙는다
+      item('clickbait_headline', 0.9),   // 🔴 + 설명 없음 → 안 붙는다
+      item('headline_body_match', 0),    // 🟢 → 안 붙는다
+    ], 'CAUTION'))
+    expect(opens()).toHaveLength(1)
+    expect(opens()[0]?.textContent).toContain(content.items.source_citation.name)
+  })
+
+  it('🟢·⚪ 에는 붙지 않는다', () => {
+    render(verdict([item('source_citation', 0), item('source_citation', null)], 'SAFE'))
+    expect(opens()).toHaveLength(0)
+  })
+
+  it('선택한 글에는 붙지 않는다 — 탭의 기사에 물어보는 길이다', () => {
+    render(verdict([item('source_citation', 0.9)], 'CAUTION'), document, 'selection')
+    expect(opens()).toHaveLength(0)
+  })
+
+  it('접혀 있는 것이 기본이다', () => {
+    render(verdict([item('source_citation', 0.9)], 'CAUTION'))
+    expect(opens()[0]?.getAttribute('aria-expanded')).toBe('false')
+    expect((document.querySelector('.ge-popup__why') as HTMLElement).hidden).toBe(true)
+  })
+})
+
+describe('하지 않은 일을 했다고 말하지 않는다', () => {
+  beforeEach(() => {
+    mountDocument()
+    const img = document.createElement('img')
+    img.id = 'brand-icon'
+    const version = document.createElement('span')
+    version.id = 'version'
+    const details = document.createElement('ul')
+    details.id = 'details'
+    details.hidden = true
+    const foot = document.createElement('footer')
+    foot.id = 'foot'
+    const toggle = document.createElement('button')
+    toggle.id = 'details-toggle'
+    const home = document.createElement('a')
+    home.id = 'homepage'
+    foot.append(toggle, home)
+    document.body.append(img, version, details, foot)
+  })
+
+  const detailText = () => document.getElementById('details')?.textContent ?? ''
+
+  it('판단한 적이 없으면 무엇을 보았다고 말하지 않는다', () => {
+    // 기사 페이지가 아닌 곳에서 아이콘을 누른 경우.
+    render({ level: 'UNDETERMINED' })
+    expect(detailText(), '하지 않은 일을 했다고 말하면 안 된다')
+      .not.toContain(content.app.basis.page)
+  })
+
+  it('판단했으면 무엇을 보았는지 말한다', () => {
+    render(verdict([item('source_citation', 0.2)], 'SAFE'))
+    expect(detailText()).toContain(content.app.basis.page)
+  })
+
+  it('판단한 적이 없어도 틀은 그린다 — 빈 화면을 남기지 않는다', () => {
+    render({ level: 'UNDETERMINED' })
+    // 전제 한 줄은 판단 여부와 상관없이 할 말이다.
+    expect(detailText()).toContain(content.app.disclaimer)
   })
 })

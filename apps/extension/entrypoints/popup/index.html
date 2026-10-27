@@ -19,7 +19,9 @@
         버전은 manifest 에서 읽는다. 두 곳에 적지 않는다.
       -->
       <div class="ge-popup__brand">
-        <img class="ge-popup__brand-icon" id="brand-icon" src="" alt="" width="16" height="16" />
+        <!-- **src 를 비워 두지 않는다.** 빈 src 는 페이지 자신을 받으러 가서
+             깨진 그림이 뜬다. 주소는 스크립트가 runtime.getURL 로 넣는다. -->
+        <img class="ge-popup__brand-icon" id="brand-icon" alt="" width="16" height="16" hidden />
         <span class="ge-popup__brand-name">GenuEarly</span>
         <span class="ge-popup__brand-version" id="version"></span>
       </div>

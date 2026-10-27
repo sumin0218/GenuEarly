@@ -10,7 +10,7 @@ import content from '../../../../packages/content/ui.ko.json'
 import schema from '@genuearly/shared/judgment-items.json'
 import { ITEM_CAUTION_AT } from '@genuearly/shared'
 import { createIcon } from '../../lib/icon'
-import { LEVEL_ICON, LEVEL_INK, LEVEL_INK_DARK, toRows } from '../../lib/item-view'
+import { LEVEL_ICON, LEVEL_INK, LEVEL_INK_DARK, UI_ICON, toRows } from '../../lib/item-view'
 import {
   SELECTION_KEY,
   clearSelection,
@@ -18,7 +18,13 @@ import {
   type SelectionOutcome,
   type SelectionRecord,
 } from '../../lib/selection'
-import type { DisplayLevel, TabState, TabStateMessage } from '../../lib/protocol'
+import type {
+  DisplayLevel,
+  ExplainRequestMessage,
+  ExplainResult,
+  TabState,
+  TabStateMessage,
+} from '../../lib/protocol'
 
 /**
  * 지금 탭의 상태를 **그 탭의 콘텐츠 스크립트에** 묻는다.
@@ -69,6 +75,17 @@ function drawSelection(outcome: SelectionOutcome): void {
  * 결과는 `storage.session` 변경으로 **나중에** 온다.
  */
 async function run(): Promise<void> {
+  // **빈 화면으로 열리는 쪽이 가장 나쁘다.** 어디서 터지든 적어도 머리말은 그린다
+  // (background.ts 의 ③ 처리도 같은 이유로 ⚪ 를 돌려준다).
+  try {
+    await draw()
+  } catch (e) {
+    console.warn('[GenuEarly] 팝업을 그리지 못했다', e)
+    render({ level: 'UNDETERMINED' }, document, 'page')
+  }
+}
+
+async function draw(): Promise<void> {
   const tabId = await activeTabId()
 
   // **먼저 듣기 시작한다.** 저장소 쓰기가 이 읽기보다 늦을 수 있다
@@ -154,8 +171,13 @@ export function drawChrome(app: AppCopy | undefined, facts: ChromeFacts, root: D
   const icon = root.getElementById('brand-icon') as HTMLImageElement | null
   // 주소를 못 받으면 **빈 이미지를 두지 않는다.** 깨진 그림이 뜬다.
   if (icon) {
-    if (facts.iconUrl) icon.src = facts.iconUrl
-    else icon.remove()
+    if (facts.iconUrl) {
+      icon.src = facts.iconUrl
+      icon.hidden = false
+    } else {
+      // 주소를 못 받았다. **빈 그림을 두지 않는다** — 깨진 그림이 뜬다.
+      icon.remove()
+    }
   }
 
   const details = root.getElementById('details')
@@ -252,6 +274,67 @@ function readFacts(): ChromeFacts {
   }
 }
 
+/** 받은 줄을 그린다. 한 줄도 없으면 자리를 비운다 — 빈 상자를 남기지 않는다. */
+function drawWhy(host: HTMLElement, lines: string[], root: Document): void {
+  host.replaceChildren()
+  for (const text of lines) {
+    const li = root.createElement('li')
+    li.className = 'ge-popup__why-line'
+    li.textContent = text
+    host.append(li)
+  }
+  host.hidden = lines.length === 0
+}
+
+/** 설명 문구 묶음. 질문 세트와 짝이 맞는지는 tests/content.test.ts 가 본다. */
+interface ExplainCopy {
+  title: string
+  none: string
+  parts: Record<string, { present: string; absent: string }>
+}
+const EXPLAIN = (content as unknown as { explain?: Record<string, ExplainCopy> }).explain ?? {}
+
+/** 그 항목에 **설명할 말이 있는가.** 문구가 없으면 버튼 자체를 그리지 않는다. */
+const canExplain = (itemId: string): boolean => Boolean(EXPLAIN[itemId]?.parts)
+
+/**
+ * 심층 분석을 **콘텐츠 스크립트에** 시킨다.
+ *
+ * **팝업은 본문을 받지 않는다** (secure-coding.md 6절). 본문을 들고 있는 것은
+ * 콘텐츠 스크립트뿐이라, 우리는 항목 id 만 보내고 답만 받는다.
+ */
+async function askExplain(itemId: string): Promise<ExplainResult | null> {
+  try {
+    const [tab] = await browser.tabs.query({ active: true, currentWindow: true })
+    if (tab?.id === undefined) return null
+    const msg: ExplainRequestMessage = { kind: 'explain-item', itemId }
+    return ((await browser.tabs.sendMessage(tab.id, msg)) as ExplainResult | null) ?? null
+  } catch {
+    return null
+  }
+}
+
+/**
+ * 받은 답을 줄로 바꾼다.
+ *
+ * **모름은 빠져 있다** — `judgeExplain` 이 확률이 모름 구간 안인 질문을 넣지 않는다.
+ * 그래서 다섯 줄이 다 나오지 않을 수 있다. 억지로 채우지 않는다.
+ */
+export function explainLines(itemId: string, result: ExplainResult | null): string[] {
+  const copy = EXPLAIN[itemId]
+  if (!copy || !result) return []
+  const ids = Object.keys(result.found)
+  if (ids.length === 0) return []
+  // 물어본 것이 **전부 아니오**면 한 줄로 말한다. 다섯 줄을 "못 찾았습니다" 로
+  // 늘어놓는 것보다 낫고, 그때가 가장 분명한 신호다.
+  if (ids.every((id) => result.found[id] === false)) return [copy.none]
+  return ids.flatMap((id) => {
+    const pair = copy.parts[id]
+    if (!pair) return []
+    return [result.found[id] ? pair.present : pair.absent]
+  })
+}
+
 /** 머리말 아이콘의 변 길이(px). 제목(18px)보다 조금 작다. */
 const HEAD_ICON = 20
 /** 항목 줄 아이콘의 변 길이(px). */
@@ -330,6 +413,11 @@ function render(state: TabState, root: Document = document, kind: 'page' | 'sele
   name.textContent = copy.name
   desc.textContent = copy.description
 
+  // **항목보다 먼저 그린다.** 아래에 항목이 없어 일찍 돌아가는 길이 셋 있는데
+  // (판단한 적 없음 / 살펴보는 중 / 항목이 비었음), 끝에서 그리면 그 셋에서
+  // 틀이 통째로 안 그려진다. 기사가 아닌 페이지에서 로고가 깨져 보이던 원인이다.
+  drawFrame(state, root, kind)
+
   items.replaceChildren()
   const rows = toRows(state.verdict)
   if (rows.length === 0) {
@@ -356,18 +444,46 @@ function render(state: TabState, root: Document = document, kind: 'page' | 'sele
     icon.className = 'ge-popup__item-mark'
     paintMark(icon, r.level, ROW_ICON, loud ? 'level' : 'quiet')
 
-    const head = root.createElement('span')
-    head.className = 'ge-popup__item-name'
-    head.textContent = r.name
-
     const body = root.createElement('span')
     body.className = 'ge-popup__item-text'
     body.textContent = r.text
 
-    li.append(icon, head, body)
+    // **걸린 항목에만, 설명할 말이 있을 때만 펼침을 단다.**
+    // 🟢·⚪ 에 달면 일곱 줄이 전부 눌리는 것처럼 보인다.
+    const 펼칠수있다 = kind === 'page' && loud && canExplain(r.id)
+    if (!펼칠수있다) {
+      const head = root.createElement('span')
+      head.className = 'ge-popup__item-name'
+      head.textContent = r.name
+      li.append(icon, head, body)
+      items.append(li)
+      continue
+    }
+
+    const why = root.createElement('ul')
+    why.className = 'ge-popup__why'
+    why.hidden = true
+
+    const head = root.createElement('button')
+    head.className = 'ge-popup__item-name ge-popup__item-open'
+    head.type = 'button'
+    head.setAttribute('aria-expanded', 'false')
+    head.append(root.createTextNode(r.name), createIcon(root, UI_ICON.expand, { size: 12 }))
+
+    let asked = false
+    head.onclick = () => {
+      why.hidden = !why.hidden
+      head.setAttribute('aria-expanded', String(!why.hidden))
+      if (why.hidden || asked) return
+      asked = true
+      // **누를 때만 나간다.** 기사를 여는 것만으로는 한 건도 나가지 않는다.
+      drawWhy(why, [content.badge.PENDING.name], root)
+      void askExplain(r.id).then((res) => drawWhy(why, explainLines(r.id, res), root))
+    }
+
+    li.append(icon, head, body, why)
     items.append(li)
   }
-  drawFrame(state, root, kind)
 }
 
 /**
@@ -382,7 +498,9 @@ function drawFrame(state: TabState, root: Document, kind: 'page' | 'selection'):
     APP,
     {
       ...readFacts(),
-      basis: kind,
+      // **판단한 적이 없으면 근거를 말하지 않는다.** 기사 페이지가 아닌 곳에서도
+      // "제목과 본문을 살펴본 결과입니다" 가 뜨면 **하지 않은 일을 했다고 말하는 것**이다.
+      basis: state.verdict ? kind : undefined,
       sentences: sentencesOf(state.verdict),
       lowConfidence: isLowConfidence(state),
     },

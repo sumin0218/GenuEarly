@@ -10,7 +10,14 @@ import content from '../../../packages/content/ui.ko.json'
 import { extractArticle } from '../lib/extract'
 import { createIcon } from '../lib/icon'
 import { LEVEL_ICON, LEVEL_INK, LEVEL_INK_DARK } from '../lib/item-view'
-import type { ArticleVerdict, DisplayLevel, Message, TabState, TabStateMessage } from '../lib/protocol'
+import type {
+  ArticleVerdict,
+  DisplayLevel,
+  ExplainRequestMessage,
+  Message,
+  TabState,
+  TabStateMessage,
+} from '../lib/protocol'
 
 /** 아이콘 크기(px). 글자(14px)와 같은 줄에 선다. */
 const MARK_SIZE = 16
@@ -103,9 +110,27 @@ export default defineContentScript({
     //
     // **보낸 곳을 확인한다.** 이 핸들러는 판정 전체를 돌려준다
     // (AGENT.md 전역 규칙, docs/security/secure-coding.md 5절).
-    browser.runtime.onMessage.addListener((msg: TabStateMessage, sender) => {
-      if (sender.id !== browser.runtime.id || msg?.kind !== 'get-tab-state') return
-      return Promise.resolve(badge.state())
+    browser.runtime.onMessage.addListener((raw: TabStateMessage | ExplainRequestMessage, sender) => {
+      if (sender.id !== browser.runtime.id) return
+      if (raw?.kind === 'get-tab-state') return Promise.resolve(badge.state())
+
+      // **본문은 여기서만 나간다.** 팝업은 본문을 받지 않는다 (secure-coding.md 6절).
+      // 팝업이 "이 항목을 설명해 달라" 고만 하고, 본문을 들고 있는 우리가 물어본 뒤
+      // **답만** 돌려준다. 기사를 못 읽었으면 물어볼 것도 없다.
+      if (raw?.kind === 'explain-item') {
+        if (!article) return Promise.resolve(null)
+        const ask: Message = {
+          kind: 'judge-explain',
+          url: location.href,
+          body: article.body,
+          itemId: raw.itemId,
+        }
+        return browser.runtime.sendMessage(ask).catch((e) => {
+          console.warn('[GenuEarly] 심층 분석을 받지 못했다', e)
+          return null
+        })
+      }
+      return
     })
 
     if (!article) {

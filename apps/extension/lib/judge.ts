@@ -8,7 +8,7 @@
 // 엔트리포인트는 WXT 의 defineBackground 로 감싸여 있어 그대로는 불러올 수 없다.
 // **점수 규칙은 여기 없다.** `@genuearly/shared` 하나가 원본이고 중계 서버와 함께 쓴다 (GE-15).
 // 두 벌을 두면 조용히 갈라진다.
-import { decideBadge, scoreArticle, type ItemResult } from '@genuearly/shared'
+import { decideBadge, resolveBand, scoreArticle, type ItemResult } from '@genuearly/shared'
 import schema from '@genuearly/shared/judgment-items.json'
 import {
   headlineFingerprint,
@@ -30,6 +30,7 @@ import {
   type HeadlineVerdict,
   type Message,
   isUndetermined,
+  type ExplainResult,
 } from './protocol'
 
 /**
@@ -304,4 +305,66 @@ export async function judgeHeadline(msg: Extract<Message, { kind: 'judge-headlin
 
   const verdict = decideBadge(toResults(cached))
   return { level: verdict.level, basis: 'headline' }
+}
+
+// ── 심층 분석 ───────────────────────────────────────────────────────────────
+
+/**
+ * "모름" 구간. Noul 확률이 이 안이면 **그 질문은 답하지 않은 것으로 본다.**
+ *
+ * `@genuearly/shared` 의 문장 판단이 쓰는 것과 같은 구간이다. 찾았는지 못 찾았는지를
+ * 0.5 근처에서 억지로 가르면, 모델이 모르겠다고 말한 것을 우리가 단정하는 셈이 된다.
+ */
+const EXPLAIN_BAND = resolveBand(null)
+
+/** 설명 전용 항목. **`items` 가 아니라 `explain_items` 다** (judgment-items.json). */
+interface ExplainItemDef {
+  id: string
+  explain_for: string
+  request_group: Record<string, string>
+  questions: { id: string }[]
+}
+const EXPLAIN_ITEMS = ((schema as unknown as { explain_items?: ExplainItemDef[] }).explain_items ?? [])
+
+/** 그 판단 항목을 설명하는 질문 묶음이 있는가. */
+export const explainableItems = (): string[] => EXPLAIN_ITEMS.map((i) => i.explain_for)
+
+/**
+ * 판정이 **왜 그렇게 나왔는지** 묻는다.
+ *
+ * Jev 는 이유를 돌려주지 않는다 — 분류기라 "고른 보기 + 확률 + 확신도" 가 전부다
+ * (docs/jev.md 2절). 그래서 그 항목의 criteria 를 쪼갠 질문들을 **따로** 물어
+ * "무엇이 있고 무엇이 없어서 그렇게 봤는지" 를 알아낸다.
+ *
+ * **점수에 들어가지 않는다.** 판정은 이미 났고 바뀌지 않는다 (GE-44).
+ * **사용자가 누를 때만 불린다.** 기사를 여는 것만으로는 한 건도 나가지 않는다.
+ *
+ * 모름 구간 안의 답은 **빼고 준다.** 억지로 가르면 모델이 모르겠다고 한 것을
+ * 우리가 단정하게 된다.
+ */
+export async function judgeExplain(
+  msg: Extract<Message, { kind: 'judge-explain' }>,
+): Promise<ExplainResult | null> {
+  const def = EXPLAIN_ITEMS.find((i) => i.explain_for === msg.itemId)
+  const group = def?.request_group.explain
+  if (!def || !group) return null
+
+  const out = await callProxy({
+    feature: 'explain',
+    group,
+    items: [def.id],
+    state: { body: msg.body },
+  })
+  if (!out || isUndetermined(out)) return null
+
+  const [lo, hi] = EXPLAIN_BAND
+  const found: Record<string, boolean> = {}
+  for (const q of def.questions) {
+    const a = out.answers[q.id] as { type?: string; noul?: unknown } | undefined
+    if (a?.type !== 'noul' || typeof a.noul !== 'number' || !Number.isFinite(a.noul)) continue
+    if (a.noul > hi) found[q.id] = true
+    else if (a.noul < lo) found[q.id] = false
+    // 그 사이는 모름이다. 넣지 않는다.
+  }
+  return { itemId: msg.itemId, found }
 }

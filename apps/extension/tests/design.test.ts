@@ -3,7 +3,7 @@
 // 보기 좋은가는 여기서 못 본다. 여기서 보는 것은 **읽히는가**다 —
 // 근거와 결정은 docs/design.md 에 있다.
 import { describe, expect, it } from 'vitest'
-import { GLYPH, LEVEL_ICON, LEVEL_INK, LEVEL_INK_DARK } from '../lib/item-view'
+import { GLYPH, LEVEL_ICON, LEVEL_INK, LEVEL_INK_DARK, UI_ICON } from '../lib/item-view'
 import { ICON_DATA } from '../lib/icon-data'
 import type { DisplayLevel } from '../lib/protocol'
 
@@ -92,7 +92,10 @@ describe('이모지를 쓰지 않는다', () => {
 
 describe('아이콘 데이터', () => {
   it('쓰는 것만 들어 있다 — 2,630개를 들고 오지 않는다', () => {
-    const used = new Set<string>(LEVELS.map((l) => LEVEL_ICON[l] as string))
+    const used = new Set<string>([
+      ...LEVELS.map((l) => LEVEL_ICON[l] as string),
+      ...Object.values(UI_ICON) as string[],
+    ])
     for (const name of Object.keys(ICON_DATA)) {
       expect(used.has(name), `${name} 은 아무도 쓰지 않는다`).toBe(true)
     }
