@@ -10,7 +10,15 @@
 // 두 벌을 두면 조용히 갈라진다.
 import { decideBadge, scoreArticle, type ItemResult } from '@genuearly/shared'
 import schema from '@genuearly/shared/judgment-items.json'
-import { readScores, sweepExpired, writeScores, type ItemScores } from './cache'
+import {
+  headlineFingerprint,
+  isReusable,
+  readScores,
+  sweepExpired,
+  writeScores,
+  type CachedItem,
+  type ItemScores,
+} from './cache'
 import { GLYPH, LEVEL_COLOR } from './item-view'
 import {
   PROXY_URL,
@@ -46,6 +54,51 @@ const MAX_SENTENCES = 40
  * ①과 ②가 같은 캐시에 쓰므로 **규칙도 하나여야 한다** (requirements.md 3-6절).
  */
 const JUDGED: readonly (string | undefined)[] = [undefined, 'low_confidence', 'uncertain']
+
+/** 그 기능에서 **항목 하나를 어느 그룹으로 보내는가.** 캐시를 다시 쓸 수 있는지 가릴 때 쓴다. */
+function groupOf(feature: string): Map<string, string> {
+  const m = new Map<string, string>()
+  for (const item of schema.items as unknown as { id: string; request_group: Record<string, string> }[]) {
+    const g = item.request_group[feature]
+    if (g) m.set(item.id, g)
+  }
+  return m
+}
+
+/** 그 그룹이 제목을 보는가. 보면 캐시를 다시 쓸 때 제목까지 같아야 한다. */
+function usesHeadline(group: string): boolean {
+  const def = (schema.request_groups as Record<string, { state_fields: string[] } | undefined>)[group]
+  return (def?.state_fields ?? []).includes('headline')
+}
+
+/**
+ * 캐시에서 **지금 그대로 쓸 수 있는 것만** 추린다.
+ *
+ * 같은 항목 id 라도 **무엇을 보고 낸 판단인지**가 다르면 쓸 수 없다 (리뷰 #22).
+ * 추리지 않고 통째로 넘기면 `decideBadge` 가 먼저 온 값을 쓰기 때문에
+ * **제목만 보고 낸 값이 본문까지 본 값을 이긴다.**
+ */
+function reusable(cached: ItemScores, ids: readonly string[], gmap: Map<string, string>, fp?: string): ItemScores {
+  const out: ItemScores = {}
+  for (const id of ids) {
+    const g = gmap.get(id)
+    if (!g) continue
+    const c = cached[id]
+    if (isReusable(c, g, usesHeadline(g) ? fp : undefined)) out[id] = c as CachedItem
+  }
+  return out
+}
+
+/** 캐시에 넣을 모양으로. **무엇을 보고 낸 판단인지 함께 적는다.** */
+function stamp(r: ItemResult, group: string, fp?: string): CachedItem {
+  return {
+    score: r.score,
+    isConfident: r.isConfident,
+    reason: r.reason,
+    g: group,
+    ...(usesHeadline(group) && fp !== undefined ? { h: fp } : {}),
+  }
+}
 
 /** 기능별로 어느 항목이 어느 요청 그룹에 들어가는지. 원본은 judgment-items.json 이다. */
 function plan(feature: string) {
@@ -97,8 +150,12 @@ export async function judgeArticle(msg: Extract<Message, { kind: 'judge-article'
   // --- 캐시 -----------------------------------------------------------------
   // **항목 단위다.** ② 포털 목록은 제목 항목만 채우므로, 기사 단위로 "있다/없다" 를
   // 보면 제목만 본 결과가 기사 배지로 나간다 (requirements.md 3-6절).
-  const cached = await readScores(msg.url)
+  const stored = await readScores(msg.url)
   const needed = [...[...groups.values()].flat(), ...(sentenceItem ? [sentenceItem] : [])]
+  const gmap = groupOf('page')
+  const fp = await headlineFingerprint(msg.headline)
+  // **②가 제목만 보고 낸 값을 본문까지 본 것으로 쓰지 않는다** (리뷰 #22).
+  const cached = reusable(stored, needed, gmap, fp)
   const missing = new Set(needed.filter((id) => !(id in cached)))
 
   if (missing.size === 0) {
@@ -160,7 +217,9 @@ export async function judgeArticle(msg: Extract<Message, { kind: 'judge-article'
   for (const r of fresh) {
     if (sentenceFailed && r.id === sentenceItem) continue
     if (!JUDGED.includes(r.reason)) continue
-    toCache[r.id] = { score: r.score, isConfident: r.isConfident, reason: r.reason }
+    const g = gmap.get(r.id)
+    if (!g) continue
+    toCache[r.id] = stamp(r, g, fp)
   }
   await writeScores(msg.url, toCache)
 
@@ -188,18 +247,29 @@ export async function judgeHeadline(msg: Extract<Message, { kind: 'judge-headlin
   const portal = plan('portal_list')
   const portalItems = [...portal.groups.values()].flat()
 
-  const cached = await readScores(msg.url)
+  const stored = await readScores(msg.url)
 
   // --- 진한 동그라미: ①이 쓰는 항목이 캐시에 다 있는가 ------------------------
-  // **①과 같은 기준으로 본다.** 여기서 느슨하게 보면 제목만 본 결과가 "본문까지 봤다" 로 나간다.
+  // **①과 같은 기준으로 본다.** 여기서 느슨하게 보면 제목만 본 결과가 "본문까지 봤다" 로 나간다 —
+  // `spread_inducement` 는 ①에서 본문까지, ②에서 제목만 보므로 그룹이 다르면 쓸 수 없다.
+  //
+  // **제목 지문은 보지 않는다.** ①이 쓴 값의 지문은 기사 페이지의 진짜 제목에서 나온 것이고,
+  // 여기 있는 것은 목록 링크의 글자다. 둘이 달라도 ①의 판단이 더 믿을 만하다.
   const page = plan('page')
+  const pageGroups = groupOf('page')
   const pageItems = [...[...page.groups.values()].flat(), ...(page.sentenceItem ? [page.sentenceItem] : [])]
-  if (pageItems.every((id) => id in cached)) {
-    const verdict = decideBadge(toResults(cached))
+  const full = reusable(stored, pageItems, pageGroups)
+  if (pageItems.every((id) => id in full)) {
+    const verdict = decideBadge(toResults(full))
     return { level: verdict.level, basis: 'full' }
   }
 
   // --- 옅은 동그라미: 제목만 ---------------------------------------------------
+  //
+  // 목록 링크의 글자가 바뀌면 다시 묻는다 — 그 글자가 곧 판단의 입력이다.
+  const portalGroups = groupOf('portal_list')
+  const fp = await headlineFingerprint(msg.headline)
+  const cached = reusable(stored, portalItems, portalGroups, fp)
   const missing = portalItems.filter((id) => !(id in cached))
   if (missing.length > 0) {
     const jobs = [...portal.groups.entries()]
@@ -220,9 +290,12 @@ export async function judgeHeadline(msg: Extract<Message, { kind: 'judge-headlin
     const toCache: ItemScores = {}
     for (const r of fresh) {
       if (!JUDGED.includes(r.reason)) continue
-      toCache[r.id] = { score: r.score, isConfident: r.isConfident, reason: r.reason }
+      const g = portalGroups.get(r.id)
+      if (!g) continue
+      toCache[r.id] = stamp(r, g, fp)
     }
-    // **①이 이 항목을 재사용한다.** 같은 기사를 눌러 들어가면 제목 항목은 다시 묻지 않는다.
+    // **①이 재사용할 수 있는 것만 재사용한다.** 두 기능에서 요청 그룹이 같고 제목도 같은
+    // 항목(`clickbait_headline`)만 해당된다. 나머지는 ①이 본문을 넣어 다시 묻는다.
     await writeScores(msg.url, toCache)
 
     const verdict = decideBadge([...toResults(cached), ...fresh])

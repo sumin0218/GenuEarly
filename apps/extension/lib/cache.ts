@@ -21,7 +21,55 @@ const TTL_MS = 6 * 60 * 60 * 1000
  * 점수만 저장하면 캐시에서 읽은 항목이 전부 "확신하지 못한 것" 으로 취급돼
  * **같은 기사가 두 번째 열 때 다른 배지를 준다.**
  */
-export type CachedItem = Pick<ItemResult, 'score' | 'isConfident' | 'reason'>
+export type CachedItem = Pick<ItemResult, 'score' | 'isConfident' | 'reason'> & {
+  /**
+   * **무엇을 보고 낸 판단인가** — 그 항목을 보낸 요청 그룹 이름.
+   *
+   * 없으면 이런 일이 생긴다. `spread_inducement` 는 ①에서 `headline_body`(제목+본문),
+   * ②에서 `headline_only`(제목만)다. 캐시 키가 항목 id 하나뿐이면 **②가 제목만 보고 낸 값을
+   * ①이 "이미 있다" 고 보고 본문으로 다시 묻지 않는다.** 본문 끝의 "꼭 공유해 주세요" 를
+   * 6시간 동안 못 본다 (리뷰 #22).
+   *
+   * 목록에서 눌러 들어가는 것이 기사를 여는 **가장 흔한 길**이라 흔하게 걸린다.
+   */
+  g?: string
+  /**
+   * 판단에 쓴 **제목의 지문**(해시 앞 12자리). 제목을 보는 그룹에만 둔다.
+   *
+   * ②는 목록 링크의 글자를 제목으로 쓰는데, 거기에는 "동영상"·재생 시간·언론사 이름이
+   * 섞이거나 포털이 긴 제목을 줄여 `…` 를 붙여 놓기도 한다. `clickbait_headline` 의 기준이
+   * 바로 "말줄임표로 궁금증만 남긴다" 라서 **글자가 다르면 판정도 달라진다.**
+   * ①이 그 값을 기사 페이지의 진짜 제목에 대한 판단으로 쓰면 안 된다 (리뷰 #22).
+   *
+   * **제목 글자를 저장하지 않는다.** 해시만 둔다 — 캐시가 열람 기록이 되지 않게 하는
+   * 규칙 그대로다 (docs/security/secure-coding.md 7절).
+   */
+  h?: string
+}
+
+/**
+ * 제목의 지문. 같은 제목인지만 가리면 되므로 짧게 자른다.
+ *
+ * **되돌릴 수 없어야 한다.** 그래서 URL 키와 같은 SHA-256 을 쓴다.
+ */
+export async function headlineFingerprint(headline: string): Promise<string> {
+  const bytes = new TextEncoder().encode(headline.replace(/\s+/g, ' ').trim())
+  const hash = await crypto.subtle.digest('SHA-256', bytes)
+  return [...new Uint8Array(hash)].slice(0, 6).map((b) => b.toString(16).padStart(2, '0')).join('')
+}
+
+/**
+ * 캐시에 있는 이 항목을 **지금 보내려는 요청 대신 쓸 수 있는가.**
+ *
+ * 같은 근거로 낸 판단일 때만 그렇다 — 요청 그룹이 같고, 제목을 보는 그룹이면 제목도 같아야 한다.
+ * 그룹을 적지 않고 저장된 **옛 항목은 쓰지 않는다.** 무엇을 보고 낸 것인지 알 수 없다.
+ */
+export function isReusable(c: CachedItem | undefined, group: string, headlineFp?: string): boolean {
+  if (!c) return false
+  if (c.g !== group) return false
+  if (headlineFp !== undefined && c.h !== headlineFp) return false
+  return true
+}
 
 /** 항목 id → 결과. */
 export type ItemScores = Record<string, CachedItem>
