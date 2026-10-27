@@ -1,6 +1,6 @@
 {
   "$comment": "Jev 판단 항목의 원본. 규칙과 필드 설명은 README.md의 '판단 항목 정의' 절에 있다. 각 항목의 question 객체가 Jev API의 questions 값이 된다. 보낼 때 instructions 뒤에 최상위 common_instructions 를 줄바꿈으로 덧붙이는 것 하나만 코드가 하고, 그 밖에는 손대지 않는다. question 바깥의 필드는 우리 코드가 쓰는 메타데이터이므로 보내지 않는다. criteria의 키 순서가 곧 Jev에 보내는 보기 순서다. 순서를 바꾸면 답이 달라질 수 있으므로 eval 없이 바꾸지 않는다. 점수 합산과 eval은 순서가 아니라 signals 값을 읽는다.",
-  "version": "1.2.0",
+  "version": "1.3.0",
   "model": "jev-1.13.0",
   "language": "ko",
   "state_fields": {
@@ -12,7 +12,7 @@
   "request_groups": {
     "headline_only": {
       "state_fields": ["headline"],
-      "required": { "page": ["headline"], "portal_list": ["headline"] },
+      "required": { "page": ["headline"], "portal_list": ["headline"], "explain": ["headline"] },
       "description": "제목만 넣는 요청. ② 포털 목록과 같은 모양이다"
     },
     "headline_body": {
@@ -214,6 +214,197 @@
           "type": "noul",
           "instructions": "`body` 필드의 글에 누구인지 특정되지 않은 출처가 등장하는가? 집단이나 직함으로만 가리킨 출처를 말한다. 예: '전문가에 따르면', '한 관계자는', '업계에서는', '~라고 알려졌다'. `body` 필드의 글자만 본다.",
           "criteria": { "true": "특정되지 않은 출처가 등장한다", "false": "등장하지 않는다" }
+        }
+      }
+      ]
+    },
+    {
+      "id": "clickbait_headline_parts",
+      "explain_for": "clickbait_headline",
+      "$comment": "clickbait_headline 의 instructions 가 \"감추는 방식\" 과 \"부풀리는 방식\" 두 가지를 이름 붙여 적어 두었다. 그 둘을 따로 물을 뿐이다.",
+      "type": "noul",
+      "unit": "article",
+      "request_group": { "explain": "headline_only" },
+      "basis_fields": ["headline"],
+      "questions": [
+      {
+        "id": "clk_hiding",
+        "question": {
+          "type": "noul",
+          "instructions": "`headline` 필드의 제목이 무엇에 관한 기사인지 가리는가? '결국 이것', '그 이유는' 처럼 지시어로 대상을 가리거나, 말줄임표·물음표로 궁금증만 남기는 경우를 말한다. '[단독]', '[속보]' 같은 언론사 말머리는 제외한다. `headline` 필드의 글자만 본다.",
+          "criteria": { "true": "대상을 가리거나 궁금증만 남기는 표현이 있다", "false": "없다" }
+        }
+      },
+      {
+        "id": "clk_inflating",
+        "question": {
+          "type": "noul",
+          "instructions": "`headline` 필드의 제목에 사안보다 큰 수식어가 붙어 있는가? '충격', '경악', '역대급', '난리 났다' 같은 표현을 말한다. `headline` 필드의 글자만 본다.",
+          "criteria": { "true": "사안보다 큰 수식어가 붙어 있다", "false": "붙어 있지 않다" }
+        }
+      }
+      ]
+    },
+    {
+      "id": "headline_body_match_parts",
+      "explain_for": "headline_body_match",
+      "$comment": "headline_body_match 의 criteria 가 \"본문 일부만 반영\" 을 셋으로 나눠 적어 두었다(핵심이 빠짐 / 곁가지를 핵심처럼 / 조건을 떼고 단정). 그 셋과 \"본문과 어긋남\" 을 따로 묻는다.",
+      "type": "noul",
+      "unit": "article",
+      "request_group": { "explain": "headline_body" },
+      "basis_fields": ["headline","body"],
+      "questions": [
+      {
+        "id": "hbm_missing",
+        "question": {
+          "type": "noul",
+          "instructions": "`headline` 필드 제목의 핵심 내용이 `body` 필드의 본문에 빠져 있는가? 제목의 핵심 내용은 제목의 주어와 서술어가 전하는 사건이나 주장이다. 말투와 표현의 강도는 보지 않는다.",
+          "criteria": { "true": "제목의 핵심 내용이 본문에 없다", "false": "본문에 있다" }
+        }
+      },
+      {
+        "id": "hbm_sidepoint",
+        "question": {
+          "type": "noul",
+          "instructions": "`headline` 필드의 제목이 `body` 필드 본문의 곁가지를 핵심처럼 내세우는가?",
+          "criteria": { "true": "곁가지를 핵심처럼 내세운다", "false": "그렇지 않다" }
+        }
+      },
+      {
+        "id": "hbm_dropped_scope",
+        "question": {
+          "type": "noul",
+          "instructions": "`headline` 필드의 제목이 `body` 필드 본문에 적힌 조건이나 범위를 떼어 내고 단정해 전하는가? 본문의 '~할 수도 있다', '일부 지역에서' 같은 한정을 제목이 빼고 전하는 경우를 말한다.",
+          "criteria": { "true": "조건이나 범위를 떼고 단정한다", "false": "그렇지 않다" }
+        }
+      },
+      {
+        "id": "hbm_contradicts",
+        "question": {
+          "type": "noul",
+          "instructions": "`body` 필드의 본문이 `headline` 필드 제목의 핵심 내용과 반대되거나 다른 사실을 적어 두었는가? 제목의 내용이 본문에 그저 빠져 있는 경우는 여기에 들지 않는다.",
+          "criteria": { "true": "본문이 제목과 반대되거나 다른 사실을 적었다", "false": "그렇지 않다" }
+        }
+      }
+      ]
+    },
+    {
+      "id": "spread_inducement_parts",
+      "explain_for": "spread_inducement",
+      "$comment": "spread_inducement 의 criteria 가 \"확산 재촉\" 과 \"확산 암시\" 를 나눠 적어 두었다. 그 둘을 따로 묻는다.",
+      "type": "noul",
+      "unit": "article",
+      "request_group": { "explain": "headline_body" },
+      "basis_fields": ["headline","body"],
+      "questions": [
+      {
+        "id": "spr_urging",
+        "question": {
+          "type": "noul",
+          "instructions": "`headline` 필드와 `body` 필드의 글이 독자에게 공유·전달을 직접 요구하는가? '꼭 공유하세요', '널리 알려 주세요', '삭제되기 전에 퍼뜨리세요' 같은 표현을 말한다. 구독·좋아요 안내처럼 언론사가 모든 기사에 붙이는 고정 문구는 제외한다.",
+          "criteria": { "true": "공유·전달을 직접 요구한다", "false": "요구하지 않는다" }
+        }
+      },
+      {
+        "id": "spr_hinting",
+        "question": {
+          "type": "noul",
+          "instructions": "`headline` 필드와 `body` 필드의 글이 전달할 필요를 강조하는가? '모두가 알아야 할', '주변에도 알려야 할' 같은 표현을 말한다. 직접 요구하지는 않지만 퍼뜨릴 이유를 내세우는 경우다.",
+          "criteria": { "true": "전달할 필요를 강조한다", "false": "강조하지 않는다" }
+        }
+      }
+      ]
+    },
+    {
+      "id": "emotional_language_parts",
+      "explain_for": "emotional_language",
+      "$comment": "emotional_language 의 instructions 가 \"감정을 자극하는 표현의 예\" 로 넷을 들어 두었다. 그 넷을 따로 묻는다. 등급은 바뀌지 않는다.",
+      "type": "noul",
+      "unit": "article",
+      "request_group": { "explain": "headline_body" },
+      "basis_fields": ["headline","body"],
+      "questions": [
+      {
+        "id": "emo_slur",
+        "question": {
+          "type": "noul",
+          "instructions": "`headline` 필드와 `body` 필드에서 기사 작성자가 사람이나 집단을 비하하거나 조롱하는 호칭을 쓰는가? 따옴표로 인용한 발언 속 표현은 작성자의 서술에서 제외한다.",
+          "criteria": { "true": "비하하거나 조롱하는 호칭을 쓴다", "false": "쓰지 않는다" }
+        }
+      },
+      {
+        "id": "emo_repeat",
+        "question": {
+          "type": "noul",
+          "instructions": "`headline` 필드와 `body` 필드에서 기사 작성자가 '분노', '경악', '끔찍한' 같은 감정 낱말을 되풀이해 쓰는가? 따옴표로 인용한 발언 속 표현은 제외한다.",
+          "criteria": { "true": "감정 낱말을 되풀이해 쓴다", "false": "되풀이하지 않는다" }
+        }
+      },
+      {
+        "id": "emo_exclaim",
+        "question": {
+          "type": "noul",
+          "instructions": "`headline` 필드와 `body` 필드에 느낌표가 연달아 쓰여 있는가?",
+          "criteria": { "true": "느낌표가 연달아 쓰여 있다", "false": "그렇지 않다" }
+        }
+      },
+      {
+        "id": "emo_fear",
+        "question": {
+          "type": "noul",
+          "instructions": "`headline` 필드와 `body` 필드가 독자를 겨냥해 공포를 조성하는가? '당신도 당할 수 있다' 처럼 읽는 사람에게 닥칠 일로 돌려 겁을 주는 표현을 말한다.",
+          "criteria": { "true": "독자를 겨냥해 공포를 조성한다", "false": "그렇지 않다" }
+        }
+      }
+      ]
+    },
+    {
+      "id": "ai_style_signal_parts",
+      "explain_for": "ai_style_signal",
+      "$comment": "ai_style_signal 의 instructions 가 \"기계 생성 글의 문체 특징\" 으로 다섯을 들어 두었다. 그 다섯을 따로 묻는다. 등급은 바뀌지 않는다.",
+      "type": "noul",
+      "unit": "article",
+      "request_group": { "explain": "headline_body" },
+      "basis_fields": ["body"],
+      "questions": [
+      {
+        "id": "ai_same_frame",
+        "question": {
+          "type": "noul",
+          "instructions": "`body` 필드의 글에 같은 틀의 문장이 반복되는가? 주어와 서술어의 짜임이 거의 같은 문장이 줄줄이 이어지는 경우를 말한다.",
+          "criteria": { "true": "같은 틀의 문장이 반복된다", "false": "반복되지 않는다" }
+        }
+      },
+      {
+        "id": "ai_even_length",
+        "question": {
+          "type": "noul",
+          "instructions": "`body` 필드의 글에서 문장 길이와 문단 구성이 고르게 맞춰져 있는가? 보도자료나 날씨·증시 기사는 원래 정형적이므로, 정형성 자체보다 지나치게 고른지를 본다.",
+          "criteria": { "true": "문장 길이와 문단 구성이 고르게 맞춰져 있다", "false": "그렇지 않다" }
+        }
+      },
+      {
+        "id": "ai_summary_phrase",
+        "question": {
+          "type": "noul",
+          "instructions": "`body` 필드의 글에 '결론적으로', '요약하자면' 같은 정리 표현이 있는가?",
+          "criteria": { "true": "정리 표현이 있다", "false": "없다" }
+        }
+      },
+      {
+        "id": "ai_generic",
+        "question": {
+          "type": "noul",
+          "instructions": "`body` 필드의 글에 사안과 동떨어진 일반론이 섞여 있는가? 이 기사에만 해당하지 않고 아무 기사에나 붙일 수 있는 서술을 말한다.",
+          "criteria": { "true": "사안과 동떨어진 일반론이 섞여 있다", "false": "섞여 있지 않다" }
+        }
+      },
+      {
+        "id": "ai_both_sides",
+        "question": {
+          "type": "noul",
+          "instructions": "`body` 필드의 글에 양쪽을 기계적으로 맞추는 문장이 있는가? '장단점이 모두 있다' 처럼 양쪽을 같은 무게로 적어 두고 끝내는 서술을 말한다.",
+          "criteria": { "true": "양쪽을 기계적으로 맞추는 문장이 있다", "false": "없다" }
         }
       }
       ]
