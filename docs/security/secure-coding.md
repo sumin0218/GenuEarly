@@ -34,7 +34,7 @@
 | --- | --- | --- | --- |
 | `contextMenus` | ③ 선택 텍스트 검사 | 오른쪽 클릭 메뉴를 만드는 유일한 방법이다 | 필요 |
 | `storage` | 설정, 피드백 동의 여부, 판단 결과 캐시 | service worker가 종료돼도 남아야 한다 | 필요 |
-| `host_permissions` (포털·언론사 도메인) | ① ② | 그 사이트의 DOM을 읽어야 판단할 내용이 나온다 | 필요 — **도메인을 명시해서** 받는다. 현재 `n.news.naver.com/article/*`, `v.daum.net/v/*` |
+| `host_permissions` (포털 도메인) | ① ② | 그 사이트의 DOM을 읽어야 판단할 내용이 나온다 | 필요 — **도메인과 경로를 명시해서** 받는다. 현재 `n.news.naver.com/article/*`, `n.news.naver.com/mnews/article/*`, `v.daum.net/v/*`, `news.naver.com/section/*` |
 | `notifications` | — | OS 알림을 띄울 권한이다. **아이콘 배지와 페이지 안 알림으로 대신한다.** 둘 다 권한이 필요 없고, OS 알림은 윈도우에서 알림 센터로 들어가 놓치기 쉽다 | **쓰지 않는다** |
 | `scripting` / `activeTab` | — | ③의 결과를 **선택한 글 근처**에 띄우려면 임의의 사이트에 UI를 주입해야 해서 둘 다 필요했다. **결과를 확장 팝업으로 옮겨 주입 자체를 없앴다** ([requirements.md](../requirements.md) 5-1절) | **쓰지 않는다** |
 | `tabs` | — | 전체 탭의 URL과 제목을 읽을 수 있다. 필요 없다 | **쓰지 않는다** |
@@ -58,12 +58,12 @@
 > **TODO: 언론사 도메인 확정** — 포털 기사 경로는 확인했다(네이버 기사 본문은 `news.naver.com`이 아니라
 > `n.news.naver.com/article/…`에 있다). 언론사 자체 도메인을 어디까지 받을지는 아직 미정이다.
 > 넓게 받고 나중에 줄이는 것보다 좁게 시작해 늘리는 쪽이 안전하다.
-> **TODO: 포털 목록 페이지 추가(GE-23)** — `news.naver.com/section/*`. 쓰는 기능이 생길 때 받는다.
 > **TODO: `optional_permissions`로 돌릴 수 있는 권한 검토** — 사용자가 그 기능을 쓸 때만 허용을 받는 방식.
 
 ### 원칙
 
 - `host_permissions`는 와일드카드 도메인(`*://*/*`)으로 받지 않는다. 필요한 호스트를 적는다.
+- **목록 페이지는 섹션 경로까지 좁혀서 받는다.** `news.naver.com/*` 로 받으면 포털 첫 화면·댓글·마이뉴스가 전부 들어온다. 우리가 보는 것은 섹션 목록뿐이다 (GE-23).
 - `content_scripts`의 `matches`도 같다. 기사·목록 페이지에만 붙인다.
 - 기능이 사라지면 권한도 같은 PR에서 뺀다.
 

@@ -57,7 +57,26 @@ export interface JudgeArticleMessage {
   sentences: string[]
 }
 
-export type Message = JudgeArticleMessage
+/**
+ * ② 목록의 제목 하나. **본문이 없다** — 목록 페이지에는 제목밖에 없다.
+ *
+ * 그래서 `request_group` 에 `portal_list` 가 있는 항목만 판단한다.
+ * 결과는 ①과 **같은 캐시에 항목 단위로** 쌓인다 (requirements.md 3-6절).
+ */
+export interface JudgeHeadlineMessage {
+  kind: 'judge-headline'
+  url: string
+  headline: string
+}
+
+/** ②가 돌려받는 것. **근거가 무엇이었는지 함께 준다** (requirements.md 4-3절). */
+export interface HeadlineVerdict {
+  level: BadgeLevel
+  /** `'full'` 이면 캐시에 본문까지 본 결과가 있었다는 뜻이다. 비용은 0이었다 */
+  basis: 'headline' | 'full'
+}
+
+export type Message = JudgeArticleMessage | JudgeHeadlineMessage
 
 // ── 팝업이 콘텐츠 스크립트에 보내는 것 ──────────────────────────────────────
 //

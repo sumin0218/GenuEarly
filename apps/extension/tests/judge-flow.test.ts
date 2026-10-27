@@ -2,7 +2,7 @@
 //
 // 중계 서버를 가짜로 세우고 **호출 횟수를 센다.** 캐시가 도는지는 그것으로만 알 수 있다.
 import { beforeEach, describe, expect, it, vi } from 'vitest'
-import { judgeArticle } from '../lib/judge'
+import { judgeArticle, judgeHeadline } from '../lib/judge'
 import { writeScores, type CachedItem } from '../lib/cache'
 
 /** 캐시 값이 숫자에서 항목 결과 조각으로 바뀌었다. 테스트에서 짧게 쓰려고 둔다. */
@@ -139,29 +139,41 @@ describe('같은 기사를 다시 열 때', () => {
 })
 
 describe('② 가 제목 항목만 채워 둔 상태', () => {
-  it('① 은 나머지만 묻는다', async () => {
-    // ② 포털 목록이 제목만 보는 항목을 채워 뒀다고 두자.
-    await writeScores(article.url, { clickbait_headline: item(1), spread_inducement: item(0) })
-
-    await judgeArticle(article, 1)
-    const asked = sent.flatMap((r) => r.items)
-    expect(asked, '②가 채운 것은 다시 묻지 않는다').not.toContain('clickbait_headline')
-    expect(asked).toContain('source_citation')
-    expect(asked).toContain('unverifiable_claim')
-  })
+  const list = { kind: 'judge-headline' as const, url: article.url, headline: article.headline }
 
   it('제목만 있는 캐시로 "캐시 있음" 처리하지 않는다', async () => {
     // 이걸 놓치면 제목만 본 결과가 6시간 동안 기사 배지로 나간다.
-    await writeScores(article.url, { clickbait_headline: item(1), spread_inducement: item(0) })
+    await judgeHeadline(list)
+    sent = []
     await judgeArticle(article, 1)
     expect(sent.length, '본문·문장 판단을 건너뛰면 안 된다').toBeGreaterThan(0)
   })
 
-  it('헤드라인 그룹은 통째로 건너뛴다', async () => {
-    await writeScores(article.url, { clickbait_headline: item(1) })
+  it('제목만 보는 항목은 다시 묻지 않는다', async () => {
+    await judgeHeadline(list)
+    sent = []
     await judgeArticle(article, 1)
-    // headline_only 그룹에는 clickbait_headline 하나뿐이다. 다 찼으면 요청이 없어야 한다.
-    expect(sent.some((r) => r.group === 'headline_only')).toBe(false)
+    expect(sent.flatMap((r) => r.items), '두 기능이 같은 질문을 한 항목이다')
+      .not.toContain('clickbait_headline')
+  })
+
+  it('②가 제목만 보고 낸 spread_inducement 를 ①이 본문으로 다시 묻는다', async () => {
+    // 리뷰(#22)가 짚은 것. 이 항목은 ①에서 headline_body, ②에서 headline_only 다.
+    // 재사용하면 **본문 끝의 "꼭 공유해 주세요" 를 6시간 동안 못 본다.**
+    await judgeHeadline(list)
+    sent = []
+    await judgeArticle(article, 1)
+    const asked = sent.filter((r) => r.group === 'headline_body').flatMap((r) => r.items)
+    expect(asked, '근거가 다른 판단을 물려받으면 안 된다').toContain('spread_inducement')
+  })
+
+  it('목록 글자가 기사 제목과 다르면 제목 항목도 다시 묻는다', async () => {
+    // 목록 링크에는 "동영상"·재생 시간이 섞이거나 제목이 줄여져 있다.
+    // 그 글자로 낸 판단을 기사 제목에 대한 판단으로 쓰면 안 된다 (리뷰 #22).
+    await judgeHeadline({ ...list, headline: '제목이다 02:31 동영상' })
+    sent = []
+    await judgeArticle(article, 1)
+    expect(sent.flatMap((r) => r.items)).toContain('clickbait_headline')
   })
 })
 
@@ -176,5 +188,66 @@ describe('중계가 실패해도', () => {
     vi.stubGlobal('fetch', () => Promise.reject(new Error('연결 안 됨')))
     await judgeArticle(article, 1)
     expect(store.size, '실패를 6시간 동안 들고 있으면 안 된다').toBe(0)
+  })
+})
+
+describe('② 목록에서 제목만 볼 때', () => {
+  const headline = {
+    kind: 'judge-headline' as const,
+    url: 'https://n.news.naver.com/mnews/article/001/0001',
+    headline: '제목이다',
+  }
+
+  it('제목만 보는 그룹 하나만 보낸다', async () => {
+    await judgeHeadline(headline)
+    expect(sent.map((r) => r.group)).toEqual(['headline_only'])
+    expect(sent[0]?.feature).toBe('portal_list')
+    expect(sent[0]?.state, '본문을 보내지 않는다 — 목록에는 본문이 없다').toEqual({ headline: '제목이다' })
+  })
+
+  it('아이콘 배지를 건드리지 않는다', async () => {
+    // 목록 페이지에는 기사가 서른 개 있다. 그중 하나의 판정을 탭 전체의 상태로 올리면
+    // 그 목록이 주의 대상인 것처럼 보인다 (requirements.md 2-1절).
+    await judgeHeadline(headline)
+    expect(badge.text, '목록에서는 아이콘 배지가 바뀌면 안 된다').toEqual([])
+  })
+
+  it('제목만 본 것은 근거를 제목으로 밝힌다', async () => {
+    expect((await judgeHeadline(headline)).basis).toBe('headline')
+  })
+
+  it('같은 제목을 다시 보면 부르지 않는다', async () => {
+    await judgeHeadline(headline)
+    sent = []
+    await judgeHeadline(headline)
+    expect(sent).toHaveLength(0)
+  })
+})
+
+describe('②와 ①이 같은 캐시를 쓴다', () => {
+  const url = 'https://n.news.naver.com/mnews/article/001/0001'
+
+  it('②가 채운 제목 항목을 ①이 다시 묻지 않는다', async () => {
+    await judgeHeadline({ kind: 'judge-headline', url, headline: '제목이다' })
+    sent = []
+    // 경로가 다르지만 normalizeUrl 이 같은 키로 모은다.
+    await judgeArticle({ ...article, url: 'https://n.news.naver.com/article/001/0001' }, 1)
+    expect(sent.map((r) => r.group), '제목만 보는 그룹은 캐시에 있다').not.toContain('headline_only')
+    expect(sent.map((r) => r.group), '본문 그룹은 여전히 물어야 한다').toContain('headline_body')
+  })
+
+  it('①이 이미 본 기사는 ②가 공짜로 진한 동그라미를 준다', async () => {
+    await judgeArticle({ ...article, url }, 1)
+    sent = []
+    const got = await judgeHeadline({ kind: 'judge-headline', url, headline: '제목이다' })
+    expect(sent, '캐시에 다 있으면 호출이 없어야 한다').toHaveLength(0)
+    expect(got.basis, '본문까지 본 결과다').toBe('full')
+  })
+
+  it('제목 항목만 있으면 진한 동그라미가 아니다', async () => {
+    // 여기서 느슨하게 보면 제목만 본 결과가 "본문까지 봤다" 로 나간다.
+    await judgeHeadline({ kind: 'judge-headline', url, headline: '제목이다' })
+    const got = await judgeHeadline({ kind: 'judge-headline', url, headline: '제목이다' })
+    expect(got.basis).toBe('headline')
   })
 })
