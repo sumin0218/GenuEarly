@@ -344,3 +344,66 @@ describe('제품 정보와 판단 근거', () => {
     expect((document.getElementById('brand-icon') as HTMLImageElement).src).toContain('icon/16.png')
   })
 })
+
+describe('왜 이 판정인가 — 확신이 모자란 🟡', () => {
+  // decideBadge 는 주의 신호를 셀 때 **확신도 높은 것만** 센다. 그래서 점수가
+  // 주의 쪽인 항목이 있어도 모델이 확신하지 못했으면 🔴 이 아니라 🟡 에 머문다.
+  // 화면은 지금까지 그 둘을 같은 말로 보여 줬다 (PR #20 리뷰).
+  beforeEach(() => {
+    mountDocument()
+    const details = document.createElement('ul')
+    details.id = 'details'
+    details.hidden = true
+    const foot = document.createElement('footer')
+    foot.id = 'foot'
+    const toggle = document.createElement('button')
+    toggle.id = 'details-toggle'
+    const home = document.createElement('a')
+    home.id = 'homepage'
+    foot.append(toggle, home)
+    document.body.append(details, foot)
+  })
+
+  const lines = () =>
+    [...document.querySelectorAll('.ge-popup__detail')].map((x) => x.textContent ?? '')
+
+  it('확신이 모자라 🟡 이면 그렇다고 말한다', () => {
+    // 점수는 주의 쪽인데 확신하지 못한 항목이 있다.
+    render(verdict([item('clickbait_headline', 0.9, false), item('source_citation', 0.2)], 'CHECK'))
+    expect(lines()[0], '맨 앞에 와야 한다 — 자세히의 첫 질문이 "왜 이 판정인가" 다')
+      .toBe(content.app.lowConfidence)
+  })
+
+  it('신호가 뚜렷해서 🟡 이면 그 말을 쓰지 않는다', () => {
+    // 확신은 하는데 점수가 중간이라 🟡 인 경우. 이유가 다르다.
+    render(verdict([item('clickbait_headline', 0.4), item('source_citation', 0.4)], 'CHECK'))
+    expect(lines()).not.toContain(content.app.lowConfidence)
+  })
+
+  it('🔴 이나 🟢 에는 쓰지 않는다', () => {
+    for (const level of ['CAUTION', 'SAFE'] as const) {
+      render(verdict([item('clickbait_headline', 0.9, false)], level))
+      expect(lines(), level).not.toContain(content.app.lowConfidence)
+    }
+  })
+})
+
+describe('4차 문구가 실제로 쓰인다', () => {
+  // 문구를 받아 놓고 배선을 안 하면 ui.ko.json 에만 남는다.
+  it('app 의 문구가 전부 어딘가에서 쓰인다', () => {
+    const used = new Set(['homepage', 'details', 'basis', 'coverage', 'criteria', 'lowConfidence', 'disclaimer'])
+    const keys = Object.keys(content.app).filter((k) => !k.startsWith('$'))
+    expect(keys.filter((k) => !used.has(k)), '배선하지 않은 문구가 있다').toEqual([])
+  })
+
+  it('무엇을 보고 낸 판단인지 셋 다 있다', () => {
+    expect(Object.keys(content.app.basis).sort()).toEqual(['headline', 'page', 'selection'])
+  })
+
+  it('자리표시자가 짝이 맞는다', () => {
+    expect(content.app.coverage.sentences).toContain('{total}')
+    expect(content.app.coverage.sentences).toContain('{judged}')
+    expect(content.app.criteria).toContain('{version}')
+    expect(content.app.criteria).toContain('{model}')
+  })
+})

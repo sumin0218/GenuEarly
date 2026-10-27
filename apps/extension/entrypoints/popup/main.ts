@@ -8,6 +8,7 @@
 import './style.css'
 import content from '../../../../packages/content/ui.ko.json'
 import schema from '@genuearly/shared/judgment-items.json'
+import { ITEM_CAUTION_AT } from '@genuearly/shared'
 import { createIcon } from '../../lib/icon'
 import { LEVEL_ICON, LEVEL_INK, LEVEL_INK_DARK, toRows } from '../../lib/item-view'
 import {
@@ -107,6 +108,8 @@ export interface AppCopy {
   /** 얼마나 봤는가. **정확도가 아니다** */
   coverage?: { sentences?: string; capped?: string }
   criteria?: string
+  /** 신호는 보이는데 **확신이 모자라** 🟡 에 머문 경우 */
+  lowConfidence?: string
   disclaimer?: string
 }
 
@@ -125,6 +128,8 @@ export interface ChromeFacts {
   sentences?: { total: number; judged: number }
   /** 글이 길어 앞부분만 봤는가 */
   capped?: boolean
+  /** 점수가 아니라 확신도 때문에 🟡 이 되었는가 */
+  lowConfidence?: boolean
 }
 
 /** `{a}` 자리에 값을 끼운다. 값이 없는 자리표시자가 남으면 **그 줄을 버린다.** */
@@ -161,6 +166,8 @@ export function drawChrome(app: AppCopy | undefined, facts: ChromeFacts, root: D
 
   // --- 자세히 안의 줄들 ---------------------------------------------------
   const lines: string[] = []
+  // **맨 앞이다.** 자세히를 여는 첫 질문이 "왜 이 판정인가" 다.
+  if (app?.lowConfidence && facts.lowConfidence) lines.push(app.lowConfidence)
   const basis = facts.basis && app?.basis?.[facts.basis]
   if (basis) lines.push(basis)
   if (app?.coverage?.sentences && facts.sentences) {
@@ -371,7 +378,30 @@ function render(state: TabState, root: Document = document, kind: 'page' | 'sele
  * > 실려 오지 않는다. 문구는 4차에서 같이 받아 두고 배선은 뒤에 한다 (GE-45).
  */
 function drawFrame(state: TabState, root: Document, kind: 'page' | 'selection'): void {
-  drawChrome(APP, { ...readFacts(), basis: kind, sentences: sentencesOf(state.verdict) }, root)
+  drawChrome(
+    APP,
+    {
+      ...readFacts(),
+      basis: kind,
+      sentences: sentencesOf(state.verdict),
+      lowConfidence: isLowConfidence(state),
+    },
+    root,
+  )
+}
+
+/**
+ * 🟡 이 **점수 때문이 아니라 확신 때문**인가.
+ *
+ * `decideBadge` 는 주의 신호를 셀 때 **확신도 높은 것만** 센다. 그래서 점수가
+ * 주의 쪽인 항목이 있어도 모델이 확신하지 못했으면 🔴 이 되지 못하고 🟡 에 머문다.
+ * 화면은 지금까지 그 둘을 같은 말로 보여 줬다 (PR #20 리뷰).
+ */
+function isLowConfidence(state: TabState): boolean {
+  if (state.level !== 'CHECK') return false
+  return (state.verdict?.items ?? []).some(
+    (it) => it.score !== null && it.score >= ITEM_CAUTION_AT && !it.isConfident,
+  )
 }
 
 export { render, renderTooLong, readTabState, drawSelection, run, readFacts }

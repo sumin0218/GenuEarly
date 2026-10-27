@@ -17,8 +17,15 @@ function strings(node: unknown, path = ''): [string, string][] {
   return []
 }
 
-/** `$comment`·`source` 는 사용자에게 보이지 않는다. 규칙 검사에서 뺀다. */
-const visible = strings(content).filter(([p]) => !p.startsWith('$comment') && !p.startsWith('source'))
+/**
+ * `$comment`·`source` 는 사용자에게 보이지 않는다. 규칙 검사에서 뺀다.
+ *
+ * **어느 깊이에 있든 뺀다.** 맨 위만 보면 `app.$comment` 같은 중간 주석이
+ * 사용자 문구로 세어져 길이·말투 검사에 걸린다.
+ */
+const visible = strings(content).filter(
+  ([p]) => !p.split('.').includes('$comment') && !p.startsWith('source'),
+)
 
 describe('단정하지 않는다', () => {
   // docs/product.md 2절. 이 제품은 기사가 참인지 거짓인지 말하지 않는다.
