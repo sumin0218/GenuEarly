@@ -96,6 +96,8 @@ describe('대상 사이트', () => {
       [...hostPermissions, ...contentScriptMatches].map((m) => new URL(m.replace('*', '')).host),
     )
     expect([...도메인].sort(), '설치 경고 문구가 길어진다. 권한 표도 같이 고쳤는가').toEqual([
+      'm.entertain.naver.com',
+      'm.sports.naver.com',
       'm.wikitree.co.kr',
       'n.news.naver.com',
       'news.naver.com',

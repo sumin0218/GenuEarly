@@ -65,6 +65,17 @@ describe('URL 정규화 — 같은 기사가 여러 키로 갈라지지 않게',
       .toBe(normalizeUrl('https://www.wikitree.co.kr/articles/1169622'))
   })
 
+  it('스포츠·연예는 경로 가운데 분류를 뗀다', () => {
+    // 같은 기사가 다른 분류로도 걸릴 수 있다.
+    expect(normalizeUrl('https://m.sports.naver.com/kbaseball/article/076/0004459867'))
+      .toBe(normalizeUrl('https://m.sports.naver.com/wfootball/article/076/0004459867'))
+  })
+
+  it('스포츠와 연예는 서로 다른 기사다 — 호스트는 접지 않는다', () => {
+    expect(normalizeUrl('https://m.sports.naver.com/kbaseball/article/076/0004459867'))
+      .not.toBe(normalizeUrl('https://m.entertain.naver.com/home/article/076/0004459867'))
+  })
+
   it('다른 사이트의 같은 번호는 다른 기사다', () => {
     expect(normalizeUrl('https://www.insight.co.kr/news/1169622'))
       .not.toBe(normalizeUrl('https://www.wikitree.co.kr/articles/1169622'))

@@ -18,6 +18,14 @@ export interface Article {
 interface SiteRule {
   host: RegExp
   headline: string[]
+  /**
+   * 제목 선택자가 통하지 않을 때 쓸 `<meta>` 의 property. **쓰는 곳만 둔다.**
+   *
+   * 네이버 스포츠·연예의 제목 클래스가 `ArticleHead_article_title__qh8GV` 처럼
+   * **빌드마다 바뀌는 해시**를 달고 있다. 앞부분으로 찾고 있지만 모듈 이름이 바뀌면
+   * 그것도 깨진다. 그때 제목 하나 때문에 기사 전체를 못 읽는 것은 아깝다.
+   */
+  headlineMeta?: string[]
   body: string[]
   /** 본문 안에서 걷어낼 것 — 사진 설명, 기자 정보, 관련 기사 */
   drop: string[]
@@ -35,6 +43,21 @@ const RULES: SiteRule[] = [
     headline: ['h3.tit_view', '.head_view .tit_view'],
     body: ['div.article_view[data-translation-body="true"]', 'div.article_view', '#harmonyContainer'],
     drop: ['figure', 'figcaption', '.link_figure', '.txt_caption', 'script', 'style', 'table'],
+  },
+  {
+    // 네이버 스포츠·연예. **두 사이트의 구조가 같다** — 같은 틀로 만든 화면이다.
+    // 걷어낼 것도 뉴스와 같은 클래스(`end_photo_org`, `img_desc`)를 쓴다.
+    //
+    // 스포츠 기사는 본문이 **사진 설명으로 시작하는 일이 잦다**
+    // ("…인천=송정헌 기자songs@…/2026.09.29/"). 걷어내지 않으면 그것이 첫 문장이 되고
+    // 출처 판단에도 섞인다.
+    host: /(^|\.)m\.(sports|entertain)\.naver\.com$/,
+    // 클래스에 빌드 해시가 붙어 있어 **앞부분으로** 찾는다. 그래도 깨질 수 있어
+    // `og:title` 을 뒤에 둔다.
+    headline: ['h2[class*="ArticleHead_article_title"]'],
+    headlineMeta: ['og:title'],
+    body: ['#comp_news_article ._article_content', '#comp_news_article'],
+    drop: ['.end_photo_org', '.img_desc', 'script', 'style', 'table'],
   },
   {
     // 인사이트. 본문은 `<p>` 단락이고 사진 설명만 `<p class="image">` 로 따로 있다.
@@ -113,11 +136,17 @@ export function extractArticle(): Article | null {
   const rule = RULES.find((r) => r.host.test(location.hostname))
   if (!rule) return null
 
-  const headlineEl = pick(rule.headline)
   const bodyEl = pick(rule.body)
-  if (!headlineEl || !bodyEl) return null
+  if (!bodyEl) return null
 
-  const headline = (headlineEl.textContent ?? '').replace(/\s+/g, ' ').trim()
+  const headlineEl = pick(rule.headline)
+  let headline = (headlineEl?.textContent ?? '').replace(/\s+/g, ' ').trim()
+  // 선택자가 통하지 않았다. 그 사이트가 `<meta>` 를 쓰기로 되어 있으면 거기서 읽는다.
+  for (const prop of headline ? [] : (rule.headlineMeta ?? [])) {
+    const el = document.querySelector(`meta[property="${prop}"]`)
+    headline = (el?.getAttribute('content') ?? '').replace(/\s+/g, ' ').trim()
+    if (headline) break
+  }
 
   // 원본 DOM 을 건드리지 않으려고 복제본에서 걷어낸다.
   const clone = bodyEl.cloneNode(true) as Element

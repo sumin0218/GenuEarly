@@ -275,3 +275,45 @@ describe('위키트리', () => {
     expect(extractArticle()!.body.startsWith('첫 문장이다.')).toBe(true)
   })
 })
+
+// 네이버 스포츠·연예. **두 사이트의 구조가 같다.** 제목 클래스에 빌드 해시가 붙어 있어
+// 앞부분으로 찾고, 그래도 못 찾으면 og:title 로 간다.
+describe('네이버 스포츠·연예', () => {
+  const 본문틀 = (제목태그: string) => `
+    ${제목태그}
+    <article id="comp_news_article" class="Article_comp_news_article__XIpve _article_body">
+      <div class="_article_content">
+        <span class="end_photo_org">29일 경기장에서 선수가 공을 던지고 있다. 인천=홍길동 기자</span>
+        <em class="img_desc">이미지 캡션도 아니다</em>
+        첫 문장이다.
+        ${긴본문}
+      </div>
+    </article>`
+
+  it('해시가 붙은 제목 클래스를 앞부분으로 찾는다', () => {
+    load('m.sports.naver.com', 본문틀('<h2 class="ArticleHead_article_title__qh8GV">  투수를  바꿀 수도  </h2>'))
+    expect(extractArticle()?.headline).toBe('투수를 바꿀 수도')
+  })
+
+  it('연예도 같은 틀이다', () => {
+    load('m.entertain.naver.com', 본문틀('<h2 class="ArticleHead_article_title__qh8GV">배우가 입을 열었다</h2>'))
+    expect(extractArticle()?.headline).toBe('배우가 입을 열었다')
+  })
+
+  it('제목 클래스가 통째로 바뀌면 og:title 로 간다', () => {
+    // 제목 하나 때문에 기사 전체를 못 읽는 것은 아깝다.
+    load('m.sports.naver.com', `
+      <meta property="og:title" content="투수를 바꿀 수도">
+      ${본문틀('<h2 class="완전히_다른_이름">투수를 바꿀 수도</h2>').replace(/<h2[\s\S]*?<\/h2>/, '')}`)
+    expect(extractArticle()?.headline).toBe('투수를 바꿀 수도')
+  })
+
+  it('사진 설명을 걷어낸다 — 스포츠 기사는 여기서 시작하는 일이 잦다', () => {
+    load('m.sports.naver.com', 본문틀('<h2 class="ArticleHead_article_title__qh8GV">투수를 바꿀 수도</h2>'))
+    const a = extractArticle()!
+    expect(a.body).not.toContain('공을 던지고')
+    expect(a.body).not.toContain('홍길동')
+    expect(a.body).not.toContain('이미지 캡션')
+    expect(a.body.startsWith('첫 문장이다.')).toBe(true)
+  })
+})

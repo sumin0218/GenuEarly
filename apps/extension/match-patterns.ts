@@ -35,6 +35,22 @@ export const ARTICLE_MATCHES = [
   'https://n.news.naver.com/mnews/article/*',
   'https://n.news.naver.com/mnews/ranking/article/*',
   'https://n.news.naver.com/mnews/hotissue/article/*',
+
+  // **네이버 스포츠·연예는 호스트가 따로다.** 뉴스와 같은 언론사·기사 번호를 쓰지만
+  // `n.news.naver.com` 에서는 열리지 않는다.
+  //
+  //     m.sports.naver.com/kbaseball/article/076/0004459867
+  //     m.entertain.naver.com/home/article/076/0004459769
+  //
+  // 가운데 한 칸이 분류(`kbaseball`, `home`, `wfootball`…)라 **경로 와일드카드로 받는다.**
+  // 분류를 전부 적으면 새 분류가 생길 때마다 조용히 빠진다.
+  //
+  // 한때 "SPA 라 서버 HTML 에 본문이 없다" 고 보고 미뤘는데 **틀렸다.**
+  // `canonical` 과 `og:url` 이 없을 뿐이고 `og:title` 과 본문(`#comp_news_article`)은
+  // 서버 HTML 에 그대로 있다 (2026-10-27 재확인).
+  'https://m.sports.naver.com/*/article/*',
+  'https://m.entertain.naver.com/*/article/*',
+
   'https://v.daum.net/v/*',
 
   // **언론사 자체 도메인.** 포털을 거치지 않고 링크를 받아 바로 들어오는 길이

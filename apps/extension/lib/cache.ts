@@ -115,6 +115,12 @@ export function normalizeUrl(raw: string): string {
   // `www` 를 가리킨다 (2026-10-27 확인). 접지 않으면 휴대폰에서 본 기사를 PC 에서
   // 다시 열 때 또 판단하게 된다.
   if (u.hostname === 'm.wikitree.co.kr') u.hostname = 'www.wikitree.co.kr'
+  // 스포츠·연예는 경로 가운데 한 칸이 분류다 (`/kbaseball/article/…`, `/home/article/…`).
+  // 같은 기사가 다른 분류로도 걸릴 수 있으므로 분류를 뗀다.
+  // **호스트는 그대로 둔다** — 스포츠와 연예는 서로 다른 기사다.
+  if (u.hostname === 'm.sports.naver.com' || u.hostname === 'm.entertain.naver.com') {
+    u.pathname = u.pathname.replace(/^\/[^/]+\/article\//, '/article/')
+  }
   u.pathname = u.pathname
     .replace(/^\/mnews\/(?:ranking\/|hotissue\/)?article\/(?:comment\/)?/, '/article/')
     .replace(/\/+$/, '')

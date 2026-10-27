@@ -95,10 +95,18 @@ describe('어떤 링크가 기사인가', () => {
       expect(isArticleUrl('https://m.wikitree.co.kr/articles/1169622')).toBe(true)
     })
 
+    it('네이버 스포츠·연예도 기사다 — 분류가 경로 가운데 들어간다', () => {
+      expect(isArticleUrl('https://m.sports.naver.com/kbaseball/article/076/0004459867')).toBe(true)
+      expect(isArticleUrl('https://m.sports.naver.com/wfootball/article/076/0004459867')).toBe(true)
+      expect(isArticleUrl('https://m.entertain.naver.com/home/article/076/0004459769')).toBe(true)
+    })
+
     it('그 사이트의 목록 페이지는 기사가 아니다', () => {
       // 기사와 모양이 달라 구분된다 — 숫자가 없거나 경로가 다르다.
       expect(isArticleUrl('https://www.insight.co.kr/economy/')).toBe(false)
       expect(isArticleUrl('https://www.wikitree.co.kr/categories/1')).toBe(false)
+      expect(isArticleUrl('https://m.sports.naver.com/kbaseball/index')).toBe(false)
+      expect(isArticleUrl('https://m.entertain.naver.com/home')).toBe(false)
     })
 
     it('댓글 화면은 기사가 아니다 — 본문이 없다', () => {

@@ -34,7 +34,7 @@
 | --- | --- | --- | --- |
 | `contextMenus` | ③ 선택 텍스트 검사 | 오른쪽 클릭 메뉴를 만드는 유일한 방법이다 | 필요 |
 | `storage` | 설정, 피드백 동의 여부, 판단 결과 캐시 | service worker가 종료돼도 남아야 한다 | 필요 |
-| `host_permissions` (대상 사이트) | ① ② | 그 사이트의 DOM을 읽어야 판단할 내용이 나온다 | 필요 — **도메인과 경로를 명시해서** 받는다. 도메인은 여섯이다. 목록은 아래 |
+| `host_permissions` (대상 사이트) | ① ② | 그 사이트의 DOM을 읽어야 판단할 내용이 나온다 | 필요 — **도메인과 경로를 명시해서** 받는다. 도메인은 여덟이다. 목록은 아래 |
 | `notifications` | — | OS 알림을 띄울 권한이다. **아이콘 배지와 페이지 안 알림으로 대신한다.** 둘 다 권한이 필요 없고, OS 알림은 윈도우에서 알림 센터로 들어가 놓치기 쉽다 | **쓰지 않는다** |
 | `scripting` / `activeTab` | — | ③의 결과를 **선택한 글 근처**에 띄우려면 임의의 사이트에 UI를 주입해야 해서 둘 다 필요했다. **결과를 확장 팝업으로 옮겨 주입 자체를 없앴다** ([requirements.md](../requirements.md) 5-1절) | **쓰지 않는다** |
 | `tabs` | — | 전체 탭의 URL과 제목을 읽을 수 있다. 필요 없다 | **쓰지 않는다** |
@@ -66,6 +66,8 @@
 | `n.news.naver.com/mnews/article/*` | ① | 목록이 거는 경로 |
 | `n.news.naver.com/mnews/ranking/article/*` | ① | **섹션 한 페이지 기사 링크의 절반 가까이**가 이것이다 (2026-10-27 실측: 354개 중 170개) |
 | `n.news.naver.com/mnews/hotissue/article/*` | ① | 같은 측정에서 16개 |
+| `m.sports.naver.com/*/article/*` | ① | 가운데 한 칸이 분류(`kbaseball`, `wfootball`…)다. 분류를 전부 적으면 새 분류가 생길 때 조용히 빠진다 |
+| `m.entertain.naver.com/*/article/*` | ① | 같은 틀이다 |
 | `v.daum.net/v/*` | ① | |
 | `www.insight.co.kr/news/*` | ① | 호스트가 하나다 — `m.insight.co.kr` 은 `www` 로 넘긴다 (301) |
 | `www.wikitree.co.kr/articles/*` | ① | |
@@ -87,10 +89,10 @@
 ([product.md](../product.md) 2절). 사이트를 늘리는 것은 "어디서 읽든 같은 기준으로 본다" 는 쪽이어야지
 "이 언론사는 의심한다" 가 되면 안 된다. **코드에도 문구에도 매체 이름으로 점수를 깎는 규칙을 넣지 않는다.**
 
-> **TODO: 네이버 연예·스포츠** — `m.entertain.naver.com/home/article/…` 은 경로를 확인했지만
-> **SPA 라 서버 HTML 에 본문이 없다.** `extract.ts` 가 그 경우를 다루지 않는다.
-> `m.sports.naver.com` 은 경로조차 확정하지 못했다 — SPA 라 어떤 주소에도 200 을 돌려준다.
-> **확인하지 못한 사이트의 권한을 미리 받아 두지 않는다.**
+**스포츠·연예의 제목 클래스에는 빌드 해시가 붙어 있다** (`ArticleHead_article_title__qh8GV`).
+앞부분으로 찾고, 그래도 못 찾으면 `og:title` 로 간다 — 제목 하나 때문에 기사 전체를
+못 읽는 것은 아깝다. 선택자는 예고 없이 바뀌고, **사이트가 늘수록 깨질 자리가 는다.**
+깨지면 ⚪ 가 되므로 조용히 틀리지는 않지만 사용자는 아무것도 못 본다.
 > **TODO: `optional_permissions`로 돌릴 수 있는 권한 검토** — 사용자가 그 기능을 쓸 때만 허용을 받는 방식.
 
 ### 원칙
