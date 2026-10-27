@@ -762,7 +762,8 @@ describe('게이트웨이로 나가는 요청의 헤더', () => {
 
 describe('심층 분석 — 본문에서 근거를 집어 온다', () => {
   // **판단이 아니다.** 판정은 Jev 가 이미 냈고, 여기서 하는 일은 그 판정의 근거가 될
-  // 대목을 본문에서 **베껴 오는** 것뿐이다 (src/pinpoint.ts).
+  // 문장을 본문에서 **베껴 오는** 것과, 왜 베껴 왔는지 **정해 둔 이유 중에서 고르는**
+  // 것뿐이다 (src/pinpoint.ts). 모델이 쓴 한국어는 한 글자도 나가지 않는다.
   const BODY = '통계청은 지난달 물가가 올랐다고 밝혔다. 한 관계자는 더 오를 것이라고 말했다.'
 
   const explain = (body: unknown, origin: string | null = EXT_ORIGIN) =>
@@ -773,31 +774,62 @@ describe('심층 분석 — 본문에서 근거를 집어 온다', () => {
     })
 
   const REQ = { itemId: 'source_citation', level: 'CAUTION', body: BODY }
-  /** 생성 모델이 돌려줄 법한 모양. 내용은 본문에서 베껴 온 조각들이다. */
+  /** 생성 모델이 돌려줄 법한 모양. */
   const said = (text: string) => ok({ choices: [{ message: { content: text } }] })
+  const picksOf = async (res: Response) => (await res.json() as { picks?: unknown }).picks
 
-  it('본문에 있는 조각만 돌려준다', async () => {
-    mockFetch(() => said('["통계청은", "한 관계자는"]'))
+  it('본문에 있는 문장과, 고른 이유를 함께 돌려준다', async () => {
+    mockFetch(() => said('[{"quote": "한 관계자는", "why": "src_group_only"}]'))
     const res = await explain(REQ)
     expect(res.status).toBe(200)
-    await expect(res.json()).resolves.toEqual({ spans: ['통계청은', '한 관계자는'] })
+    expect(await picksOf(res)).toEqual([{ text: '한 관계자는', why: 'src_group_only' }])
   })
 
-  it('지어낸 조각은 버린다 — **이 기능의 안전장치다**', async () => {
+  it('지어낸 문장은 버린다 — **이 기능의 안전장치다**', async () => {
     // 모델이 가장 잘 틀리는 것이 없는 말을 지어내는 일이고, 그 틀림은 문자열
     // 대조로 100% 잡힌다. 본문에 없는 것은 화면까지 가지 못한다.
-    mockFetch(() => said('["통계청은", "한국은행은 금리를 올렸다"]'))
-    await expect((await explain(REQ)).json()).resolves.toEqual({ spans: ['통계청은'] })
+    mockFetch(() =>
+      said(
+        '[{"quote": "한 관계자는", "why": "src_group_only"},' +
+          ' {"quote": "한국은행은 금리를 올렸다", "why": "src_none"}]',
+      ),
+    )
+    expect(await picksOf(await explain(REQ))).toEqual([
+      { text: '한 관계자는', why: 'src_group_only' },
+    ])
+  })
+
+  it('모르는 이유는 버린다 — **모델이 쓴 한국어가 새는 자리다**', async () => {
+    // 화면에 뜨는 문장은 전부 ChatKHU 가 미리 쓴 것이다. 목록에 없는 id 를 통과시키면
+    // 짝이 되는 문구가 없고, 그 자리가 곧 모델이 쓴 말이 들어오는 구멍이 된다.
+    mockFetch(() => said('[{"quote": "한 관계자는", "why": "이 기사는 거짓입니다"}]'))
+    expect(await picksOf(await explain(REQ))).toEqual([])
+  })
+
+  it('다른 항목의 이유는 쓸 수 없다', async () => {
+    mockFetch(() => said('[{"quote": "한 관계자는", "why": "uvc_causal"}]'))
+    expect(await picksOf(await explain(REQ))).toEqual([])
+  })
+
+  it('**둘까지만** 돌려준다 — 넷을 붙이면 본문 복사처럼 보인다', async () => {
+    const body = '가나다. 라마바. 사아자. 차카타.'
+    mockFetch(() =>
+      said(
+        '[{"quote":"가나다","why":"src_none"},{"quote":"라마바","why":"src_none"},' +
+          '{"quote":"사아자","why":"src_none"},{"quote":"차카타","why":"src_none"}]',
+      ),
+    )
+    expect(await picksOf(await explain({ ...REQ, body }))).toHaveLength(2)
   })
 
   it('한 글자라도 다르면 버린다', async () => {
-    mockFetch(() => said('["통계청이"]'))   // 본문은 "통계청은"
-    await expect((await explain(REQ)).json()).resolves.toEqual({ spans: [] })
+    mockFetch(() => said('[{"quote": "한 관계자가", "why": "src_group_only"}]'))
+    expect(await picksOf(await explain(REQ))).toEqual([])
   })
 
   it('모델이 말을 덧붙여도 배열만 꺼낸다', async () => {
-    mockFetch(() => said('다음과 같습니다:\n["통계청은"]\n이상입니다.'))
-    await expect((await explain(REQ)).json()).resolves.toEqual({ spans: ['통계청은'] })
+    mockFetch(() => said('다음과 같습니다:\n[{"quote":"한 관계자는","why":"src_none"}]\n이상입니다.'))
+    expect(await picksOf(await explain(REQ))).toEqual([{ text: '한 관계자는', why: 'src_none' }])
   })
 
   it('배열이 아니면 "없음" 으로 돌려준다 — 오류가 아니다', async () => {
@@ -811,7 +843,7 @@ describe('심층 분석 — 본문에서 근거를 집어 온다', () => {
     mockFetch(() => new Response('upstream boom', { status: 500 }))
     const res = await explain(REQ)
     expect(res.status).toBe(200)
-    await expect(res.json()).resolves.toEqual({ spans: [], reason: 'upstream_error' })
+    await expect(res.json()).resolves.toEqual({ picks: [], reason: 'upstream_error' })
   })
 
   it('실패해도 게이트웨이의 말을 그대로 내보내지 않는다', async () => {
@@ -821,9 +853,12 @@ describe('심층 분석 — 본문에서 근거를 집어 온다', () => {
 
   it('모르는 항목은 거절한다 — 우리 키로 남이 쓰지 못하게', async () => {
     mockFetch(() => said('[]'))
-    const res = await explain({ ...REQ, itemId: 'make_me_a_poem' })
-    expect(res.status).toBe(400)
-    expect(await errorOf(res)).toBe('unknown_item')
+    // 코드가 설명하는 항목(감정적 표현)도 여기서는 받지 않는다. 자리가 하나씩이다.
+    for (const itemId of ['make_me_a_poem', 'emotional_language', 'clickbait_headline']) {
+      const res = await explain({ ...REQ, itemId })
+      expect(res.status, itemId).toBe(400)
+      expect(await errorOf(res)).toBe('unknown_item')
+    }
     expect(calls, '모델을 부르면 안 된다').toHaveLength(0)
   })
 
@@ -861,13 +896,17 @@ describe('심층 분석 — 본문에서 근거를 집어 온다', () => {
     expect(calls).toHaveLength(0)
   })
 
-  it('판정을 바꾸지 말라고 적어 보낸다', async () => {
+  it('고를 이유를 적어 보내고, 판정을 바꾸지 말라고 적어 보낸다', async () => {
     mockFetch(() => said('[]'))
     await explain(REQ)
     const sent = JSON.parse(calls[0].init.body as string)
     expect(sent.model).toBe('gpt-5.6-luna')
     const prompt = sent.messages[0].content as string
     expect(prompt).toContain('판정을 바꾸거나 평가하지 마세요')
+    // 이유는 **고르는 것**이지 쓰는 것이 아니다.
+    expect(prompt).toContain('src_group_only')
+    expect(prompt).toContain('src_none')
+    expect(prompt).toContain('새로 쓰지 않습니다')
     // 받은 글자가 아니라 **우리가 정해 둔 우리말**이 들어간다.
     expect(prompt).toContain('주의가 필요함')
     expect(prompt).not.toContain('CAUTION')

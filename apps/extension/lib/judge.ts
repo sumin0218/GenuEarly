@@ -31,6 +31,7 @@ import {
   type Message,
   isUndetermined,
   type ExplainLevel,
+  type ExplainPick,
   type ExplainResult,
 } from './protocol'
 
@@ -351,7 +352,11 @@ const NEEDS_PINPOINT: ReadonlySet<string> = new Set(
  * **돌려받은 것을 여기서 한 번 더 대조한다.** 중계 서버도 대조하지만, 화면에 인용으로
  * 올라가는 글자라 두 번 본다. 본문에 없는 글자는 한 자도 보이지 않는다.
  */
-async function pinpointQuotes(body: string, itemId: string, level: ExplainLevel): Promise<string[]> {
+async function pinpointPicks(
+  body: string,
+  itemId: string,
+  level: ExplainLevel,
+): Promise<ExplainPick[]> {
   try {
     const res = await fetch(`${PROXY_URL}/v1/explain`, {
       method: 'POST',
@@ -362,9 +367,16 @@ async function pinpointQuotes(body: string, itemId: string, level: ExplainLevel)
       console.warn('[GenuEarly] 심층 분석 거절', res.status)
       return []
     }
-    const out = (await res.json()) as { spans?: unknown }
-    if (!Array.isArray(out.spans)) return []
-    return out.spans.filter((q): q is string => typeof q === 'string' && body.includes(q))
+    const out = (await res.json()) as { picks?: unknown }
+    if (!Array.isArray(out.picks)) return []
+    return out.picks.filter(
+      (x): x is ExplainPick =>
+        typeof x === 'object' &&
+        x !== null &&
+        typeof (x as ExplainPick).text === 'string' &&
+        typeof (x as ExplainPick).why === 'string' &&
+        body.includes((x as ExplainPick).text),
+    )
   } catch (e) {
     console.warn('[GenuEarly] 심층 분석에 닿지 못했다', e)
     return []
@@ -415,7 +427,7 @@ export async function judgeExplain(
     }
   }
 
-  const quotes = pinpoint ? await pinpointQuotes(msg.body, msg.itemId, msg.level) : []
+  const picks = pinpoint ? await pinpointPicks(msg.body, msg.itemId, msg.level) : []
   // 코드가 찾은 것은 콘텐츠 스크립트가 채운다 — 여기서는 Jev 가 **잰** 것과 LLM 이 **집어 온** 것만 낸다.
-  return { itemId: msg.itemId, found, spans: {}, ...(quotes.length ? { quotes } : {}) }
+  return { itemId: msg.itemId, found, spans: {}, ...(picks.length ? { picks } : {}) }
 }

@@ -452,18 +452,53 @@ describe('왜 이 판정인가 — 항목별 설명', () => {
     ).toEqual([])
   })
 
-  it('짝 문구가 없는 항목은 본문에서 집어 온 대목으로 말한다', () => {
+  it('짝 문구가 없는 항목은 떼어 온 문장마다 **왜** 를 붙인다', () => {
     // 출처 표시는 기관명·실명이라 목록을 만들 수 없다. 그래서 하위 질문이 아니라
-    // **본문에서 떼어 온 글자**를 보여 준다 (apps/proxy/src/pinpoint.ts).
+    // **본문에서 떼어 온 문장**에 이유 하나씩을 붙인다 (apps/proxy/src/pinpoint.ts).
     const lines = explainLines('source_citation', {
       itemId: 'source_citation',
       found: {},
       spans: {},
-      quotes: ['통계청은', '한 관계자는'],
+      picks: [
+        { text: '한 관계자는', why: 'src_group_only' },
+        { text: '업계에서는 이미 예견된 일이었다', why: 'src_none' },
+      ],
     })
     expect(lines).toEqual([
-      { text: content.explain.source_citation.found, quotes: ['통계청은', '한 관계자는'] },
+      { text: content.explain.source_citation.reasons.src_group_only, quotes: ['한 관계자는'] },
+      {
+        text: content.explain.source_citation.reasons.src_none,
+        quotes: ['업계에서는 이미 예견된 일이었다'],
+      },
     ])
+  })
+
+  it('같은 이유는 한 줄로 모은다', () => {
+    // 똑같은 말을 두 번 적으면 두 가지를 짚은 것처럼 보인다.
+    const lines = explainLines('source_citation', {
+      itemId: 'source_citation',
+      found: {},
+      spans: {},
+      picks: [
+        { text: '앞 문장', why: 'src_none' },
+        { text: '뒤 문장', why: 'src_none' },
+      ],
+    })
+    expect(lines).toEqual([
+      { text: content.explain.source_citation.reasons.src_none, quotes: ['앞 문장', '뒤 문장'] },
+    ])
+  })
+
+  it('모르는 이유는 버린다 — 화면에 띄울 문구가 없다', () => {
+    // 여기가 모델이 쓴 한국어가 새어 들어올 수 있는 유일한 구멍이다. 막아 둔다.
+    expect(
+      explainLines('source_citation', {
+        itemId: 'source_citation',
+        found: {},
+        spans: {},
+        picks: [{ text: '한 관계자는', why: '이 기사는 거짓입니다' }],
+      }),
+    ).toEqual([{ text: content.explain.source_citation.none }])
   })
 
   it('집어 온 대목이 없으면 "찾지 못했다" 고 말한다 — 빈 화면을 두지 않는다', () => {
@@ -473,18 +508,18 @@ describe('왜 이 판정인가 — 항목별 설명', () => {
     ).toEqual([{ text: content.explain.source_citation.none }])
   })
 
-  it('집어 온 대목은 우리가 쓴 말과 섞이지 않는다', () => {
+  it('집어 온 문장은 우리가 쓴 말과 섞이지 않는다', () => {
     // 화면의 **문장은 전부 ChatKHU 가 미리 쓴 것**이고, 인용은 본문 글자 그대로다.
-    const quotes = ['한 관계자는 더 오를 것이라고 말했다']
+    const text = "앤트로픽의 기업공개 소식이 국내 주식시장에 '산소호흡기'가 됐다."
     const lines = explainLines('unverifiable_claim', {
       itemId: 'unverifiable_claim',
       found: {},
       spans: {},
-      quotes,
+      picks: [{ text, why: 'uvc_causal' }],
     })
     const line = lines[0]!
-    expect(line.text).toBe(content.explain.unverifiable_claim.found)
-    expect(line.quotes).toEqual(quotes)
+    expect(line.text).toBe(content.explain.unverifiable_claim.reasons.uvc_causal)
+    expect(line.quotes).toEqual([text])
   })
 
   it('같은 id 면 Jev 가 낸 줄에 코드가 찾은 글자가 붙는다', () => {

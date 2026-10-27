@@ -231,7 +231,8 @@ export default {
 
     // --- 심층 분석 ----------------------------------------------------------
     // **판단이 아니다.** 판정은 이미 Jev 가 냈고, 여기서는 그 판정의 근거가 될 대목을
-    // 본문에서 집어 올 뿐이다. 돌려주는 것은 **본문의 부분 문자열**뿐이다 (src/pinpoint.ts).
+    // 본문에서 집어 올 뿐이다. 돌려주는 것은 **본문의 부분 문자열**과, 미리 정해 둔
+    // 이유 중 모델이 **고른 id** 뿐이다 — 모델이 쓴 한국어는 나가지 않는다 (src/pinpoint.ts).
     if (url.pathname === '/v1/explain') {
       const passed = await gate(env, request, origin)
       if (!passed.ok) return passed.response
@@ -261,15 +262,15 @@ export default {
       // --- 예산 ------------------------------------------------------------
       // 판단과 같은 지갑을 쓴다. 심층 분석은 **부수 기능**이라 먼저 포기한다.
       if (!(await budgetAllows(env))) {
-        return reply(origin, { spans: [], reason: 'budget_exhausted' }, 200)
+        return reply(origin, { picks: [], reason: 'budget_exhausted' }, 200)
       }
 
       const found = await pinpoint(env, req.itemId, req.level, req.body)
       if (!found.ok) {
         // 실패가 아니라 "없음" 이다. 그래서 200 이다 — 화면은 "찾지 못했다" 를 보인다.
-        return reply(origin, { spans: [], reason: found.reason }, 200)
+        return reply(origin, { picks: [], reason: found.reason }, 200)
       }
-      return reply(origin, { spans: found.spans }, 200)
+      return reply(origin, { picks: found.picks }, 200)
     }
 
     return json({ error: 'not_found' }, 404)
