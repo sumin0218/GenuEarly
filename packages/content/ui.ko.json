@@ -1,13 +1,13 @@
 {
   "$comment": "사용자에게 보이는 문구. **ChatKHU 가 쓴 글이다** — 코딩 도구가 쓰지 않는다. 고칠 때는 README.md 의 규칙을 먼저 보고, 고친 내용을 docs/ai-log/ 에 남긴다. 금지어·길이·말투는 apps/extension/tests/content.test.ts 가 검사한다.",
-  "version": "1.1.0",
+  "version": "1.2.0",
   "locale": "ko",
   "source": {
     "tool": "ChatKHU",
     "model": "gpt-5.6-luna",
     "date": "2026-10-22",
     "prompt": "tools/content-gen/prompt.md",
-    "note": "항목마다 후보 3개를 받아 사람이 골랐다. 고른 내용은 ChatKHU 출력 그대로이고 손대지 않았다. 신호 없음(safe) 문구는 2차로, ③ 선택 글 문구는 3차로 따로 받았다.",
+    "note": "항목마다 후보 3개를 받아 사람이 골랐다. 고른 내용은 ChatKHU 출력 그대로이고 손대지 않았다. 신호 없음(safe) 문구는 2차로, ③ 선택 글 문구는 3차로, 팝업 틀과 판단 근거는 4차로 따로 받았다.",
     "rounds": [
       {
         "date": "2026-10-22",
@@ -20,6 +20,10 @@
       {
         "date": "2026-10-26",
         "what": "③ 오른쪽 클릭 메뉴, 선택 글 결과 꼬리표, 길이 초과 안내, 기사 페이지가 아닐 때"
+      },
+      {
+        "date": "2026-10-28",
+        "what": "팝업 틀(홈페이지·자세히), 판단 근거(무엇을 보고 냈는가·몇 문장을 봤는가·판단 기준), 참·거짓을 말하지 않는다는 한 줄, 확신이 모자라 🟡 인 경우"
       }
     ]
   },
@@ -88,6 +92,26 @@
       "signal": "근거를 확인하기 어려운 단정이 포함되어 있습니다.",
       "undetermined": "주장의 근거를 확인하지 못했습니다."
     }
+  },
+  "app": {
+    "$comment": "팝업 틀과 판단 근거. ChatKHU 4차 (2026-10-28). lowConfidence 는 badge 가 아니라 여기 둔다 — badge 는 5단계만 들어가야 한다 (tests/content.test.ts).",
+    "homepage": "제품 소개",
+    "details": {
+      "open": "자세히",
+      "close": "접기"
+    },
+    "basis": {
+      "page": "제목과 본문을 살펴본 결과입니다.",
+      "headline": "제목만 살펴본 결과입니다.",
+      "selection": "선택한 글만 살펴본 결과입니다."
+    },
+    "coverage": {
+      "sentences": "{total}개 문장 중 {judged}개를 살펴봤습니다.",
+      "capped": "긴 글이라 앞부분만 살펴봤습니다."
+    },
+    "criteria": "판단 기준 {version} · {model}",
+    "lowConfidence": "확인할 신호가 있으나, 판단할 만큼 분명하지는 않습니다.",
+    "disclaimer": "보이는 신호를 참고해 기사의 내용은 직접 판단해 보세요."
   },
   "undetermined": {
     "title": "아직 판단하지 못함",
