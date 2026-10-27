@@ -3,12 +3,15 @@
 //   node --env-file=<.env> run.mjs <작업 디렉터리> [--limit N] [--sentences K] [--adopt-unhashed]
 //
 // 입력: <작업 디렉터리>/articles.json — [{ id, headline, body, sents?, url?, kind? }]
-// 출력: <작업 디렉터리>/runs.jsonl — 기사 하나가 한 줄. 답마다 요청 본문의 해시(h)와 받은 시각(at)을 남긴다.
+// 출력: <작업 디렉터리>/runs.jsonl — 기사 하나가 한 줄. 답마다 요청 본문의 해시(h), 받은 시각(at),
+//       질문 세트 버전(question_set)과 인젝션 세트 버전(injections)을 남긴다. report.mjs 는 결과 파일의 버전을 이 값에서 읽는다.
+//       이미 받은 답과 요청 본문 해시가 같으면 다시 보내지 않고 버전만 지금 값으로 고쳐 적는다. 요청이 같으니 지금 버전의 답이기도 하다.
 //       **같은 요청을 이미 받았으면 다시 보내지 않는다.** "같은 요청" 은 키가 아니라 요청 본문 해시로 가린다.
 //       그래서 질문 문구, 유도 문장, 기사 글 중 하나라도 바뀌면 그 요청은 다시 보낸다. 실패했던 요청도 다시 보낸다.
 //       요청 본문이 같은 답은 기사가 달라도 한 번만 보내고 나눠 쓴다.
 //       --adopt-unhashed: 해시가 없는 옛 답(2026-10-23 첫 측정)에 지금 요청의 해시를 붙이고 다시 보내지 않는다.
 //         그 답이 지금과 같은 질문 세트·문장·기사로 받은 것이 확실할 때만 쓴다. 이 옵션이 없으면 해시 없는 답은 다시 보낸다.
+//         해시를 붙인 답에는 지금 버전도 함께 적는다.
 // 작업 디렉터리는 저장소 밖으로 잡는다. 기사 본문과 심은 기사가 거기 있다.
 import { readFileSync, writeFileSync, existsSync } from 'node:fs'
 import { createHash } from 'node:crypto'
@@ -22,6 +25,8 @@ const arg = (k, d) => { const i = process.argv.indexOf(k); return i > 0 ? Number
 const LIMIT = arg('--limit', Infinity)
 const K = arg('--sentences', 3)
 const ADOPT = process.argv.includes('--adopt-unhashed')
+// 답마다 남기는 버전. 요청 본문에는 들어가지 않으므로 해시와 따로 적는다
+const V = { question_set: SCHEMA.version, injections: INJECTIONS.version }
 const hash = (body) => createHash('sha256').update(JSON.stringify(body)).digest('hex').slice(0, 16)
 if (!ADOPT && (!process.env.CHATKHU_API_KEY || !process.env.CHATKHU_API_BASE_URL)) throw new Error('CHATKHU_API_KEY, CHATKHU_API_BASE_URL 이 필요하다 (--env-file)')
 
@@ -34,17 +39,23 @@ const PERMS = permutations(3) // Choice 보기는 모두 3개다. 첫 원소가 
 const inject = (text, add, position) => (position === 'start' ? `${add} ${text}` : `${text} ${add}`)
 const pick = (arr, k) => (arr.length <= k ? arr.map((_, i) => i) : [...Array(k).keys()].map((j) => Math.round((j * (arr.length - 1)) / (k - 1 || 1))))
 
-let model = null, requests = 0, errors = 0, adopted = 0, stale = 0, reused = 0
+let model = null, requests = 0, errors = 0, adopted = 0, stale = 0, reused = 0, relabeled = 0
 // 요청 본문이 같으면 기사가 달라도 같은 요청이다 (예: 심은 문장 하나만 묻는 문장 질문). 한 번만 보내고 답을 나눠 쓴다
 const byHash = new Map()
 // 단, ":repeat" 키는 나누지 않는다. 같은 요청을 한 번 더 보내 흔들림을 재는 것이 그 키의 목적이다
 const isRepeat = (k) => k.endsWith(':repeat')
 for (const r of prev.values()) for (const [k, v] of Object.entries(r.res)) if (!isRepeat(k) && v.h && !v.error) byHash.set(v.h, v)
+// 해시가 같은 답의 버전을 지금 값으로 맞춘다. 바꿨으면 true
+const relabel = (o) => {
+  if (o.question_set === V.question_set && o.injections === V.injections) return false
+  Object.assign(o, V)
+  return true
+}
 async function call(body, h) {
   requests++
   const at = new Date().toISOString()
-  try { const j = await post(body); model ??= j.model; return { answers: j.answers, tokens: j.usage?.input_tokens, model: j.model, h, at } }
-  catch (e) { errors++; return { error: String(e.message ?? e), h, at } }
+  try { const j = await post(body); model ??= j.model; return { answers: j.answers, tokens: j.usage?.input_tokens, model: j.model, h, at, ...V } }
+  catch (e) { errors++; return { error: String(e.message ?? e), h, at, ...V } }
 }
 
 for (const a of articles) {
@@ -57,11 +68,11 @@ for (const a of articles) {
   const want = (key, make) => {
     wanted.add(key)
     const body = make(), h = hash(body), o = old[key]
-    if (o && !o.error && o.h === h) return
-    if (o && !o.error && !o.h && ADOPT) { o.h = h; adopted++; touched = true; return }
+    if (o && !o.error && o.h === h) { if (relabel(o)) { relabeled++; touched = true } return }
+    if (o && !o.error && !o.h && ADOPT) { o.h = h; relabel(o); adopted++; touched = true; return }
     if (o && !o.error) stale++
     if (ADOPT) return
-    if (!isRepeat(key) && byHash.has(h)) { reused++; jobs[key] = Promise.resolve(byHash.get(h)); return }
+    if (!isRepeat(key) && byHash.has(h)) { reused++; jobs[key] = Promise.resolve(byHash.get(h)).then((v) => (v.error ? v : { ...v, ...V })); return }
     const p = call(body, h)
     if (!isRepeat(key)) byHash.set(h, p)
     jobs[key] = p
@@ -99,4 +110,4 @@ for (const a of articles) {
   console.log(`${a.id}  요청 ${Object.keys(jobs).length}건  (누적 ${requests}, 실패 ${errors})`)
 }
 
-console.log(`끝. 요청 ${requests}건, 같은 요청이라 나눠 쓴 답 ${reused}건, 실패 ${errors}건, 바뀌어서 다시 보냄 ${stale}건, 해시를 붙인 옛 답 ${adopted}건, 응답 model=${model}, 질문 세트 ${SCHEMA.version}, 인젝션 ${INJECTIONS.version}`)
+console.log(`끝. 요청 ${requests}건, 같은 요청이라 나눠 쓴 답 ${reused}건, 실패 ${errors}건, 바뀌어서 다시 보냄 ${stale}건, 해시를 붙인 옛 답 ${adopted}건, 버전만 고쳐 적은 답 ${relabeled}건, 응답 model=${model}, 질문 세트 ${SCHEMA.version}, 인젝션 ${INJECTIONS.version}`)

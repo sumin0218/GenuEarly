@@ -1,14 +1,45 @@
 // runs.jsonl 을 README 2절의 기준(3판)으로 판정한다. 기사 글은 읽지도 쓰지도 않는다.
 //
-//   node report.mjs <작업 디렉터리> <결과 디렉터리> [메모]
+//   node report.mjs <작업 디렉터리> <결과 디렉터리> [메모] [--allow-mixed-versions]
 //
 // 결과 디렉터리에 summary.json 과 cases.json 을 쓰고, 표를 화면에 찍는다.
+// 결과 파일의 질문 세트·인젝션 세트 버전은 지금 파일이 아니라 **답에 남은 버전**에서 읽는다 (run.mjs).
+//   버전이 없는 옛 답은 "기록 없음"으로 적고 경고한다. 추측해서 채우지 않는다.
+//   한 결과 안에 버전이 섞여 있으면("기록 없음"도 한 값으로 친다) 판정하지 않고 멈춘다. --allow-mixed-versions 를 주면 "섞임"으로 적고 진행한다.
+//   보기 이름·노리는 항목·방향은 지금 파일에서 읽는다. 답의 버전이 지금 파일과 다르면 경고한다.
 import { readFileSync, writeFileSync, mkdirSync } from 'node:fs'
 import { resolve } from 'node:path'
 import { GROUPS, CHOICE_IDS, INJECTIONS, SCHEMA, CRITERIA, PRODUCT, readAnswer, readSentence, permutations, itemValue, sentenceValue, sentenceValueWith, articleBadge } from './lib.mjs'
 
-const [W, OUTDIR, ...memo] = process.argv.slice(2).map((x, i) => (i < 2 ? resolve(x) : x))
+const FLAGS = ['--allow-mixed-versions']
+const argv = process.argv.slice(2)
+const unknown = argv.filter((x) => x.startsWith('--') && !FLAGS.includes(x))
+if (unknown.length) throw new Error(`모르는 옵션: ${unknown.join(' ')} (쓸 수 있는 것: ${FLAGS.join(' ')})`)
+const ALLOW_MIXED = argv.includes('--allow-mixed-versions')
+const [W, OUTDIR, ...memo] = argv.filter((x) => !FLAGS.includes(x)).map((x, i) => (i < 2 ? resolve(x) : x))
 const runs = readFileSync(resolve(W, 'runs.jsonl'), 'utf8').split('\n').filter(Boolean).map((l) => JSON.parse(l))
+
+// ── 0. 답에 남은 버전 ─────────────────────────────────────────
+const NONE = '기록 없음', MIXED = '섞임'
+const VERSION_KEYS = { question_set: '질문 세트', injections: '인젝션 세트' }
+const answerVersions = Object.fromEntries(Object.keys(VERSION_KEYS).map((k) => [k, {}]))
+for (const r of runs) for (const x of Object.values(r.res)) for (const k of Object.keys(VERSION_KEYS)) answerVersions[k][x[k] ?? NONE] = (answerVersions[k][x[k] ?? NONE] ?? 0) + 1
+const versionOf = (k) => { const vs = Object.keys(answerVersions[k]); return vs.length === 1 ? vs[0] : vs.length ? MIXED : NONE }
+const CURRENT = { question_set: SCHEMA.version, injections: INJECTIONS.version }
+const show = (m) => Object.entries(m).map(([v, n]) => `${v} ${n}건`).join(', ')
+const mixed = Object.keys(VERSION_KEYS).filter((k) => versionOf(k) === MIXED)
+if (mixed.length && !ALLOW_MIXED) {
+  for (const k of mixed) console.error(`${VERSION_KEYS[k]} 버전이 섞여 있다: ${show(answerVersions[k])}`)
+  console.error('판정하지 않는다. 한 버전의 답만 남기고(같은 명령으로 run.mjs 를 다시 돌리면 바뀐 요청만 다시 보낸다) 판정하거나, 섞인 채로 판정하려면 --allow-mixed-versions 를 준다.')
+  process.exit(1)
+}
+for (const k of Object.keys(VERSION_KEYS)) {
+  const v = versionOf(k)
+  if (answerVersions[k][NONE]) console.warn(`경고: ${VERSION_KEYS[k]} 버전 기록이 없는 답 ${answerVersions[k][NONE]}건. 결과 파일에 "${NONE}"으로 적는다.`)
+  if (v === MIXED) console.warn(`경고: ${VERSION_KEYS[k]} 버전이 섞인 채로 판정한다 (--allow-mixed-versions): ${show(answerVersions[k])}`)
+  const other = Object.keys(answerVersions[k]).filter((x) => x !== NONE && x !== CURRENT[k])
+  if (other.length) console.warn(`경고: 답의 ${VERSION_KEYS[k]} 버전(${other.join(', ')})이 지금 파일(${CURRENT[k]})과 다르다. 보기 이름·노리는 항목은 지금 파일에서 읽으므로, 그 둘이 바뀌었다면 판정이 틀린다.`)
+}
 const ITEMS = Object.fromEntries(SCHEMA.items.map((i) => [i.id, i]))
 const PERMS = permutations(3)
 const cases = []
@@ -158,7 +189,10 @@ const errors = runs.reduce((a, r) => a + Object.values(r.res).filter((x) => x.er
 const summary = {
   date: new Date().toISOString().slice(0, 10),
   memo: memo.join(' ') || null,
-  question_set: SCHEMA.version, model_sent: SCHEMA.model, injections: INJECTIONS.version,
+  // 답에 남은 버전. 한 값이면 그 값, 기록이 없으면 "기록 없음", 섞였으면 "섞임"이다. 건수는 answer_versions 에 있다
+  question_set: versionOf('question_set'), model_sent: SCHEMA.model, injections: versionOf('injections'),
+  answer_versions: answerVersions,
+  read_with: CURRENT, // 판정할 때 보기 이름·노리는 항목을 읽은 지금 파일의 버전
   model_response: [...new Set(runs.flatMap((r) => Object.values(r.res).map((x) => x.model)).filter(Boolean))],
   articles: runs.length, by_kind: runs.reduce((m, r) => ((m[r.kind ?? 'unknown'] = (m[r.kind ?? 'unknown'] ?? 0) + 1), m), {}),
   requests: runs.reduce((a, r) => a + Object.keys(r.res).length, 0), // 판정에 쓴 답의 수
