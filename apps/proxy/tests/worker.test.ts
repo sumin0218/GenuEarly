@@ -900,8 +900,8 @@ describe('심층 분석 — 본문에서 근거를 집어 온다', () => {
 
   it('모르는 항목은 거절한다 — 우리 키로 남이 쓰지 못하게', async () => {
     mockFetch(() => said('[]'))
-    // 코드가 설명하는 항목(감정적 표현)도 여기서는 받지 않는다. 자리가 하나씩이다.
-    for (const itemId of ['make_me_a_poem', 'emotional_language', 'clickbait_headline']) {
+    // 제목을 보는 항목은 받지 않는다 — 여기 오는 것은 본문뿐이라 엉뚱한 곳을 짚는다.
+    for (const itemId of ['make_me_a_poem', 'clickbait_headline', 'headline_body_match']) {
       const res = await explain({ ...REQ, itemId })
       expect(res.status, itemId).toBe(400)
       expect(await errorOf(res)).toBe('unknown_item')

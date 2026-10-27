@@ -137,6 +137,8 @@ export default defineContentScript({
           itemId,
           // 판정은 **이미 나와 있다.** 바깥에 다시 묻는 것이 아니라 적어 보낼 뿐이다.
           level: raw.level,
+          // 코드가 빈손이면 LLM 에 넘긴다. 찾았으면 부르지 않는다 (lib/judge.ts).
+          noEvidence: Object.values(spans).every((v) => v.length === 0),
         }
 
         return (async () => {

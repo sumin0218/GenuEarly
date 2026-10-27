@@ -69,6 +69,8 @@ export const isPinpointLevel = (v: string): v is PinpointLevel => Object.hasOwn(
 const WHAT: Readonly<Record<string, string>> = {
   source_citation: '주장의 출처를 누구인지 밝히지 않고 적은 대목, 또는 출처 없이 단정한 대목.',
   unverifiable_claim: '일어난 일·수치·인과관계를 확정해 적었는데 그 문장 안에 근거가 없는 문장.',
+  emotional_language: '읽는 사람의 분노·공포·혐오·불안을 끌어올리는 표현. 작성자가 쓴 서술만 본다.',
+  spread_inducement: '이 글을 퍼뜨리라고 재촉하거나 그럴 필요를 강조하는 표현.',
 }
 
 /**
@@ -91,6 +93,25 @@ const REASONS: Readonly<Record<string, Readonly<Record<string, string>>>> = {
   source_citation: {
     src_group_only: "'전문가에 따르면'·'한 관계자는' 처럼 누구인지 밝히지 않은 출처 표현",
     src_none: '출처를 가리키는 표현 없이 주장만 적힌 대목',
+  },
+  // 아래 둘은 **코드가 먼저 찾아 본 뒤 빈손일 때만** 부른다 (apps/extension/lib/judge.ts).
+  // 이유 id 가 코드 규칙 id 와 같다 — 같은 것을 찾기 때문이다. 그래서 화면 문구도
+  // 이미 있는 것을 그대로 쓴다 (packages/content 의 explain.*.parts).
+  emotional_language: {
+    emo_repeat: "'분노'·'경악'·'끔찍한' 같은 감정 낱말이 되풀이되는 대목",
+    emo_exclaim: '느낌표를 연달아 쓴 대목',
+    emo_fear: "'당신도 당할 수 있다' 처럼 읽는 사람에게 닥칠 일로 돌려 겁을 주는 대목",
+    // 아래 둘은 **코드가 할 수 없는 것**이다. 비속어 목록을 우리가 들고 있을 수 없고,
+    // "감정이 실린 서술" 은 낱말로 셀 수 있는 것이 아니다. 둘 다 criteria 에 있다.
+    emo_slur: '사람이나 집단을 낮춰 부르거나 비웃는 호칭',
+    emo_charged:
+      '위 넷에 들지 않지만 작성자가 분노·공포·혐오·불안을 끌어올리는 쪽으로 쓴 서술. ' +
+      '**사건이 참혹한 것과 표현이 감정을 끌어올리는 것은 다르다** — ' +
+      '참혹한 일을 담담한 낱말로 전한 문장은 고르지 않는다.',
+  },
+  spread_inducement: {
+    spr_urging: "'꼭 공유하세요'·'널리 알려 주세요' 처럼 공유를 직접 요구하는 표현",
+    spr_hinting: "'모두가 알아야 할'·'주변에도 알려야 할' 처럼 전달할 필요를 강조하는 표현",
   },
 }
 

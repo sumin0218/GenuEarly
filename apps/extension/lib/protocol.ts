@@ -90,6 +90,14 @@ export interface ExplainMessage {
   itemId: string
   /** 이미 나온 판정. **중계 서버가 프롬프트에 적어 준다** — 모델은 이것을 바꾸지 않는다 */
   level: ExplainLevel
+  /**
+   * **코드가 찾아봤는데 빈손이었는가.**
+   *
+   * 코드 사전은 criteria 에 적힌 낱말만 안다. 다른 말로 감정을 자극하면 못 찾고,
+   * 그러면 판정은 걸렸는데 보여 줄 것이 없다. 그때만 LLM 에 넘긴다 —
+   * 코드가 찾았으면 부르지 않는다. 더 정확하고, 빠르고, 크레딧을 쓰지 않는다.
+   */
+  noEvidence?: boolean
 }
 
 /**

@@ -344,6 +344,21 @@ const NEEDS_PINPOINT: ReadonlySet<string> = new Set(
 )
 
 /**
+ * **코드만 설명하는 항목.** 코드가 빈손일 때 LLM 이 대신 찾아 준다.
+ *
+ * 코드 사전은 criteria 에 적힌 낱말만 안다 — 다른 말로 감정을 자극하면 못 찾는다.
+ * 그러면 판정은 걸렸는데 보여 줄 것이 없다. 그때만 부른다.
+ *
+ * Jev 하위 질문이 있는 항목은 여기 없다. 그쪽은 Jev 가 이미 "무엇이 그런가" 를 답했고,
+ * 그 답이 전부 아니오인데 LLM 이 무언가 집어 오면 **Jev 와 어긋난다.**
+ */
+const CODE_ONLY: ReadonlySet<string> = new Set(
+  (schema.items as unknown as { id: string }[])
+    .map((i) => i.id)
+    .filter((id) => !explainableItems().includes(id) && hasCodeEvidence(id)),
+)
+
+/**
  * 중계 서버에 **본문에서 대목을 집어 달라고** 한다.
  *
  * 프롬프트는 **중계 서버가 만든다.** 여기서는 항목 id 와 판정 이름과 본문만 보낸다 —
@@ -401,7 +416,9 @@ export async function judgeExplain(
 ): Promise<ExplainResult | null> {
   const def = EXPLAIN_ITEMS.find((i) => i.explain_for === msg.itemId)
   const group = def?.request_group.explain
-  const pinpoint = NEEDS_PINPOINT.has(msg.itemId)
+  // 늘 LLM 이 맡는 항목이거나, 코드만 맡는 항목인데 코드가 빈손이었을 때.
+  const pinpoint =
+    NEEDS_PINPOINT.has(msg.itemId) || (CODE_ONLY.has(msg.itemId) && msg.noEvidence === true)
   // 둘 다 아니면 이 항목은 코드가 설명한다. 바깥에 물어볼 것이 없다.
   if ((!def || !group) && !pinpoint) return null
 

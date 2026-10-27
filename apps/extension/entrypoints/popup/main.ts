@@ -129,6 +129,14 @@ export interface AppCopy {
   /** 신호는 보이는데 **확신이 모자라** 🟡 에 머문 경우 */
   lowConfidence?: string
   disclaimer?: string
+  /**
+   * **판정은 걸렸는데 어디인지 짚지 못한 경우.**
+   *
+   * 판정을 내리는 물음과 "그래서 어디가 그런가" 를 따지는 물음은 **서로 다른 물음**이라,
+   * 판정이 주의인데 쪼갠 물음은 하나도 걸리지 않을 수 있다. 그때 "신호가 보이지
+   * 않습니다" 라고 적으면 **바로 윗줄과 정면으로 어긋난다** — 실제로 그렇게 떴다.
+   */
+  unpinned?: string
 }
 
 /** 문구가 아니라 **사실**. 생성하지 않고 읽어 온다. */
@@ -356,10 +364,26 @@ export interface ExplainLine {
  * **모름은 빠져 있다** — `judgeExplain` 이 확률이 모름 구간 안인 질문을 넣지 않는다.
  * 억지로 채우지 않는다.
  */
-export function explainLines(itemId: string, result: ExplainResult | null): ExplainLine[] {
+export function explainLines(
+  itemId: string,
+  result: ExplainResult | null,
+  level?: DisplayLevel,
+): ExplainLine[] {
   const copy = EXPLAIN[itemId]
   if (!copy || !result) return []
   const parts = copy.parts ?? {}
+
+  /**
+   * 아무것도 못 짚었을 때 할 말.
+   *
+   * **판정이 걸린 항목에 "신호가 보이지 않습니다" 라고 적지 않는다.** 바로 윗줄이
+   * "주의할 표현을 씁니다" 인데 그 밑에 없다고 적으면 서로 어긋나고, 사용자는
+   * 둘 중 어느 쪽도 믿지 못하게 된다. 못 짚은 쪽은 **우리**라고 말한다.
+   */
+  const 없다 = (): ExplainLine => ({
+    text:
+      (level === 'CAUTION' || level === 'CHECK') && APP?.unpinned ? APP.unpinned : copy.none,
+  })
 
   const ids = [...Object.keys(result.found), ...Object.keys(result.spans ?? {})]
   const 본것 = [...new Set(ids)].filter((id) => parts[id])
@@ -368,36 +392,37 @@ export function explainLines(itemId: string, result: ExplainResult | null): Expl
     (result.spans?.[id]?.length ?? 0) > 0 || result.found[id] === true
 
   const lines: ExplainLine[] = []
-  if (본것.length > 0) {
-    // 본 것이 **전부 아니오**면 한 줄로 말한다. 여러 줄을 "없습니다" 로 늘어놓는 것보다 낫다.
-    if (본것.every((id) => !있다(id))) {
-      lines.push({ text: copy.none })
-    } else {
-      for (const id of 본것) {
-        const pair = parts[id]
-        if (!pair) continue
-        const yes = 있다(id)
-        const quotes = yes ? result.spans?.[id] : undefined
-        lines.push({ text: yes ? pair.present : pair.absent, ...(quotes?.length ? { quotes } : {}) })
-      }
+
+  // ① Jev 가 **잰** 것과 코드가 **찾은** 것. 본 것이 전부 아니오면 아래 ③ 에서 한 줄로 말한다.
+  if (본것.some((id) => 있다(id))) {
+    for (const id of 본것) {
+      const pair = parts[id]
+      if (!pair) continue
+      const yes = 있다(id)
+      const quotes = yes ? result.spans?.[id] : undefined
+      lines.push({ text: yes ? pair.present : pair.absent, ...(quotes?.length ? { quotes } : {}) })
     }
   }
 
-  // LLM 이 본문에서 집어 온 문장. **한 줄에 "왜" 하나와 인용 하나씩.**
+  // ② LLM 이 본문에서 집어 온 문장. **한 줄에 "왜" 하나와 인용 하나씩.**
   // 넷을 늘어놓으면 본문 복사처럼 보인다 — 중계 서버가 둘로 끊어 준다.
-  if (copy.reasons) {
-    const reasons = copy.reasons
-    const picks = (result.picks ?? []).filter((x) => reasons[x.why])
-    if (picks.length === 0) {
-      lines.push({ text: copy.none })
-    } else {
-      // **같은 이유는 한 줄로 모은다.** 똑같은 말을 두 번 적으면 두 가지를 짚은 것처럼
-      // 보인다. 이유가 하나면 줄도 하나고, 그 밑에 떼어 온 문장이 나란히 붙는다.
-      const 묶음 = new Map<string, string[]>()
-      for (const x of picks) 묶음.set(x.why, [...(묶음.get(x.why) ?? []), x.text])
-      for (const [why, quotes] of 묶음) lines.push({ text: reasons[why]!, quotes })
-    }
+  //
+  // "왜" 는 두 곳에서 온다. 전용 문구(`reasons`)가 있으면 그것을 쓰고, 없으면
+  // **코드가 찾던 것과 같은 하위 항목**이라 이미 있는 문구를 그대로 쓴다
+  // (감정적 표현·공유 유도가 그렇다 — 코드가 빈손일 때만 LLM 이 대신 찾는다).
+  const 이유문구 = (why: string): string | undefined => copy.reasons?.[why] ?? parts[why]?.present
+  const picks = (result.picks ?? []).filter((x) => 이유문구(x.why))
+  if (picks.length > 0) {
+    // **같은 이유는 한 줄로 모은다.** 똑같은 말을 두 번 적으면 두 가지를 짚은 것처럼
+    // 보인다. 이유가 하나면 줄도 하나고, 그 밑에 떼어 온 문장이 나란히 붙는다.
+    const 묶음 = new Map<string, string[]>()
+    for (const x of picks) 묶음.set(x.why, [...(묶음.get(x.why) ?? []), x.text])
+    for (const [why, quotes] of 묶음) lines.push({ text: 이유문구(why)!, quotes })
   }
+
+  // ③ 아무 줄도 없으면 **한 줄로** 말한다. 여러 줄을 "없습니다" 로 늘어놓는 것보다 낫다.
+  // 눌렀는데 빈 화면이 뜨는 것이 가장 나쁘다 — 그때도 할 말이 있다.
+  if (lines.length === 0) lines.push(없다())
   return lines
 }
 
@@ -545,7 +570,7 @@ function render(state: TabState, root: Document = document, kind: 'page' | 'sele
       // **누를 때만 나간다.** 기사를 여는 것만으로는 한 건도 나가지 않는다.
       drawWhy(why, [{ text: content.badge.PENDING.name }], root)
       void askExplain(r.id, r.level as ExplainLevel).then((res) =>
-        drawWhy(why, explainLines(r.id, res), root),
+        drawWhy(why, explainLines(r.id, res, r.level), root),
       )
     }
 
