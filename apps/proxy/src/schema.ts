@@ -31,7 +31,13 @@ const SCHEMA = source as unknown as {
 export const SCHEMA_VERSION = SCHEMA.version
 export const SCHEMA_MODEL = SCHEMA.model
 
-const ITEMS = new Map(SCHEMA.items.map((i) => [i.id, i]))
+// **설명 전용 항목을 여기서만 합친다.** 스키마가 `items` 와 `explain_items` 로 갈라 둔 것은
+// 점수를 내는 쪽이 설명 항목을 집어 가지 못하게 하려는 것이다 (judgment-items.json).
+// 중계 서버는 둘 다 받아야 한다 — 어느 쪽이든 `request_group` 이 맞으면 보내 준다.
+const ITEMS = new Map(
+  [...SCHEMA.items, ...((SCHEMA as { explain_items?: typeof SCHEMA.items }).explain_items ?? [])]
+    .map((i) => [i.id, i] as const),
+)
 const GROUPS = SCHEMA.request_groups
 
 /** 그 항목이 내는 Jev 질문들. 한 판단이 질문 여러 개로 나뉘는 항목이 있다. */

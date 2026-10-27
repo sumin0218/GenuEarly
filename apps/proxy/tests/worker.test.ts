@@ -804,3 +804,71 @@ describe('게이트웨이로 나가는 요청의 헤더', () => {
     expect(h['User-Agent'], 'UA 가 없으면 배포 후 전부 403 이 된다').toBeTruthy()
   })
 })
+
+describe('설명 전용 질문 (explain)', () => {
+  // **점수에 들어가지 않는다.** 스키마가 items 와 explain_items 로 갈라 두었고,
+  // 확장 프로그램의 plan() 은 items 만 훑는다 (GE-44).
+  const EXPLAIN_BODY = {
+    feature: 'explain',
+    group: 'headline_body',
+    items: ['source_citation_parts'],
+    state: { body: '본문' },
+  }
+
+  const explainItem = () =>
+    ((schema as unknown as { explain_items: { id: string; questions: { id: string }[] }[] })
+      .explain_items ?? [])[0]
+
+  it('스키마가 설명 항목을 items 밖에 둔다', () => {
+    // items 안에 있으면 점수 설정 검사·문구 검사·plan() 이 전부 걸러 줘야 한다.
+    // 구조로 갈라 두면 걸러 줄 일 자체가 없다.
+    expect(schema.items.some((i) => i.id === 'source_citation_parts')).toBe(false)
+    expect(explainItem()?.id).toBe('source_citation_parts')
+  })
+
+  it('하위 질문을 전부 보낸다', async () => {
+    const ids = explainItem().questions.map((q) => q.id)
+    const answers: Record<string, unknown> = {}
+    for (const id of ids) answers[id] = { type: 'noul', probability: 0.7 }
+    mockFetch(() => ok({ model: 'jev-latest', answers }))
+
+    const res = await judge(EXPLAIN_BODY)
+    expect(res.status).toBe(200)
+
+    const sent = JSON.parse(calls[0].init.body as string)
+    expect(Object.keys(sent.questions).sort()).toEqual([...ids].sort())
+    // 질문 하나가 아니라 **다섯**이다. 쪼갠 것이 요점이다.
+    expect(ids.length).toBeGreaterThan(1)
+  })
+
+  it('본문만 보낸다 — 제목은 이 질문의 판단 범위 밖이다', async () => {
+    mockFetch(() => ok({ model: 'jev-latest', answers: {} }))
+    await judge(EXPLAIN_BODY)
+    const sent = JSON.parse(calls[0].init.body as string)
+    expect(sent.state).toEqual({ body: '본문' })
+  })
+
+  it('설명 질문에도 공통 지시가 붙는다 — 인젝션 방어는 똑같이 받는다', async () => {
+    mockFetch(() => ok({ model: 'jev-latest', answers: {} }))
+    await judge(EXPLAIN_BODY)
+    const sent = JSON.parse(calls[0].init.body as string)
+    for (const q of Object.values(sent.questions) as { instructions: string }[]) {
+      expect(q.instructions.endsWith(schema.common_instructions)).toBe(true)
+    }
+  })
+
+  it('점수 내는 항목을 explain 으로 보낼 수 없다', async () => {
+    // 섞어 보내면 설명 요청이 점수 경로로 새는 길이 생긴다.
+    mockFetch(() => ok({ model: 'jev-latest', answers: {} }))
+    const res = await judge({ ...EXPLAIN_BODY, items: ['source_citation'] })
+    expect(res.status).toBe(400)
+    expect(await errorOf(res)).toBe('item_not_in_feature')
+  })
+
+  it('설명 항목을 page 로 보낼 수 없다', async () => {
+    mockFetch(() => ok({ model: 'jev-latest', answers: {} }))
+    const res = await judge({ ...PAGE_BODY, items: ['source_citation_parts'] })
+    expect(res.status).toBe(400)
+    expect(await errorOf(res)).toBe('item_not_in_feature')
+  })
+})

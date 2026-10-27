@@ -87,9 +87,24 @@ describe('빠진 문구가 없다', () => {
   })
 
   it('판단 항목 전부에 문구가 있다', () => {
-    // 빠지면 배지 상세에 그 항목만 통째로 안 보인다.
+    // 빠지면 상세에 그 항목만 통째로 안 보인다.
+    //
+    // 설명 전용 항목은 `items` 가 아니라 `explain_items` 에 있다. 여기 걸리지 않는다.
     const ids = (schema.items as { id: string }[]).map((i) => i.id)
     expect(Object.keys(content.items).sort()).toEqual([...ids].sort())
+  })
+
+  it('설명 전용 항목은 점수에 들어가지 않는다', () => {
+    // **배지가 바뀌면 안 된다.** request_group 에 점수를 내는 기능이 있으면
+    // plan() 이 집어 가서 가중평균에 섞인다.
+    const 점수내는기능 = ['page', 'portal_list', 'selection']
+    const 설명전용 = ((schema as { explain_items?: unknown[] }).explain_items ?? []) as
+      { id: string; request_group: Record<string, string> }[]
+    expect(설명전용.length, '설명 전용 항목이 하나는 있어야 이 검사가 산다').toBeGreaterThan(0)
+    for (const i of 설명전용) {
+      const 샌것 = Object.keys(i.request_group).filter((f) => 점수내는기능.includes(f))
+      expect(샌것, `${i.id} 가 ${샌것.join(',')} 에서도 불린다`).toEqual([])
+    }
   })
 
   it('항목마다 이름·신호없음·신호·보류 네 가지가 다 있다', () => {
