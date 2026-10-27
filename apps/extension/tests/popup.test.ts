@@ -7,7 +7,7 @@
 // 화면에 **있으면 안 되는 것이 새어 나오지 않는가**다.
 import { beforeEach, describe, expect, it } from 'vitest'
 import content from '../../../packages/content/ui.ko.json'
-import { render, renderTooLong } from '../entrypoints/popup/main'
+import { drawChrome, render, renderTooLong } from '../entrypoints/popup/main'
 import type { TabState } from '../lib/protocol'
 
 /** 팝업 문서의 뼈대. entrypoints/popup/index.html 과 id 가 같아야 한다. */
@@ -228,5 +228,119 @@ describe('판단이 도는 동안의 팝업', () => {
   it('무엇에 대한 판단인지는 먼저 밝힌다', () => {
     render({ level: 'PENDING' }, document, 'selection')
     expect((document.getElementById('scope') as HTMLElement).hidden).toBe(false)
+  })
+})
+
+describe('제품 정보와 판단 근거', () => {
+  /** 틀까지 갖춘 팝업 문서. entrypoints/popup/index.html 과 id 가 같아야 한다. */
+  function mountFrame(): void {
+    document.body.replaceChildren()
+    const img = document.createElement('img')
+    img.id = 'brand-icon'
+    const version = document.createElement('span')
+    version.id = 'version'
+    const details = document.createElement('ul')
+    details.id = 'details'
+    details.hidden = true
+    const foot = document.createElement('footer')
+    foot.id = 'foot'
+    foot.hidden = true
+    const toggle = document.createElement('button')
+    toggle.id = 'details-toggle'
+    const home = document.createElement('a')
+    home.id = 'homepage'
+    foot.append(toggle, home)
+    document.body.append(img, version, details, foot)
+  }
+
+  /** 4차를 받고 난 뒤의 모습. **실제 문구가 아니다** — 구조만 본다. */
+  const 받은문구 = {
+    homepage: '홈페이지',
+    details: { open: '자세히', close: '접기' },
+    basis: { page: '기사 전체를 보았습니다', headline: '제목만 보았습니다', selection: '고른 글만 보았습니다' },
+    coverage: { sentences: '{total}문장 중 {judged}문장', capped: '앞부분만 보았습니다' },
+    criteria: '기준 {version} · {model}',
+    disclaimer: '참인지 거짓인지는 말하지 않습니다',
+  }
+  const 사실 = { version: '1.0.0', homepageUrl: 'https://example.invalid/', schemaVersion: '1.1.0', model: 'jev-1.13.0' }
+
+  beforeEach(mountFrame)
+
+  it('버전은 문구가 없어도 보인다 — 이름과 숫자는 생성할 말이 아니다', () => {
+    drawChrome(undefined, 사실)
+    expect(document.getElementById('version')?.textContent).toBe('v1.0.0')
+  })
+
+  it('문구가 없으면 자세히도 홈페이지도 그리지 않는다', () => {
+    // **빈 자리를 영어나 임시 한국어로 채우지 않는다.** 그대로 배포본에 들어간다.
+    drawChrome(undefined, { ...사실, basis: 'page' })
+    expect((document.getElementById('foot') as HTMLElement).hidden).toBe(true)
+    expect(document.getElementById('details')?.children.length).toBe(0)
+  })
+
+  it('문구가 들어오면 켜진다 — 코드를 더 고치지 않는다', () => {
+    drawChrome(받은문구, { ...사실, basis: 'page' })
+    expect((document.getElementById('foot') as HTMLElement).hidden).toBe(false)
+    expect(document.getElementById('homepage')?.textContent).toBe('홈페이지')
+    expect((document.getElementById('homepage') as HTMLAnchorElement).href).toContain('example.invalid')
+  })
+
+  it('접혀 있는 것이 기본이다 — 판정을 보러 연 팝업이다', () => {
+    drawChrome(받은문구, { ...사실, basis: 'page' })
+    expect((document.getElementById('details') as HTMLElement).hidden).toBe(true)
+    expect(document.getElementById('details-toggle')?.getAttribute('aria-expanded')).toBe('false')
+  })
+
+  it('눌러서 펼치고 접는다', () => {
+    drawChrome(받은문구, { ...사실, basis: 'page' })
+    const toggle = document.getElementById('details-toggle') as HTMLButtonElement
+    toggle.click()
+    expect((document.getElementById('details') as HTMLElement).hidden).toBe(false)
+    expect(toggle.getAttribute('aria-expanded')).toBe('true')
+    expect(toggle.textContent).toBe('접기')
+    toggle.click()
+    expect((document.getElementById('details') as HTMLElement).hidden).toBe(true)
+  })
+
+  it('무엇을 보고 낸 판단인지 밝힌다', () => {
+    drawChrome(받은문구, { ...사실, basis: 'selection' })
+    const lines = [...document.querySelectorAll('.ge-popup__detail')].map((x) => x.textContent)
+    expect(lines).toContain('고른 글만 보았습니다')
+    expect(lines, '다른 근거의 말이 섞이면 안 된다').not.toContain('기사 전체를 보았습니다')
+  })
+
+  it('몇 문장 중 몇 문장을 봤는지 채워 넣는다', () => {
+    drawChrome(받은문구, { ...사실, basis: 'page', sentences: { total: 28, judged: 24 } })
+    const lines = [...document.querySelectorAll('.ge-popup__detail')].map((x) => x.textContent)
+    expect(lines).toContain('28문장 중 24문장')
+  })
+
+  it('채울 값이 없으면 그 줄을 버린다 — 자리표시자가 화면에 새면 안 된다', () => {
+    drawChrome(받은문구, { version: '1.0.0', basis: 'page' })
+    const text = document.getElementById('details')?.textContent ?? ''
+    expect(text).not.toContain('{')
+    expect(text, '문장 수를 모르는데 줄을 만들지 않는다').not.toContain('문장 중')
+  })
+
+  it('참·거짓을 말하지 않는다는 한 줄이 맨 마지막이다', () => {
+    drawChrome(받은문구, { ...사실, basis: 'page', sentences: { total: 10, judged: 9 } })
+    const lines = [...document.querySelectorAll('.ge-popup__detail')].map((x) => x.textContent)
+    expect(lines[lines.length - 1]).toBe('참인지 거짓인지는 말하지 않습니다')
+  })
+
+  it('점수가 자세히에도 새지 않는다', () => {
+    drawChrome(받은문구, { ...사실, basis: 'page', sentences: { total: 28, judged: 24 } })
+    const text = document.getElementById('details')?.textContent ?? ''
+    expect(text, '문장 수는 얼마나 봤는지이지 점수가 아니다').not.toMatch(/0\.\d|\d+%|\d+점/)
+  })
+
+  it('아이콘 주소가 없으면 깨진 그림을 두지 않는다', () => {
+    drawChrome(받은문구, 사실)
+    expect(document.getElementById('brand-icon')).toBeNull()
+  })
+
+  it('아이콘 주소가 있으면 건다', () => {
+    drawChrome(받은문구, { ...사실, iconUrl: 'chrome-extension://abc/icon/16.png' })
+    expect((document.getElementById('brand-icon') as HTMLImageElement).src).toContain('icon/16.png')
   })
 })

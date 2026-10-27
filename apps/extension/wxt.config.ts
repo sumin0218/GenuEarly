@@ -14,6 +14,11 @@ export default defineConfig({
     name: 'GenuEarly',
     description: '기사를 읽는 순간과 공유하려는 순간에 주의가 필요한 신호를 알려 줍니다.',
 
+    // 팝업 꼬리말의 홈페이지 링크와 chrome://extensions 의 "웹사이트" 가 이것을 쓴다.
+    // **주소를 두 곳에 적지 않는다** — 팝업은 manifest 에서 읽는다.
+    // 랜딩 페이지(GE-40)가 생기면 그 주소로 바꾼다.
+    homepage_url: 'https://github.com/sumin0218/GenuEarly',
+
     // 권한은 최소로. 늘리는 PR은 "이 권한 없이는 안 되는 이유"를 본문에 적는다.
     //
     // `contextMenus` 는 ③ 선택 텍스트 검사가 쓴다 (GE-24). **이것으로 끝이다** —

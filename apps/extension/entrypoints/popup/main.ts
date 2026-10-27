@@ -7,6 +7,7 @@
 // **점수 숫자를 쓰지 않는다.** 정밀해 보이는 숫자는 단정으로 읽힌다 (docs/product.md 6절).
 import './style.css'
 import content from '../../../../packages/content/ui.ko.json'
+import schema from '@genuearly/shared/judgment-items.json'
 import { createIcon } from '../../lib/icon'
 import { LEVEL_ICON, LEVEL_INK, LEVEL_INK_DARK, toRows } from '../../lib/item-view'
 import {
@@ -91,6 +92,159 @@ async function run(): Promise<void> {
   render(await readTabState(), document, 'page')
 }
 
+/**
+ * 팝업 틀에 들어가는 **사용자에게 보이는 말.** 전부 ChatKHU 가 쓴다
+ * (tools/content-gen/prompt.md 4차). 코딩 도구는 한국어를 지어내지 않는다.
+ *
+ * **전부 선택이다.** 아직 받지 못한 문구가 있으면 그 자리를 **그리지 않는다** —
+ * 영어나 임시 한국어로 채우면 그것이 그대로 배포본에 들어간다.
+ */
+export interface AppCopy {
+  homepage?: string
+  details?: { open?: string; close?: string }
+  /** 무엇을 보고 낸 판단인가 */
+  basis?: { page?: string; headline?: string; selection?: string }
+  /** 얼마나 봤는가. **정확도가 아니다** */
+  coverage?: { sentences?: string; capped?: string }
+  criteria?: string
+  disclaimer?: string
+}
+
+/** 문구가 아니라 **사실**. 생성하지 않고 읽어 온다. */
+export interface ChromeFacts {
+  /** 확장 프로그램 버전. manifest 에서 읽는다 */
+  version?: string
+  homepageUrl?: string
+  /** 질문 세트 버전과 모델 */
+  schemaVersion?: string
+  model?: string
+  /** 브랜드 줄의 아이콘. 확장 안의 파일이라 `runtime.getURL` 로 받는다 */
+  iconUrl?: string
+  basis?: 'page' | 'headline' | 'selection'
+  /** 문장 단위 항목이 몇 문장 중 몇 문장을 봤는가 */
+  sentences?: { total: number; judged: number }
+  /** 글이 길어 앞부분만 봤는가 */
+  capped?: boolean
+}
+
+/** `{a}` 자리에 값을 끼운다. 값이 없는 자리표시자가 남으면 **그 줄을 버린다.** */
+function fill(template: string, values: Record<string, string | undefined>): string | null {
+  let out = template
+  for (const [k, v] of Object.entries(values)) {
+    if (v === undefined) continue
+    out = out.split(`{${k}}`).join(v)
+  }
+  return /{[a-z]+}/i.test(out) ? null : out
+}
+
+/**
+ * 제품 정보와 판단 근거를 그린다.
+ *
+ * **버전은 문구가 없어도 보인다** — 이름과 숫자는 생성할 말이 아니다.
+ * 나머지는 해당 문구가 있을 때만 보인다.
+ */
+export function drawChrome(app: AppCopy | undefined, facts: ChromeFacts, root: Document = document): void {
+  const version = root.getElementById('version')
+  if (version) version.textContent = facts.version ? `v${facts.version}` : ''
+  const icon = root.getElementById('brand-icon') as HTMLImageElement | null
+  // 주소를 못 받으면 **빈 이미지를 두지 않는다.** 깨진 그림이 뜬다.
+  if (icon) {
+    if (facts.iconUrl) icon.src = facts.iconUrl
+    else icon.remove()
+  }
+
+  const details = root.getElementById('details')
+  const foot = root.getElementById('foot')
+  const toggle = root.getElementById('details-toggle')
+  const homepage = root.getElementById('homepage') as HTMLAnchorElement | null
+  if (!details || !foot || !toggle || !homepage) return
+
+  // --- 자세히 안의 줄들 ---------------------------------------------------
+  const lines: string[] = []
+  const basis = facts.basis && app?.basis?.[facts.basis]
+  if (basis) lines.push(basis)
+  if (app?.coverage?.sentences && facts.sentences) {
+    const line = fill(app.coverage.sentences, {
+      total: String(facts.sentences.total),
+      judged: String(facts.sentences.judged),
+    })
+    if (line) lines.push(line)
+  }
+  if (app?.coverage?.capped && facts.capped) lines.push(app.coverage.capped)
+  if (app?.criteria) {
+    const line = fill(app.criteria, { version: facts.schemaVersion, model: facts.model })
+    if (line) lines.push(line)
+  }
+  // **마지막에 놓는다.** 이 제품이 참·거짓을 말하지 않는다는 것을 사용자에게
+  // 직접 말하는 유일한 자리다 (GE-45).
+  if (app?.disclaimer) lines.push(app.disclaimer)
+
+  details.replaceChildren()
+  for (const text of lines) {
+    const li = root.createElement('li')
+    li.className = 'ge-popup__detail'
+    li.textContent = text
+    details.append(li)
+  }
+
+  // --- 꼬리말 -------------------------------------------------------------
+  const canToggle = lines.length > 0 && Boolean(app?.details?.open && app.details.close)
+  const canLink = Boolean(app?.homepage && facts.homepageUrl)
+
+  toggle.hidden = !canToggle
+  homepage.hidden = !canLink
+  foot.hidden = !canToggle && !canLink
+  // 열 수 없으면 펼쳐진 채로 남지 않게 한다.
+  if (!canToggle) details.hidden = true
+
+  if (canLink) {
+    homepage.textContent = app?.homepage ?? ''
+    homepage.href = facts.homepageUrl ?? ''
+  }
+  if (canToggle) {
+    const open = app?.details?.open ?? ''
+    const close = app?.details?.close ?? ''
+    const paint = () => {
+      toggle.textContent = details.hidden ? open : close
+      toggle.setAttribute('aria-expanded', String(!details.hidden))
+    }
+    details.hidden = true
+    paint()
+    toggle.onclick = () => {
+      details.hidden = !details.hidden
+      paint()
+    }
+  }
+}
+
+/**
+ * 지금 들어 있는 틀 문구. **아직 4차를 돌리지 않았으면 `undefined` 다** —
+ * 그러면 버전 줄만 보이고 자세히·홈페이지는 그려지지 않는다.
+ */
+const APP: AppCopy | undefined = (content as { app?: AppCopy }).app
+
+/** 문장 단위 항목이 몇 문장 중 몇 문장을 봤는가. 쓰는 항목이 하나뿐이라 첫 것을 쓴다. */
+function sentencesOf(verdict: TabState['verdict']): ChromeFacts['sentences'] {
+  return verdict?.items?.find((it) => it.sentences)?.sentences
+}
+
+/** manifest 와 질문 세트에서 사실을 읽어 온다. 테스트에서는 부르지 않는다. */
+function readFacts(): ChromeFacts {
+  try {
+    const m = browser.runtime.getManifest() as { version?: string; homepage_url?: string }
+    return {
+      version: m.version,
+      homepageUrl: m.homepage_url,
+      iconUrl: browser.runtime.getURL('/icon/16.png'),
+      schemaVersion: schema.version,
+      model: schema.model,
+    }
+  } catch {
+    // 팝업 문서 밖(테스트)에서 불린 경우. 사실이 없으면 그리지 않을 뿐이다.
+    return { schemaVersion: schema.version, model: schema.model }
+  }
+}
+
 /** 머리말 아이콘의 변 길이(px). 제목(18px)보다 조금 작다. */
 const HEAD_ICON = 20
 /** 항목 줄 아이콘의 변 길이(px). */
@@ -137,6 +291,7 @@ function renderTooLong(limit: number, root: Document = document): void {
   name.textContent = content.selection.tooLong.title
   desc.textContent = content.selection.tooLong.description.replace('{limit}', String(limit))
   items.replaceChildren()
+  drawFrame({ level: 'UNDETERMINED' }, root, 'selection')
 }
 
 /** `innerHTML` 을 쓰지 않는다 (docs/security/secure-coding.md 4절). */
@@ -205,9 +360,21 @@ function render(state: TabState, root: Document = document, kind: 'page' | 'sele
     li.append(icon, head, body)
     items.append(li)
   }
+  drawFrame(state, root, kind)
 }
 
-export { render, renderTooLong, readTabState, drawSelection, run }
+/**
+ * 판정 아래의 **제품 정보와 판단 근거**를 그린다.
+ *
+ * > TODO: `capped`(앞부분만 살펴봄)를 아직 넘기지 못한다. 글자 상한에 걸려 뒤쪽
+ * > 문장이 빠졌다는 사실은 `lib/judge.ts` 가 자르는 자리에서만 알 수 있고 판정에
+ * > 실려 오지 않는다. 문구는 4차에서 같이 받아 두고 배선은 뒤에 한다 (GE-45).
+ */
+function drawFrame(state: TabState, root: Document, kind: 'page' | 'selection'): void {
+  drawChrome(APP, { ...readFacts(), basis: kind, sentences: sentencesOf(state.verdict) }, root)
+}
+
+export { render, renderTooLong, readTabState, drawSelection, run, readFacts }
 
 // 테스트에서 이 파일을 불러도 팝업이 멋대로 열리지 않게 한다.
 // 팝업 문서에서만 실제로 그린다.
