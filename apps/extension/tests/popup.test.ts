@@ -392,7 +392,10 @@ describe('왜 이 판정인가 — 확신이 모자란 🟡', () => {
 describe('4차 문구가 실제로 쓰인다', () => {
   // 문구를 받아 놓고 배선을 안 하면 ui.ko.json 에만 남는다.
   it('app 의 문구가 전부 어딘가에서 쓰인다', () => {
-    const used = new Set(['homepage', 'details', 'basis', 'coverage', 'criteria', 'lowConfidence', 'disclaimer'])
+    const used = new Set([
+      'homepage', 'details', 'basis', 'coverage', 'criteria', 'lowConfidence', 'disclaimer',
+      'unpinned',
+    ])
     const keys = Object.keys(content.app).filter((k) => !k.startsWith('$'))
     expect(keys.filter((k) => !used.has(k)), '배선하지 않은 문구가 있다').toEqual([])
   })
@@ -445,11 +448,15 @@ describe('왜 이 판정인가 — 항목별 설명', () => {
     expect(lines).toEqual([{ text: content.explain.emotional_language.none }])
   })
 
-  it('답이 없으면 아무 줄도 만들지 않는다', () => {
+  it('답 자체가 없으면 아무 줄도 만들지 않는다', () => {
+    // 묻지도 못한 경우다. 접힌 채로 둔다.
     expect(explainLines('emotional_language', null)).toEqual([])
-    expect(
-      explainLines('emotional_language', { itemId: 'emotional_language', found: {}, spans: {} }),
-    ).toEqual([])
+  })
+
+  it('빈 답에는 **빈 화면 대신 한 줄**을 둔다', () => {
+    // 눌렀는데 아무것도 안 뜨는 것이 가장 나쁘다. 못 찾았으면 못 찾았다고 적는다.
+    expect(explainLines('emotional_language', { itemId: 'emotional_language', found: {}, spans: {} }))
+      .toEqual([{ text: content.explain.emotional_language.none }])
   })
 
   it('짝 문구가 없는 항목은 떼어 온 문장마다 **왜** 를 붙인다', () => {
@@ -540,6 +547,49 @@ describe('왜 이 판정인가 — 항목별 설명', () => {
     })
   })
 
+  it('걸린 항목에 "신호가 보이지 않습니다" 라고 적지 않는다', () => {
+    // 실제로 이렇게 떴다 — 윗줄은 "제목이 내용을 감추거나 부풀린 표현을 씁니다",
+    // 아랫줄은 "제목 표현에서 주의할 신호가 보이지 않습니다". 정면으로 어긋난다.
+    // 판정을 내리는 물음과 쪼갠 물음은 서로 다른 물음이라 이 일이 생긴다.
+    const 빈답 = { itemId: 'clickbait_headline', found: { clk_hiding: false }, spans: {} }
+    for (const level of ['CAUTION', 'CHECK'] as const) {
+      expect(explainLines('clickbait_headline', 빈답, level), level).toEqual([
+        { text: content.app.unpinned },
+      ])
+    }
+  })
+
+  it('걸리지 않은 항목에는 그대로 "보이지 않습니다" 라고 적는다', () => {
+    // 판정과 어긋나지 않으니 바꿀 이유가 없다. 여기서 바꾸면 되레 겁을 준다.
+    const 빈답 = { itemId: 'clickbait_headline', found: { clk_hiding: false }, spans: {} }
+    expect(explainLines('clickbait_headline', 빈답, 'SAFE')).toEqual([
+      { text: content.explain.clickbait_headline.none },
+    ])
+  })
+
+  it('집어 올 항목에서도 어긋나지 않는다', () => {
+    // 출처 표시·확인하기 어려운 주장도 같은 일이 난다 (LLM 이 못 집었을 때).
+    const 빈답 = { itemId: 'unverifiable_claim', found: {}, spans: {} }
+    expect(explainLines('unverifiable_claim', 빈답, 'CAUTION')).toEqual([
+      { text: content.app.unpinned },
+    ])
+  })
+  it('코드가 빈손이면 LLM 이 집어 온 것을 **같은 문구로** 보인다', () => {
+    // 감정적 표현·공유 유도는 전용 "왜" 문구가 없다. 코드가 찾던 것과 같은
+    // 하위 항목이라, 이미 있는 문구를 그대로 쓴다.
+    const lines = explainLines('emotional_language', {
+      itemId: 'emotional_language',
+      found: {},
+      spans: {},
+      picks: [{ text: '참을 수 없는 배신', why: 'emo_repeat' }],
+    }, 'CAUTION')
+    expect(lines).toEqual([
+      {
+        text: content.explain.emotional_language.parts.emo_repeat.present,
+        quotes: ['참을 수 없는 배신'],
+      },
+    ])
+  })
   it('점수 숫자가 설명에 새지 않는다', () => {
     const lines = explainLines('emotional_language', {
       itemId: 'emotional_language',

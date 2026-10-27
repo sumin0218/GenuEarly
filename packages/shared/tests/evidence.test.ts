@@ -22,10 +22,26 @@ describe('제목 표현', () => {
     expect(found('clickbait_headline', { body: '충격적인 결과였다.' }, 'clk_inflating')).toEqual([])
   })
 
-  it('말줄임표·물음표는 규칙을 두지 않았다', () => {
-    // 따옴표 안에 물음표 하나가 덩그러니 놓이는 것은 설명이 아니다. Jev 에 맡긴다.
-    const ids = findEvidence('clickbait_headline', { headline: '그 이유는?' }).map((e) => e.id)
-    expect(ids).toEqual(['clk_inflating'])
+  it('궁금증만 남기는 구절을 **부호가 아니라 구절째** 뜬다', () => {
+    // 실제로 놓쳤던 제목이다. 물음표 하나만 따오면 설명이 되지 않는다.
+    expect(
+      found(
+        'clickbait_headline',
+        { headline: '금메달 따면 군 면제? 달라진다…정부, 병역특례 대폭 축소 검토' },
+        'clk_hiding',
+      ),
+    ).toEqual(['금메달 따면 군 면제?', '달라진다…'])
+  })
+
+  it('부호가 없으면 찾지 않는다', () => {
+    expect(found('clickbait_headline', { headline: '정부, 병역특례 축소 검토' }, 'clk_hiding'))
+      .toEqual([])
+  })
+
+  it('제목을 통째로 집지 않는다', () => {
+    const headline = '가'.repeat(60) + '?'
+    const got = found('clickbait_headline', { headline }, 'clk_hiding')
+    expect(got[0]?.length).toBeLessThanOrEqual(21)
   })
 })
 

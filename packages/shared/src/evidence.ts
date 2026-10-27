@@ -58,12 +58,20 @@ const RULES: readonly Rule[] = [
   // 있는가" 를 재고(0.77, docs/jev.md 8절) 코드는 **그게 어느 낱말인지** 찾는다.
   // id 가 같으면 explainLines 가 둘을 한 줄로 합쳐, Jev 가 낸 문장 밑에 인용이 붙는다.
   //
-  // 말줄임표·물음표(criteria 의 "궁금증만 남기는 것")는 규칙을 두지 않는다.
-  // 따옴표 안에 물음표 하나가 덩그러니 놓이는 것은 설명이 아니다. 그쪽은 Jev 에 맡긴다.
   {
     id: 'clk_inflating',
     field: 'headline',
     pattern: /충격|경악|역대급|난리\s*났다|초유의|발칵/g,
+  },
+  // criteria: "말줄임표·물음표로 궁금증만 남기는 것"
+  //
+  // **부호가 아니라 구절을 뜬다.** 따옴표 안에 물음표 하나가 덩그러니 놓이면 설명이
+  // 되지 않는다 — "금메달 따면 군 면제?" 라고 떠야 어디가 그런지 보인다.
+  // 그래서 부호 앞의 한 토막(쉼표·마침표로 끊기는 데까지, 최대 스무 자)을 함께 집는다.
+  {
+    id: 'clk_hiding',
+    field: 'headline',
+    pattern: /[^\s,·…?.][^,·…?.]{1,19}(?:[?…]|\.{3})/g,
   },
 
   // --- 공유 유도 (spread_inducement) --------------------------------------
@@ -125,7 +133,7 @@ const RULES: readonly Rule[] = [
 // 제목 표현은 **Jev 와 코드가 같은 질문을 나눠 맡는다.** 큰 수식어가 있는지는 Jev 가
 // 재고, 그게 어느 낱말인지는 코드가 찾아 같은 줄에 인용으로 붙인다.
 const BY_ITEM: Readonly<Record<string, readonly string[]>> = {
-  clickbait_headline: ['clk_inflating'],
+  clickbait_headline: ['clk_inflating', 'clk_hiding'],
   spread_inducement: ['spr_urging', 'spr_hinting'],
   emotional_language: ['emo_exclaim', 'emo_repeat', 'emo_fear'],
   ai_style_signal: ['ai_summary_phrase', 'ai_both_sides'],
