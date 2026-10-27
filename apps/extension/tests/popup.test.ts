@@ -466,12 +466,20 @@ describe('펼침은 걸린 항목에만 붙는다', () => {
 
   it('🔴·🟡 이고 설명할 말이 있는 항목에만 붙는다', () => {
     render(verdict([
-      item('source_citation', 0.9),      // 🔴 + 설명 있음 → 붙는다
-      item('clickbait_headline', 0.9),   // 🔴 + 설명 없음 → 안 붙는다
-      item('headline_body_match', 0),    // 🟢 → 안 붙는다
+      item('source_citation', 0.9),       // 🔴 + 설명 있음 → 붙는다
+      item('emotional_language', 0.5),    // 🟡 + 설명 있음 → 붙는다
+      item('headline_body_match', 0),     // 🟢 → 안 붙는다
     ], 'CAUTION'))
-    expect(opens()).toHaveLength(1)
-    expect(opens()[0]?.textContent).toContain(content.items.source_citation.name)
+    expect(opens()).toHaveLength(2)
+    expect([...opens()].map((o) => o.textContent))
+      .toEqual([content.items.source_citation.name, content.items.emotional_language.name])
+  })
+
+  it('설명할 말이 없는 항목에는 붙지 않는다', () => {
+    // 확인하기 어려운 주장은 **문장마다** 판단하는 항목이라 쪼개는 방식이 다르다.
+    // 그래서 설명 문구가 없고, 없으면 펼침도 붙지 않는다 (GE-44).
+    render(verdict([item('unverifiable_claim', 0.9)], 'CAUTION'))
+    expect(opens()).toHaveLength(0)
   })
 
   it('🟢·⚪ 에는 붙지 않는다', () => {
