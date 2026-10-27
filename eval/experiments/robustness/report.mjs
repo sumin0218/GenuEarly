@@ -132,7 +132,7 @@ for (const r of runs) {
       const t = r.res[`sent:${i}:${x.id}`]
       if (!okOrOut(t)) continue
       const I = t.screened_out ? HELD : readSentence(t.answers)
-      judge(x, A, R, I, CRITERIA.warnSentenceDrop, { check: 'injection', injection: x.id, direction: dirOf(x), article: r.id, url: r.url, item: 'unverifiable_claim', sentence: +i, base: +A.soft.toFixed(3), repeat: +R.soft.toFixed(3), injected: +I.soft.toFixed(3), levels: [A.risk, R.risk, I.risk] })
+      judge(x, A, R, I, CRITERIA.warnSentenceDrop, { check: 'injection', injection: x.id, direction: dirOf(x), article: r.id, url: r.url, item: 'unverifiable_claim', sentence: +i, base: +A.soft.toFixed(3), repeat: +R.soft.toFixed(3), injected: I.soft === null ? null : +I.soft.toFixed(3), levels: [A.risk, R.risk, I.risk] })
     }
   }
 }
