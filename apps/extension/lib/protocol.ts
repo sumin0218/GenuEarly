@@ -59,6 +59,24 @@ export interface JudgeArticleMessage {
 
 export type Message = JudgeArticleMessage
 
+// ── 팝업이 콘텐츠 스크립트에 보내는 것 ──────────────────────────────────────
+//
+// **background 를 거치지 않는다.** `tabs.sendMessage` 는 그 탭의 콘텐츠 스크립트에만 간다.
+//
+// 탭별 판정을 background 나 storage 에 쌓아 두고 팝업이 그것을 읽는 쪽이 더 쉽지만,
+// **탭마다의 "어느 기사를 보는 중인가" 는 그 자체가 열람 기록이다.**
+// 콘텐츠 스크립트가 들고 있다가 물어볼 때 건네면 아무 데도 남지 않는다
+// (docs/security/secure-coding.md 6절).
+export interface TabStateMessage {
+  kind: 'get-tab-state'
+}
+
+/** 콘텐츠 스크립트가 지금 그리고 있는 상태. 팝업은 이것을 그대로 그린다. */
+export interface TabState {
+  level: DisplayLevel
+  verdict?: ArticleVerdict
+}
+
 /**
  * 화면에 뜨는 단계.
  *

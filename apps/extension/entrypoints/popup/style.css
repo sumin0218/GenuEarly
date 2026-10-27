@@ -1,0 +1,74 @@
+/* 아이콘 팝업. 기사 페이지의 CSS 와 섞일 일이 없는 우리 문서다
+   (그래서 ③ 선택 글 결과도 여기로 옮겼다 — docs/requirements.md 5-1절). */
+
+:root {
+  --ge-fg: #202124;
+  --ge-fg-dim: #5f6368;
+  --ge-bg: #fff;
+  --ge-line: rgba(0, 0, 0, 0.1);
+  --ge-caution: #d93025;
+  --ge-check: #f29900;
+  --ge-safe: #1e8e3e;
+  --ge-undetermined: #9aa0a6;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --ge-fg: #e8eaed;
+    --ge-fg-dim: #9aa0a6;
+    --ge-bg: #202124;
+    --ge-line: rgba(255, 255, 255, 0.12);
+  }
+}
+
+* { box-sizing: border-box; }
+
+body {
+  width: 340px;
+  margin: 0;
+  padding: 14px;
+  background: var(--ge-bg);
+  color: var(--ge-fg);
+  font: 14px/1.5 -apple-system, BlinkMacSystemFont, "Segoe UI", "Malgun Gothic", sans-serif;
+}
+
+.ge-popup__head {
+  display: flex;
+  gap: 10px;
+  align-items: flex-start;
+  padding-left: 10px;
+  /* 색만으로 구분하지 않는다. 기호와 글이 먼저고 색은 거든다. */
+  border-left: 4px solid var(--ge-undetermined);
+}
+body[data-level="CAUTION"] .ge-popup__head { border-left-color: var(--ge-caution); }
+body[data-level="CHECK"]   .ge-popup__head { border-left-color: var(--ge-check); }
+body[data-level="SAFE"]    .ge-popup__head { border-left-color: var(--ge-safe); }
+
+.ge-popup__mark { font-size: 20px; line-height: 1.2; }
+.ge-popup__head-text { min-width: 0; }
+.ge-popup__name { margin: 0; font-size: 15px; font-weight: 600; }
+.ge-popup__desc { margin: 2px 0 0; font-size: 13px; color: var(--ge-fg-dim); }
+
+.ge-popup__items {
+  margin: 12px 0 0;
+  padding: 0;
+  list-style: none;
+  border-top: 1px solid var(--ge-line);
+}
+
+.ge-popup__item {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  padding: 7px 0;
+  font-size: 12px;
+}
+.ge-popup__item + .ge-popup__item { border-top: 1px solid var(--ge-line); }
+.ge-popup__item-name { font-weight: 600; }
+.ge-popup__item-text { color: var(--ge-fg-dim); }
+
+.ge-popup__note {
+  padding: 10px 0;
+  font-size: 12px;
+  color: var(--ge-fg-dim);
+}
