@@ -3,9 +3,10 @@
 // **키를 가진 유일한 곳이다.** 확장 프로그램은 키를 모른다.
 // 규칙은 apps/proxy/AGENT.md 와 docs/security/secure-coding.md 8절에 있다.
 //
-// 하는 일은 셋뿐이다. 요청이 우리 것인지 보고, 판단 항목이 규약에 맞는지 보고, Jev 로 넘긴다.
+// 하는 일은 넷뿐이다. 요청이 우리 것인지 보고, 판단 항목이 규약에 맞는지 보고,
+// 판단기를 노린 문장을 걷어내고(GE-35), Jev 로 넘긴다.
 // **점수로 바꾸거나 해석하지 않는다.** 그건 확장 프로그램의 몫이다 (docs/architecture.md 5절).
-import { buildRequest, isRejection, SCHEMA_MODEL, SCHEMA_VERSION } from './schema'
+import { buildRequest, isRejection, screenState, SCHEMA_MODEL, SCHEMA_VERSION } from './schema'
 import { callJev } from './jev'
 import { budgetAllows, creditGuardOn, isPaused } from './credits'
 import { RETRY_AFTER_S, withinLimits } from './ratelimit'
@@ -184,6 +185,17 @@ export default {
         return reply(origin, { error: built.error, detail: built.detail }, 400)
       }
 
+      // --- 보내기 전 걷어내기 (GE-35) ----------------------------------------
+      // 본문에 우리 항목 키·보기 이름을 적거나 [SYSTEM]·</…> 로 꾸민 문장은 모델이 보지 못하게 뺀다.
+      // 질문 문구로 막는 것은 모델이 따를지 고르지만, 걷어낸 문장은 볼 수 없다.
+      // **로그에는 걷어낸 수만 남긴다. 글은 남기지 않는다** (남이 쓴 글이다).
+      const screened = screenState(built.state)
+      if (screened.removed) console.warn(JSON.stringify({ at: 'screen', removed: screened.removed, emptied: !screened.ok }))
+      if (!screened.ok) {
+        // 남은 글이 없다. Jev 를 부르지 않는다 — 크레딧도 쓰지 않는다
+        return reply(origin, { model: env.JEV_MODEL, undetermined: true, reason: 'screened_out' }, 200)
+      }
+
       // --- 예산 ------------------------------------------------------------
       // 레이트 리밋이 아니다. 지키려는 것은 분당 건수가 아니라 **크레딧 잔액**이다.
       // 한도껏 쓰면 월 할당이 7시간이면 사라지고 다음 달까지 돌아오지 않는다.
@@ -192,7 +204,7 @@ export default {
       }
 
       // --- 호출 -------------------------------------------------------------
-      const out = await callJev(env, built.state, built.questions, built.criteria)
+      const out = await callJev(env, screened.state, built.questions, built.criteria)
 
       if (!out.ok) {
         // 실패가 아니라 결과다. 그래서 200 이다 (packages/shared/README.md).

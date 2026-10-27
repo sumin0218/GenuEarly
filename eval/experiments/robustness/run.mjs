@@ -1,6 +1,6 @@
 // 인젝션·보기 순서 검사를 Jev 에 실제로 보낸다. 답만 모으고 판정은 report.mjs 가 한다.
 //
-//   node --env-file=<.env> run.mjs <작업 디렉터리> [--limit N] [--sentences K] [--adopt-unhashed]
+//   node --env-file=<.env> run.mjs <작업 디렉터리> [--limit N] [--sentences K] [--adopt-unhashed] [--screen]
 //
 // 입력: <작업 디렉터리>/articles.json — [{ id, headline, body, sents?, url?, kind? }]
 // 출력: <작업 디렉터리>/runs.jsonl — 기사 하나가 한 줄. 답마다 요청 본문의 해시(h), 받은 시각(at),
@@ -12,6 +12,10 @@
 //       --adopt-unhashed: 해시가 없는 옛 답(2026-10-23 첫 측정)에 지금 요청의 해시를 붙이고 다시 보내지 않는다.
 //         그 답이 지금과 같은 질문 세트·문장·기사로 받은 것이 확실할 때만 쓴다. 이 옵션이 없으면 해시 없는 답은 다시 보낸다.
 //         해시를 붙인 답에는 지금 버전도 함께 적는다.
+// --screen: 중계 서버처럼 보내기 전에 걷어낸다 (GE-35, packages/shared/src/screen.ts). 본문(body)과 문장(sentence)만 보고 제목은 두지 않는다.
+//   걷어내고 남은 글이 없는 요청은 보내지 않고 { screened_out: true } 로 남긴다. 중계 서버가 Jev 를 부르지 않고 판단 보류로 돌리는 것과 같다.
+//   걷어낸 것이 있는 답에는 걷어낸 덩어리 수(screened)를, 모든 답에 규칙 버전(screen)을 남긴다. 끄면 screen 은 null 이다.
+//   전후 비교는 작업 디렉터리를 둘로 나눠 같은 시간에 돌린다 (README 5절).
 // 작업 디렉터리는 저장소 밖으로 잡는다. 기사 본문과 심은 기사가 거기 있다.
 import { readFileSync, writeFileSync, existsSync } from 'node:fs'
 import { createHash } from 'node:crypto'
@@ -19,14 +23,17 @@ import { resolve } from 'node:path'
 import { post } from '../sentence-batching/jev.mjs'
 import { splitSentences } from '../sentence-batching/split.mjs'
 import { INJECTIONS, groupRequest, sentenceRequest, permutations, SCHEMA } from './lib.mjs'
+import { createStateScreen, SCREEN_VERSION } from '../../../packages/shared/src/screen.ts'
 
 const W = resolve(process.argv[2] ?? '')
 const arg = (k, d) => { const i = process.argv.indexOf(k); return i > 0 ? Number(process.argv[i + 1]) : d }
 const LIMIT = arg('--limit', Infinity)
 const K = arg('--sentences', 3)
 const ADOPT = process.argv.includes('--adopt-unhashed')
+// 중계 서버와 같은 함수다 (apps/proxy/src/schema.ts 의 screenState). 걷어내는 필드와 "비면 보내지 않는다" 규칙이 한곳에 있다
+const screenState = process.argv.includes('--screen') ? createStateScreen(SCHEMA) : null
 // 답마다 남기는 버전. 요청 본문에는 들어가지 않으므로 해시와 따로 적는다
-const V = { question_set: SCHEMA.version, injections: INJECTIONS.version }
+const V = { question_set: SCHEMA.version, injections: INJECTIONS.version, screen: screenState ? SCREEN_VERSION : null }
 const hash = (body) => createHash('sha256').update(JSON.stringify(body)).digest('hex').slice(0, 16)
 // 키는 실제로 보낼 요청이 생길 때 확인한다. 보낼 것이 없으면(버전만 고쳐 적는 경우 등) 키 없이 돌아간다
 const needKey = () => { if (!process.env.CHATKHU_API_KEY || !process.env.CHATKHU_API_BASE_URL) throw new Error('보낼 요청이 있다. CHATKHU_API_KEY, CHATKHU_API_BASE_URL 이 필요하다 (--env-file)') }
@@ -45,19 +52,21 @@ let model = null, requests = 0, errors = 0, adopted = 0, stale = 0, reused = 0, 
 const byHash = new Map()
 // 단, ":repeat" 키는 나누지 않는다. 같은 요청을 한 번 더 보내 흔들림을 재는 것이 그 키의 목적이다
 const isRepeat = (k) => k.endsWith(':repeat')
-for (const r of prev.values()) for (const [k, v] of Object.entries(r.res)) if (!isRepeat(k) && v.h && !v.error) byHash.set(v.h, v)
+for (const r of prev.values()) for (const [k, v] of Object.entries(r.res)) if (!isRepeat(k) && v.h && !v.error && !v.screened_out) byHash.set(v.h, v)
 // 해시가 같은 답의 버전을 지금 값으로 맞춘다. 바꿨으면 true
 const relabel = (o) => {
-  if (o.question_set === V.question_set && o.injections === V.injections) return false
+  if (o.question_set === V.question_set && o.injections === V.injections && (o.screen ?? null) === V.screen) return false
   Object.assign(o, V)
   return true
 }
-async function call(body, h) {
+async function call(body, h, extra) {
   requests++
   const at = new Date().toISOString()
-  try { const j = await post(body); model ??= j.model; return { answers: j.answers, tokens: j.usage?.input_tokens, model: j.model, h, at, ...V } }
-  catch (e) { errors++; return { error: String(e.message ?? e), h, at, ...V } }
+  try { const j = await post(body); model ??= j.model; return { answers: j.answers, tokens: j.usage?.input_tokens, model: j.model, h, at, ...extra, ...V } }
+  catch (e) { errors++; return { error: String(e.message ?? e), h, at, ...extra, ...V } }
 }
+// 이번 실행에서 실제로 보낸(또는 보내지 않기로 새로 적은) 것만 센다. 옛 답을 다시 쓴 것은 세지 않는다
+let screenedSent = 0, screenedOut = 0
 
 for (const a of articles) {
   const old = prev.get(a.id)?.res ?? {}
@@ -68,14 +77,29 @@ for (const a of articles) {
   const wanted = new Set() // 이번 실행이 원한 키. 저장할 때 이것만 남긴다 (옛 키가 판정에 섞이지 않게)
   const want = (key, make) => {
     wanted.add(key)
-    const body = make(), h = hash(body), o = old[key]
-    if (o && !o.error && o.h === h) { if (relabel(o)) { relabeled++; touched = true } return }
+    let body = make(), extra = {}
+    if (screenState) {
+      const s = screenState(body.state)
+      if (s.removed) extra = { screened: s.removed }
+      if (!s.ok) {
+        // 보낼 글이 남지 않았다. 해시는 걷어내기 전 요청으로 붙인다 (같은 요청이면 다시 만들지 않게)
+        const h = hash(body), o = old[key]
+        if (o && o.screened_out && o.h === h) { if (relabel(o)) touched = true; return }
+        screenedOut++
+        jobs[key] = Promise.resolve({ screened_out: true, ...extra, h, at: new Date().toISOString(), ...V })
+        return
+      }
+      if (s.removed) body = { ...body, state: s.state }
+    }
+    const h = hash(body), o = old[key]
+    if (o && !o.error && !o.screened_out && o.h === h) { if (relabel(o)) { relabeled++; touched = true } return }
     if (o && !o.error && !o.h && ADOPT) { o.h = h; relabel(o); adopted++; touched = true; return }
     if (o && !o.error) stale++
     if (ADOPT) return
     if (!isRepeat(key) && byHash.has(h)) { reused++; jobs[key] = Promise.resolve(byHash.get(h)).then((v) => (v.error ? v : { ...v, ...V })); return }
     needKey()
-    const p = call(body, h)
+    if (extra.screened) screenedSent++
+    const p = call(body, h, extra)
     if (!isRepeat(key)) byHash.set(h, p)
     jobs[key] = p
   }
@@ -105,11 +129,11 @@ for (const a of articles) {
   const dropped = Object.keys(old).some((k) => !wanted.has(k))
   if (!Object.keys(jobs).length) { if (touched || dropped) { prev.get(a.id).res = keep(old); save() } continue }
   const res = keep({ ...old })
-  for (const [k, p] of Object.entries(jobs)) { res[k] = await p; if (!isRepeat(k) && !res[k].error) byHash.set(res[k].h, res[k]) }
+  for (const [k, p] of Object.entries(jobs)) { res[k] = await p; if (!isRepeat(k) && !res[k].error && !res[k].screened_out) byHash.set(res[k].h, res[k]) }
   // 기사 글은 남기지 않는다. 답만 남긴다
   prev.set(a.id, { id: a.id, url: a.url ?? null, kind: a.kind ?? (a.url ? 'real' : null), n_sents: sents.length, res })
   save()
   console.log(`${a.id}  요청 ${Object.keys(jobs).length}건  (누적 ${requests}, 실패 ${errors})`)
 }
 
-console.log(`끝. 요청 ${requests}건, 같은 요청이라 나눠 쓴 답 ${reused}건, 실패 ${errors}건, 바뀌어서 다시 보냄 ${stale}건, 해시를 붙인 옛 답 ${adopted}건, 버전만 고쳐 적은 답 ${relabeled}건, 응답 model=${model}, 질문 세트 ${SCHEMA.version}, 인젝션 ${INJECTIONS.version}`)
+console.log(`끝. 요청 ${requests}건, 같은 요청이라 나눠 쓴 답 ${reused}건, 실패 ${errors}건, 바뀌어서 다시 보냄 ${stale}건, 해시를 붙인 옛 답 ${adopted}건, 버전만 고쳐 적은 답 ${relabeled}건, 응답 model=${model}, 질문 세트 ${SCHEMA.version}, 인젝션 ${INJECTIONS.version}, 걷어내기 ${V.screen ?? '끔'} (걷어내고 새로 보낸 요청 ${screenedSent}건, 남은 글이 없어 보내지 않기로 새로 적은 요청 ${screenedOut}건)`)

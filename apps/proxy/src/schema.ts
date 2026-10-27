@@ -4,6 +4,7 @@
 // 항목의 question 객체는 **그대로** Jev 에 보낸다. 코드가 하는 일은 instructions 뒤에
 // common_instructions 를 붙이는 것 하나뿐이다 (packages/shared/README.md).
 import source from '../../../packages/shared/judgment-items.json'
+import { createStateScreen } from '../../../packages/shared/src/screen'
 
 export interface Question {
   type: 'choice' | 'score' | 'noul'
@@ -123,6 +124,12 @@ export function buildRequest(body: unknown): Rejection | Accepted {
 }
 
 export const isRejection = (r: Rejection | Accepted): r is Rejection => 'error' in r
+
+/**
+ * 기사 글에서 판단기를 노린 문장을 걷어낸다 (GE-35). 본문과 문장만 보고 제목은 두지 않는다.
+ * 규칙과 필드 목록은 packages/shared/src/screen.ts 에 있다. eval 의 run.mjs --screen 도 같은 함수를 부른다.
+ */
+export const screenState = createStateScreen(SCHEMA)
 
 /**
  * Jev 응답이 우리가 정한 답의 범위 안인지 본다.
