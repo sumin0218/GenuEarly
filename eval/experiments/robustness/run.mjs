@@ -28,7 +28,8 @@ const ADOPT = process.argv.includes('--adopt-unhashed')
 // 답마다 남기는 버전. 요청 본문에는 들어가지 않으므로 해시와 따로 적는다
 const V = { question_set: SCHEMA.version, injections: INJECTIONS.version }
 const hash = (body) => createHash('sha256').update(JSON.stringify(body)).digest('hex').slice(0, 16)
-if (!ADOPT && (!process.env.CHATKHU_API_KEY || !process.env.CHATKHU_API_BASE_URL)) throw new Error('CHATKHU_API_KEY, CHATKHU_API_BASE_URL 이 필요하다 (--env-file)')
+// 키는 실제로 보낼 요청이 생길 때 확인한다. 보낼 것이 없으면(버전만 고쳐 적는 경우 등) 키 없이 돌아간다
+const needKey = () => { if (!process.env.CHATKHU_API_KEY || !process.env.CHATKHU_API_BASE_URL) throw new Error('보낼 요청이 있다. CHATKHU_API_KEY, CHATKHU_API_BASE_URL 이 필요하다 (--env-file)') }
 
 const articles = JSON.parse(readFileSync(resolve(W, 'articles.json'), 'utf8')).slice(0, LIMIT)
 const OUT = resolve(W, 'runs.jsonl')
@@ -73,6 +74,7 @@ for (const a of articles) {
     if (o && !o.error) stale++
     if (ADOPT) return
     if (!isRepeat(key) && byHash.has(h)) { reused++; jobs[key] = Promise.resolve(byHash.get(h)).then((v) => (v.error ? v : { ...v, ...V })); return }
+    needKey()
     const p = call(body, h)
     if (!isRepeat(key)) byHash.set(h, p)
     jobs[key] = p
