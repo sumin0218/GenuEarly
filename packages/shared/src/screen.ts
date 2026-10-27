@@ -115,7 +115,7 @@ export function createScreen(schema: ScreenSchema): (text: string) => Screened {
     let dropped = 0
     let carry = 0 // 앞 문장의 태그 때문에 함께 걷어낼 남은 문장 수
     for (let i = 0; i < parts.length; i += 2) {
-      const s = parts[i]
+      const s = parts[i] ?? ''
       const sep = parts[i + 1] ?? ''
       let drop = false
       if (s && (CLOSE_TAG.test(s) || ROLE_OPEN.test(s))) { drop = true; carry = FOLLOWING }
@@ -171,7 +171,7 @@ export function createStateScreen(schema: ScreenSchema): (state: Record<string, 
     let removed = 0
     for (const f of SCREENED_FIELDS) {
       if (!Object.hasOwn(out, f)) continue
-      const r = screen(out[f])
+      const r = screen(out[f] ?? '')
       if (!r.removed) continue
       removed += r.removed
       if (!r.text) return { ok: false, removed }
