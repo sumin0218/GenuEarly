@@ -8,31 +8,75 @@ import '../assets/content.css'
 import { ARTICLE_MATCHES } from '../match-patterns'
 import content from '../../../packages/content/ui.ko.json'
 import { extractArticle } from '../lib/extract'
-import { MARK, toRows } from '../lib/item-view'
+import { createIcon } from '../lib/icon'
+import { LEVEL_ICON, LEVEL_INK, LEVEL_INK_DARK, toRows } from '../lib/item-view'
 import type { ArticleVerdict, DisplayLevel, Message, TabState, TabStateMessage } from '../lib/protocol'
+
+/** 접힌 줄의 아이콘 크기(px). 글자(14px)와 같은 줄에 선다. */
+const HEAD_ICON = 16
+/** 펼친 항목 줄의 아이콘 크기(px). */
+const ROW_ICON = 14
+
+/**
+ * 단계 아이콘을 자리에 그린다. 팝업의 같은 이름 함수와 규칙이 같다
+ * (entrypoints/popup/main.ts) — **색표의 원본은 lib/item-view.ts 하나다.**
+ *
+ * 밝은 쪽·어두운 쪽 값을 둘 다 넣고 어느 쪽을 쓸지는 CSS 가 고른다.
+ * `tone: 'quiet'` 는 색을 주지 않는다 — 걸리지 않은 항목 줄이 그렇다.
+ */
+function paintMark(el: HTMLElement, level: DisplayLevel, size: number, tone: 'level' | 'quiet' = 'level'): void {
+  if (tone === 'level') {
+    el.style.setProperty('--ge-level-light', LEVEL_INK[level])
+    el.style.setProperty('--ge-level-dark', LEVEL_INK_DARK[level])
+  } else {
+    el.style.removeProperty('--ge-level-light')
+    el.style.removeProperty('--ge-level-dark')
+  }
+  el.replaceChildren(createIcon(document, LEVEL_ICON[level], { size }))
+}
 
 /** 배지 DOM 을 만든다. `innerHTML` 을 쓰지 않는다 (docs/security/secure-coding.md 4절). */
 function createBadge() {
   const el = document.createElement('div')
   el.className = 'ge-badge'
 
+  const head = document.createElement('div')
+  head.className = 'ge-badge__head'
   const mark = document.createElement('span')
   mark.className = 'ge-badge__mark'
   const label = document.createElement('span')
   label.className = 'ge-badge__label'
+  head.append(mark, label)
+
   const detail = document.createElement('div')
   detail.className = 'ge-badge__detail'
   detail.hidden = true
 
-  el.append(mark, label, detail)
-  el.addEventListener('click', () => { detail.hidden = !detail.hidden })
+  el.append(head, detail)
+
+  // **키보드로도 펼칠 수 있어야 한다.** 눌러서 펼치는 것이 배지의 유일한 기능인데
+  // `div` 에 클릭만 달아 두면 마우스 없이는 "왜 이 판정인가" 에 닿을 길이 없다.
+  el.setAttribute('role', 'button')
+  el.tabIndex = 0
+  function toggle(): void {
+    detail.hidden = !detail.hidden
+    el.setAttribute('aria-expanded', String(!detail.hidden))
+  }
+  el.setAttribute('aria-expanded', 'false')
+  el.addEventListener('click', toggle)
+  el.addEventListener('keydown', (e) => {
+    if (e.key !== 'Enter' && e.key !== ' ') return
+    // 스페이스로 페이지가 스크롤되지 않게 한다.
+    e.preventDefault()
+    toggle()
+  })
 
   let state: TabState = { level: 'PENDING' }
 
   function render(level: DisplayLevel, verdict?: ArticleVerdict): void {
     state = { level, verdict }
     el.dataset.level = level
-    mark.textContent = MARK[level]
+    paintMark(mark, level, HEAD_ICON)
     label.textContent = content.badge[level].name
     detail.replaceChildren()
 
@@ -51,13 +95,21 @@ function createBadge() {
       const row = document.createElement('div')
       row.className = 'ge-badge__row'
       row.dataset.level = r.level
-      const head = document.createElement('span')
-      head.className = 'ge-badge__row-name'
-      head.textContent = `${r.mark} ${r.name}`
+
+      // **걸린 줄에만 색이 들어간다** (docs/design.md). 팝업과 같은 규칙이다.
+      const loud = r.level === 'CAUTION' || r.level === 'CHECK'
+      const icon = document.createElement('span')
+      icon.className = 'ge-badge__row-mark'
+      paintMark(icon, r.level, ROW_ICON, loud ? 'level' : 'quiet')
+
+      const name = document.createElement('span')
+      name.className = 'ge-badge__row-name'
+      name.textContent = r.name
       const body = document.createElement('span')
       body.className = 'ge-badge__row-text'
       body.textContent = r.text
-      row.append(head, body)
+
+      row.append(icon, name, body)
       detail.append(row)
     }
   }

@@ -19,7 +19,7 @@ import {
   type CachedItem,
   type ItemScores,
 } from './cache'
-import { GLYPH, LEVEL_COLOR } from './item-view'
+import { GLYPH, LEVEL_INK } from './item-view'
 import {
   PROXY_URL,
   type ArticleVerdict,
@@ -141,7 +141,7 @@ export function setIconBadge(tabId: number | undefined, level: DisplayLevel) {
   if (tabId === undefined) return
   // 탭마다 따로 둔다. 다른 탭의 기사 상태가 섞이면 안 된다.
   void browser.action.setBadgeText({ tabId, text: GLYPH[level] })
-  void browser.action.setBadgeBackgroundColor({ tabId, color: LEVEL_COLOR[level] })
+  void browser.action.setBadgeBackgroundColor({ tabId, color: LEVEL_INK[level] })
 }
 
 export async function judgeArticle(msg: Extract<Message, { kind: 'judge-article' }>, tabId?: number): Promise<ArticleVerdict> {
