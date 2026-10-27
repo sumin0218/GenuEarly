@@ -846,6 +846,19 @@ describe('심층 분석 — 본문에서 근거를 집어 온다', () => {
     ])
   })
 
+  it('줄바꿈이 섞여 있어도 같은 글로 본다 — **돌려주는 것은 원문 그대로다**', async () => {
+    // 기사 본문은 줄바꿈과 연속 공백이 섞여 있는데 모델은 공백 하나로 옮겨 적는다.
+    // 글자가 같은데 공백이 달라 떨어지면, 모델은 공백을 넘지 않는 짧은 토막만
+    // 돌려주게 된다 — 실제로 문장 대신 "한 관계자는" 만 집어 왔다.
+    const body = '한 관계자는 이번 조치가\n사실상  백지화됐다고 전했다.'
+    mockFetch(() => said(JSON.stringify([
+      { quote: '한 관계자는 이번 조치가 사실상 백지화됐다고 전했다.', why: 'src_group_only' },
+    ])))
+    const picks = (await picksOf(await explain({ ...REQ, body }))) as { text: string }[]
+    // 모델이 적어 온 글이 아니라 **본문에서 잘라 낸 글**이 돌아온다.
+    expect(picks[0].text).toBe(body)
+    expect(body.includes(picks[0].text)).toBe(true)
+  })
   it('모르는 이유는 버린다 — **모델이 쓴 한국어가 새는 자리다**', async () => {
     // 화면에 뜨는 문장은 전부 ChatKHU 가 미리 쓴 것이다. 목록에 없는 id 를 통과시키면
     // 짝이 되는 문구가 없고, 그 자리가 곧 모델이 쓴 말이 들어오는 구멍이 된다.
