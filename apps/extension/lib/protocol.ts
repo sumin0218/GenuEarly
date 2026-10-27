@@ -105,22 +105,35 @@ export type ExplainLevel = 'CAUTION' | 'CHECK'
  *
  * - `found` — Jev 가 **잰** 것. 하위 질문 id → 그런가. 확률은 접어서 준다
  * - `spans` — 코드가 **찾은** 것. 규칙 id → 본문에서 떼어 온 글자
- * - `quotes` — LLM 이 **집어 온** 것. 목록으로 담을 수 없는 항목(출처·근거)만
+ * - `picks` — LLM 이 **집어 온** 것. 목록으로 담을 수 없는 항목(출처·근거)만
  *
  * Jev 는 "이 글이 어떤가" 는 재지만 "이 표현이 있는가" 는 못 센다 (docs/jev.md 8절).
  * 코드는 **정해진 표현**만 찾을 수 있다. 남는 것 — 기관명·실명처럼 목록이 없는 것 —
  * 만 LLM 이 집어 오고, **집어 온 것은 본문과 글자 대조해 거른다.**
  *
  * **셋 다 사람에게 하는 말을 쓰지 않는다.** 화면의 문장은 전부 ChatKHU 가 미리 쓴
- * 문구이고, 여기 담기는 것은 본문에서 떼어 온 글자뿐이다.
+ * 문구이고, 여기 담기는 것은 본문에서 떼어 온 글자와 **고른 이유의 id** 뿐이다.
  */
 export interface ExplainResult {
   itemId: string
   found: Record<string, boolean>
   /** **원문 그대로다.** 화면에 인용한다 */
   spans: Record<string, string[]>
-  /** **원문 그대로다.** 항목 전체에 붙는 인용이라 하위 질문으로 나뉘지 않는다 */
-  quotes?: string[]
+  /** 떼어 온 문장과 **왜 떼어 왔는지.** 하위 질문으로 나뉘지 않는 항목만 */
+  picks?: ExplainPick[]
+}
+
+/**
+ * 떼어 온 문장 하나.
+ *
+ * `why` 는 **미리 정해 둔 이유의 id** 다 (apps/proxy/src/pinpoint.ts 의 REASONS).
+ * 화면에 뜨는 문장은 packages/content 의 `explain.*.reasons` 가 들고 있다 —
+ * **모델은 그 문장을 쓰지 않고 고르기만 한다.**
+ */
+export interface ExplainPick {
+  /** **원문 그대로다.** 화면에 인용한다 */
+  text: string
+  why: string
 }
 
 export type Message = JudgeArticleMessage | JudgeHeadlineMessage | ExplainMessage

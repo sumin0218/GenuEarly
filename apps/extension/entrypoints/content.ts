@@ -145,12 +145,14 @@ export default defineContentScript({
             return null
           })
           .then((res) => {
-            const out = res as { found?: Record<string, boolean>; quotes?: string[] } | null
+            const out = res as
+              | { found?: Record<string, boolean>; picks?: { text: string; why: string }[] }
+              | null
             if (!out && Object.keys(spans).length === 0) return null
             // **집어 온 글자를 여기서 또 대조한다.** 중계 서버와 background 에 이어 셋째다.
             // 본문을 들고 있는 것은 우리뿐이라, 마지막으로 거를 수 있는 자리이기도 하다.
-            const quotes = (out?.quotes ?? []).filter((q) => article.body.includes(q))
-            return { itemId, found: out?.found ?? {}, spans, ...(quotes.length ? { quotes } : {}) }
+            const picks = (out?.picks ?? []).filter((x) => article.body.includes(x.text))
+            return { itemId, found: out?.found ?? {}, spans, ...(picks.length ? { picks } : {}) }
           })
       }
       return

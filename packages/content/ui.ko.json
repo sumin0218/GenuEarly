@@ -1,13 +1,13 @@
 {
   "$comment": "사용자에게 보이는 문구. **ChatKHU 가 쓴 글이다** — 코딩 도구가 쓰지 않는다. 고칠 때는 README.md 의 규칙을 먼저 보고, 고친 내용을 docs/ai-log/ 에 남긴다. 금지어·길이·말투는 apps/extension/tests/content.test.ts 가 검사한다.",
-  "version": "1.6.0",
+  "version": "1.7.0",
   "locale": "ko",
   "source": {
     "tool": "ChatKHU",
     "model": "gpt-5.6-luna",
     "date": "2026-10-22",
     "prompt": "tools/content-gen/prompt.md",
-    "note": "항목마다 후보 3개를 받아 사람이 골랐다. 고른 내용은 ChatKHU 출력 그대로이고 손대지 않았다. 신호 없음(safe) 문구는 2차로, ③ 선택 글 문구는 3차로, 팝업 틀과 판단 근거는 4차로, 출처 표시를 쪼개 본 결과는 5차로, 나머지 다섯 항목을 쪼개 본 결과는 6차로, 본문에서 그대로 떼어 온 대목에 붙는 말은 7차로 따로 받았다.",
+    "note": "항목마다 후보 3개를 받아 사람이 골랐다. 고른 내용은 ChatKHU 출력 그대로이고 손대지 않았다. 신호 없음(safe) 문구는 2차로, ③ 선택 글 문구는 3차로, 팝업 틀과 판단 근거는 4차로, 출처 표시를 쪼개 본 결과는 5차로, 나머지 다섯 항목을 쪼개 본 결과는 6차로, 본문에서 그대로 떼어 온 대목에 붙는 말은 7차로, 떼어 온 문장마다 붙는 \"왜\" 한 문장은 8차로 따로 받았다.",
     "rounds": [
       {
         "date": "2026-10-22",
@@ -36,6 +36,10 @@
       {
         "date": "2026-10-28",
         "what": "본문에서 그대로 떼어 온 대목에 붙는 말 — 출처 표시와 확인하기 어려운 주장"
+      },
+      {
+        "date": "2026-10-28",
+        "what": "떼어 온 문장마다 붙는 \"왜\" 한 문장 여섯 — 근거가 빠진 방식 넷, 출처가 흐린 방식 둘"
       }
     ]
   },
@@ -126,16 +130,24 @@
     "disclaimer": "보이는 신호를 참고해 기사의 내용은 직접 판단해 보세요."
   },
   "explain": {
-    "$comment": "설명 전용 문구. 짝이 되는 것은 **둘**이다 — judgment-items.json 의 explain_items[].questions (Jev 가 재는 것), 그리고 packages/shared 의 evidence.ts 규칙 (코드가 찾는 것). parts 가 없는 항목은 LLM 이 본문에서 집어 오는 자리라 짝 문구가 없고 title 만 쓴다.",
+    "$comment": "설명 전용 문구. 짝이 되는 것은 **셋**이다 — judgment-items.json 의 explain_items[].questions (Jev 가 재는 것), packages/shared 의 evidence.ts 규칙 (코드가 찾는 것), 그리고 apps/proxy/src/pinpoint.ts 의 REASONS (LLM 이 고르는 것). reasons 를 가진 항목은 parts 가 없다 — 떼어 온 문장마다 reasons 에서 고른 한 문장이 붙는다. **모델은 이 문장을 쓰지 않고 고르기만 한다.**",
     "source_citation": {
       "title": "출처 표시를 살펴본 결과",
       "none": "확인한 항목에서 출처 표현을 찾지 못했습니다.",
-      "found": "본문 그대로입니다. 출처를 함께 볼 자리입니다."
+      "reasons": {
+        "src_group_only": "출처가 직함이나 집단으로만 적혀 있습니다.",
+        "src_none": "이 대목에는 출처를 가리키는 말이 없습니다."
+      }
     },
     "unverifiable_claim": {
       "title": "주장과 근거를 살펴본 결과",
       "none": "확인한 항목에서 해당 대목을 찾지 못했습니다.",
-      "found": "본문 그대로입니다. 근거를 함께 볼 자리입니다."
+      "reasons": {
+        "uvc_no_basis": "이 문장에는 근거를 가리키는 말이 없습니다.",
+        "uvc_group_only": "말한 쪽이 집단이나 직함으로만 적혀 있습니다.",
+        "uvc_hearsay": "'알려졌다'처럼 전하는 표현으로 끝납니다.",
+        "uvc_causal": "원인과 결과를 잇는 근거가 보이지 않습니다."
+      }
     },
     "clickbait_headline": {
       "title": "제목 표현을 살펴본 결과",

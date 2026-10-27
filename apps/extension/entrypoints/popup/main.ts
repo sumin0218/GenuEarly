@@ -298,8 +298,13 @@ function drawWhy(host: HTMLElement, lines: ExplainLine[], root: Document): void 
 interface ExplainCopy {
   title: string
   none: string
-  /** 본문에서 떼어 온 대목 앞에 놓는 한 줄. LLM 이 집어 오는 항목만 가진다 */
-  found?: string
+  /**
+   * 떼어 온 문장마다 붙는 "왜" 한 문장. **이유 id → 문장.**
+   *
+   * LLM 이 집어 오는 항목만 가진다. 짝은 apps/proxy/src/pinpoint.ts 의 REASONS 다 —
+   * **모델은 이 문장을 쓰지 않고 그중 하나를 고르기만 한다.**
+   */
+  reasons?: Record<string, string>
   /** 없을 수 있다 — LLM 이 본문에서 집어 오는 항목은 짝 문구를 두지 않는다 */
   parts?: Record<string, { present: string; absent: string }>
 }
@@ -308,10 +313,10 @@ const EXPLAIN = (content as unknown as { explain?: Record<string, ExplainCopy> }
 /**
  * 그 항목에 **설명할 말이 있는가.** 문구가 없으면 버튼 자체를 그리지 않는다.
  *
- * 쪼갠 질문(`parts`)이 있거나, 본문에서 대목을 집어 오는 항목(`found`)이면 된다.
+ * 쪼갠 질문(`parts`)이 있거나, 본문에서 대목을 집어 오는 항목(`reasons`)이면 된다.
  */
 const canExplain = (itemId: string): boolean =>
-  Boolean(EXPLAIN[itemId]?.parts ?? EXPLAIN[itemId]?.found)
+  Boolean(EXPLAIN[itemId]?.parts ?? EXPLAIN[itemId]?.reasons)
 
 /**
  * 심층 분석을 **콘텐츠 스크립트에** 시킨다.
@@ -378,10 +383,20 @@ export function explainLines(itemId: string, result: ExplainResult | null): Expl
     }
   }
 
-  // LLM 이 본문에서 집어 온 대목. **우리가 쓴 한 줄 뒤에 원문 그대로 붙는다.**
-  if (copy.found) {
-    const quotes = result.quotes ?? []
-    lines.push(quotes.length > 0 ? { text: copy.found, quotes } : { text: copy.none })
+  // LLM 이 본문에서 집어 온 문장. **한 줄에 "왜" 하나와 인용 하나씩.**
+  // 넷을 늘어놓으면 본문 복사처럼 보인다 — 중계 서버가 둘로 끊어 준다.
+  if (copy.reasons) {
+    const reasons = copy.reasons
+    const picks = (result.picks ?? []).filter((x) => reasons[x.why])
+    if (picks.length === 0) {
+      lines.push({ text: copy.none })
+    } else {
+      // **같은 이유는 한 줄로 모은다.** 똑같은 말을 두 번 적으면 두 가지를 짚은 것처럼
+      // 보인다. 이유가 하나면 줄도 하나고, 그 밑에 떼어 온 문장이 나란히 붙는다.
+      const 묶음 = new Map<string, string[]>()
+      for (const x of picks) 묶음.set(x.why, [...(묶음.get(x.why) ?? []), x.text])
+      for (const [why, quotes] of 묶음) lines.push({ text: reasons[why]!, quotes })
+    }
   }
   return lines
 }
