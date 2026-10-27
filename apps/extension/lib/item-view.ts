@@ -7,7 +7,7 @@
 // **사용자에게 보이는 말은 여기서 쓰지 않는다.** `packages/content` 가 원본이고
 // 그 글은 ChatKHU 가 썼다 (GE-16, docs/product.md 6절).
 // 여기 두는 것은 **글이 아닌 것** — 표시용 기호와 순서뿐이다.
-import { ITEM_CAUTION_AT, SIGNAL_SCORE, type ItemResult } from '@genuearly/shared'
+import { ITEM_CAUTION_AT, SAFE_BELOW, type ItemResult } from '@genuearly/shared'
 import content from '../../../packages/content/ui.ko.json'
 import type { ArticleVerdict, DisplayLevel } from './protocol'
 
@@ -19,12 +19,17 @@ export const MARK: Record<DisplayLevel, string> = {
  * 항목 하나를 화면에 어떻게 보일지.
  *
  * `@genuearly/shared` 는 **기사 단계만** 정하고 항목별 단계는 두지 않는다 — 판정에 쓰이지 않기 때문이다.
- * 여기서만 쓰는 표시용 구분이라 같은 상수(`ITEM_CAUTION_AT`, 중간 보기 값)를 보고 가른다.
+ * 여기서만 쓰는 표시용 구분이라 판정이 쓰는 상수를 그대로 보고 가른다.
+ *
+ * **🟡 의 경계가 `SAFE_BELOW` 다.** 한때 중간 보기 값(0.5)을 썼는데, 그러면 기사 배지와
+ * 항목 줄이 **서로 다른 말을 한다** — 가중평균이 0.3~0.5 사이면 배지는 🟡 "확인해 볼 점 있음"
+ * 인데 일곱 줄이 전부 🟢 "…가 보이지 않습니다" 가 된다. 사용자는 무엇을 확인하라는 것인지
+ * 알 수 없다. 배지가 🟢 를 그만두는 자리와 항목이 🟢 를 그만두는 자리는 같아야 한다.
  */
 export function itemLevel(r: ItemResult): DisplayLevel {
   if (r.score === null) return 'UNDETERMINED'
   if (r.score >= ITEM_CAUTION_AT) return 'CAUTION'
-  return r.score >= SIGNAL_SCORE.neutral ? 'CHECK' : 'SAFE'
+  return r.score >= SAFE_BELOW ? 'CHECK' : 'SAFE'
 }
 
 /** 걸린 것이 위로 온다. */

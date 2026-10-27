@@ -120,3 +120,28 @@ describe('화면에 새면 안 되는 것', () => {
     expect(document.body.textContent ?? '').not.toMatch(/https?:\/\//)
   })
 })
+
+describe('배지와 항목 줄이 같은 말을 한다', () => {
+  // 리뷰(#20)가 짚은 것: 항목 줄의 🟡 경계가 기사 배지의 경계보다 높으면
+  // **배지는 "확인해 볼 점 있음" 인데 일곱 줄이 전부 "신호 없음"** 이 된다.
+  it('기사가 CHECK 면 🟡 이상인 줄이 적어도 하나 있다', () => {
+    // 가중평균 0.33 — SAFE_BELOW(0.3) 위라 배지는 🟡 다.
+    render(verdict([
+      item('source_citation', 0.33),
+      item('headline_body_match', 0.33),
+      item('clickbait_headline', 0.33),
+    ], 'CHECK'))
+    const levels = [...document.querySelectorAll<HTMLElement>('.ge-popup__item')]
+      .map((el) => el.dataset.level)
+    expect(levels, '배지는 🟡 인데 줄이 전부 🟢 이면 무엇을 확인하라는 것인지 알 수 없다')
+      .not.toEqual(['SAFE', 'SAFE', 'SAFE'])
+    expect(levels.filter((l) => l === 'CHECK' || l === 'CAUTION').length).toBeGreaterThan(0)
+  })
+
+  it('정말 낮은 점수는 그대로 🟢 다', () => {
+    render(verdict([item('source_citation', 0.1), item('clickbait_headline', 0)], 'SAFE'))
+    const levels = [...document.querySelectorAll<HTMLElement>('.ge-popup__item')]
+      .map((el) => el.dataset.level)
+    expect(levels).toEqual(['SAFE', 'SAFE'])
+  })
+})

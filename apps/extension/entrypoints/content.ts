@@ -92,8 +92,11 @@ export default defineContentScript({
 
     // **팝업은 background 가 아니라 여기에 묻는다** (lib/protocol.ts 의 TabStateMessage).
     // 탭별 판정을 어딘가에 쌓아 두면 그것이 곧 열람 기록이 된다.
-    browser.runtime.onMessage.addListener((msg: TabStateMessage) => {
-      if (msg?.kind !== 'get-tab-state') return
+    //
+    // **보낸 곳을 확인한다.** 이 핸들러는 판정 전체를 돌려준다
+    // (AGENT.md 전역 규칙, docs/security/secure-coding.md 5절).
+    browser.runtime.onMessage.addListener((msg: TabStateMessage, sender) => {
+      if (sender.id !== browser.runtime.id || msg?.kind !== 'get-tab-state') return
       return Promise.resolve(badge.state())
     })
 
