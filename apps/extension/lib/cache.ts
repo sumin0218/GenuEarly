@@ -10,6 +10,7 @@
 //   - 값은 **항목별 점수**까지다. 기사 글은 한 글자도 넣지 않는다
 import type { ItemResult } from '@genuearly/shared'
 import schema from '@genuearly/shared/judgment-items.json'
+import content from '../../../packages/content/ui.ko.json'
 
 /** 유효 기간. 기사는 수정된다. 근거가 약한 값이라 실제 사용을 보고 조정한다 (requirements.md 3-6). */
 const TTL_MS = 6 * 60 * 60 * 1000
@@ -118,6 +119,14 @@ export interface CachedPick {
 export interface CachedExplain {
   /** 그때의 판정. 배지가 달라졌으면 다시 묻는다 — 판정이 프롬프트에 들어간다 */
   lv: string
+  /**
+   * 그때의 문구 묶음 버전.
+   *
+   * 고른 이유의 id 와 화면 문구는 짝이다. 문구를 고치거나 이유를 더하면 적어 둔 답이
+   * **낡은 짝**이 된다 — 짝이 없는 id 는 화면에서 조용히 빠져 빈 줄이 된다.
+   * 버전이 다르면 다시 묻는다.
+   */
+  cv?: string
   /** Jev 가 잰 것. 참·거짓뿐이라 글자가 섞이지 않는다 */
   f: Record<string, boolean>
   /** LLM 이 집어 온 자리 */
@@ -242,19 +251,32 @@ export async function readExplain(
     const e = got[key]
     if (!e || e.v !== schema.version || e.m !== schema.model || e.exp <= Date.now()) return undefined
     const hit = e.explain?.[itemId]
+    if (!hit) return undefined
     // 판정이 바뀌었으면 그때 받은 답은 다른 질문의 답이다 (판정이 프롬프트에 들어간다).
-    return hit && hit.lv === level ? hit : undefined
+    if (hit.lv !== level) return undefined
+    if (hit.cv !== CONTENT_VERSION) return undefined
+    return hit
   } catch {
     return undefined
   }
 }
 
-/** 받은 심층 분석 답을 적어 둔다. **만료는 점수와 같이 센다.** */
+/** 문구 묶음 버전. 이것이 바뀌면 적어 둔 심층 분석 답을 버린다. */
+const CONTENT_VERSION: string = (content as { version?: string }).version ?? '0'
+
+/**
+ * 받은 심층 분석 답을 적어 둔다. **만료는 점수와 같이 센다.**
+ *
+ * **빈 답은 적지 않는다.** 못 찾은 것은 대개 한 번의 실패이거나 그때의 물음이 빗나간
+ * 것이고, 그것을 적어 두면 **빈 화면이 여섯 시간 굳는다.** 실제로 그렇게 굳었다.
+ * 다음에 다시 묻는 편이 낫다.
+ */
 export async function writeExplain(
   url: string,
   itemId: string,
   value: CachedExplain,
 ): Promise<void> {
+  if (value.p.length === 0 && Object.keys(value.f).length === 0) return
   try {
     const key = await keyFor(url)
     const got = (await browser.storage.local.get(key)) as Record<string, Entry | undefined>
@@ -267,7 +289,7 @@ export async function writeExplain(
       // 오래 남는다. 점수를 받은 그 시각이 기준이다.
       exp: live ? old.exp : Date.now() + TTL_MS,
       items: live ? old.items : {},
-      explain: { ...(live ? old.explain : {}), [itemId]: value },
+      explain: { ...(live ? old.explain : {}), [itemId]: { ...value, cv: CONTENT_VERSION } },
     }
     await browser.storage.local.set({ [key]: entry })
   } catch {

@@ -168,9 +168,36 @@ function parseArray(raw: string): unknown[] | null {
  * 그 틀림은 둘 다 코드가 100% 잡는다 — 조각은 문자열 대조로, 이유는 목록 대조로.
  * 지어낸 것은 여기서 전부 떨어진다.
  */
+/**
+ * 공백이 다른 것을 **같은 것으로 본다.**
+ *
+ * 기사 본문은 줄바꿈과 연속 공백이 섞여 있는데, 모델은 그것을 보통 공백 하나로 옮겨
+ * 적는다. 글자가 똑같은데 공백이 달라 떨어지면, 모델은 공백을 넘지 않는 **짧은 토막**만
+ * 돌려주게 된다 — 실제로 문장 대신 "한 관계자는" 만 집어 왔다.
+ *
+ * 접은 글과 함께 **원래 자리표**를 들고 있다가, 찾은 자리를 원문에서 다시 잘라 낸다.
+ * 그래서 화면에 올라가는 것은 여전히 **본문 글자 그대로**다.
+ */
+function foldSpace(s: string): { text: string; at: number[] } {
+  const out: string[] = []
+  const at: number[] = []
+  let prevSpace = false
+  for (let i = 0; i < s.length; i++) {
+    const c = s[i] as string
+    const space = /\s/.test(c)
+    if (space && prevSpace) continue
+    out.push(space ? ' ' : c)
+    at.push(i)
+    prevSpace = space
+  }
+  return { text: out.join(''), at }
+}
+
 export function keepOnlyUsable(raw: readonly unknown[], body: string, itemId: string): Pick[] {
   const reasons = REASONS[itemId]
   if (!reasons) return []
+
+  const folded = foldSpace(body)
 
   const out: Pick[] = []
   for (const row of raw) {
@@ -178,10 +205,15 @@ export function keepOnlyUsable(raw: readonly unknown[], body: string, itemId: st
     const { quote, why } = row as { quote?: unknown; why?: unknown }
     if (typeof quote !== 'string' || typeof why !== 'string') continue
 
-    const text = quote.trim()
-    if (text.length === 0 || text.length > MAX_SPAN_CHARS) continue
-    // 본문에 없는 글자는 지어낸 것이다.
-    if (!body.includes(text)) continue
+    const asked = foldSpace(quote).text.trim()
+    if (asked.length === 0 || asked.length > MAX_SPAN_CHARS) continue
+    // **본문에 없는 글자는 지어낸 것이다.** 공백만 접어 두고 글자는 그대로 맞춘다.
+    const hit = folded.text.indexOf(asked)
+    if (hit < 0) continue
+    // 돌려주는 것은 모델이 적어 온 글이 아니라 **원문에서 잘라 낸 글**이다.
+    const start = folded.at[hit] as number
+    const end = (folded.at[hit + asked.length - 1] as number) + 1
+    const text = body.slice(start, end)
     // 목록에 없는 이유는 **화면에 띄울 문구가 없다.** 모델이 쓴 말이 새어 들어오는 자리다.
     if (!Object.hasOwn(reasons, why)) continue
     if (out.some((x) => x.text === text)) continue

@@ -185,6 +185,8 @@ describe('심층 분석 답을 들고 있는다 — 같은 기사엔 같은 답'
   // 바뀌면 사용자는 어느 쪽을 믿어야 할지 알 수 없다. **캐시가 곧 재현성이다.**
   const BODY = '앞말. 한 관계자는 더 오를 것이라고 말했다. 뒷말.'
   const PICKS = [{ text: '한 관계자는 더 오를 것이라고 말했다', why: 'src_group_only' }]
+  /** 실제로 적히는 모양. **빈 답은 적히지 않으므로** 검사에서도 빈 값을 쓰지 않는다. */
+  const 적힌답 = { lv: 'CAUTION', f: { src_group_only: true }, p: [] }
 
   it('적어 둔 답을 그대로 돌려준다', async () => {
     await writeExplain(URL1, 'source_citation', {
@@ -219,18 +221,34 @@ describe('심층 분석 답을 들고 있는다 — 같은 기사엔 같은 답'
   })
 
   it('판정이 달라지면 다시 묻는다 — 판정이 프롬프트에 들어간다', async () => {
-    await writeExplain(URL1, 'source_citation', { lv: 'CAUTION', f: {}, p: [] })
+    await writeExplain(URL1, 'source_citation', 적힌답)
     expect(await readExplain(URL1, 'source_citation', 'CHECK')).toBeUndefined()
   })
 
   it('다른 항목의 답을 쓰지 않는다', async () => {
-    await writeExplain(URL1, 'source_citation', { lv: 'CAUTION', f: {}, p: [] })
+    await writeExplain(URL1, 'source_citation', 적힌답)
     expect(await readExplain(URL1, 'unverifiable_claim', 'CAUTION')).toBeUndefined()
+  })
+
+  it('**빈 답은 적지 않는다** — 빈 화면이 여섯 시간 굳는다', async () => {
+    // 실제로 굳었다. 못 찾은 것은 대개 한 번의 실패라, 다음에 다시 묻는 편이 낫다.
+    await writeExplain(URL1, 'source_citation', { lv: 'CAUTION', f: {}, p: [] })
+    expect(store.size).toBe(0)
+    expect(await readExplain(URL1, 'source_citation', 'CAUTION')).toBeUndefined()
+  })
+
+  it('문구가 바뀌면 적어 둔 답을 버린다', async () => {
+    // 고른 이유의 id 와 화면 문구는 짝이다. 짝이 없는 id 는 화면에서 조용히 빠진다.
+    await writeExplain(URL1, 'source_citation', 적힌답)
+    const key = [...store.keys()][0]!
+    const e = store.get(key) as { explain: Record<string, { cv?: string }> }
+    e.explain.source_citation!.cv = '0.0.1-옛날'
+    expect(await readExplain(URL1, 'source_citation', 'CAUTION')).toBeUndefined()
   })
 
   it('점수와 같은 칸에 들어가고 같이 지워진다', async () => {
     await writeScores(URL1, { clickbait_headline: item(1) })
-    await writeExplain(URL1, 'source_citation', { lv: 'CAUTION', f: {}, p: [] })
+    await writeExplain(URL1, 'source_citation', 적힌답)
     // 점수가 살아 있어야 한다 — 심층 분석을 적는다고 점수를 밀어내면 안 된다.
     expect(await readScores(URL1)).toHaveProperty('clickbait_headline')
 
@@ -244,7 +262,7 @@ describe('심층 분석 답을 들고 있는다 — 같은 기사엔 같은 답'
     // 미뤄지면 점수까지 함께 오래 남는다. 점수를 받은 그 시각이 기준이다.
     await writeScores(URL1, { clickbait_headline: item(1) })
     const before = ([...store.values()][0] as { exp: number }).exp
-    await writeExplain(URL1, 'source_citation', { lv: 'CAUTION', f: {}, p: [] })
+    await writeExplain(URL1, 'source_citation', 적힌답)
     expect(([...store.values()][0] as { exp: number }).exp).toBe(before)
   })
 
@@ -253,8 +271,6 @@ describe('심층 분석 답을 들고 있는다 — 같은 기사엔 같은 답'
       storage: { local: { ...fakeStorage, get: () => Promise.reject(new Error('nope')) } },
     })
     expect(await readExplain(URL1, 'source_citation', 'CAUTION')).toBeUndefined()
-    await expect(
-      writeExplain(URL1, 'source_citation', { lv: 'CAUTION', f: {}, p: [] }),
-    ).resolves.toBeUndefined()
+    await expect(writeExplain(URL1, 'source_citation', 적힌답)).resolves.toBeUndefined()
   })
 })
