@@ -48,15 +48,19 @@ export type CachedItem = Pick<ItemResult, 'score' | 'isConfident' | 'reason'> & 
 }
 
 /**
- * 제목의 지문. 같은 제목인지만 가리면 되므로 짧게 자른다.
+ * 글의 지문. 같은 글인지만 가리면 되므로 짧게 자른다.
  *
  * **되돌릴 수 없어야 한다.** 그래서 URL 키와 같은 SHA-256 을 쓴다.
+ * 글자를 저장하지 않고 "같은 글인가" 만 확인해야 하는 자리에 쓴다.
  */
-export async function headlineFingerprint(headline: string): Promise<string> {
-  const bytes = new TextEncoder().encode(headline.replace(/\s+/g, ' ').trim())
+export async function textFingerprint(text: string): Promise<string> {
+  const bytes = new TextEncoder().encode(text.replace(/\s+/g, ' ').trim())
   const hash = await crypto.subtle.digest('SHA-256', bytes)
   return [...new Uint8Array(hash)].slice(0, 6).map((b) => b.toString(16).padStart(2, '0')).join('')
 }
+
+/** 제목의 지문. 같은 제목인지만 가린다. */
+export const headlineFingerprint = textFingerprint
 
 /**
  * 캐시에 있는 이 항목을 **지금 보내려는 요청 대신 쓸 수 있는가.**
@@ -82,6 +86,76 @@ interface Entry {
   /** 만료 시각(ms). **판단 시각은 두지 않는다** */
   exp: number
   items: ItemScores
+  /** 심층 분석 답. 항목 id → 그 항목에 받은 답 */
+  explain?: Record<string, CachedExplain>
+}
+
+/**
+ * 떼어 온 문장 하나를 **글자 없이** 적어 둔 것.
+ *
+ * **기사 글을 저장하지 않는다는 규칙을 심층 분석에서도 지킨다** (이 파일 머리말).
+ * 본문에서의 자리(`s`~`e`)와 그 글자의 지문(`q`)만 둔다. 읽을 때 본문을 다시 잘라
+ * 지문을 맞춰 보고, 기사가 고쳐졌으면 맞지 않으므로 **그냥 버린다.**
+ */
+export interface CachedPick {
+  /** 본문에서의 시작 자리 */
+  s: number
+  /** 끝 자리 */
+  e: number
+  /** 그 자리 글자의 지문. 기사가 고쳐졌는지 가린다 */
+  q: string
+  /** 고른 이유 id. 짝 문구는 packages/content 가 들고 있다 */
+  w: string
+}
+
+/**
+ * 심층 분석 답 하나. **같은 기사를 다시 열면 같은 답을 보인다.**
+ *
+ * 생성 모델은 같은 글에도 매번 다르게 답한다. 눌렀다 접었다 하면 짚는 문장이 바뀌는데,
+ * 그러면 사용자는 어느 쪽을 믿어야 할지 알 수 없다. 한 번 받은 답을 들고 있는다
+ * (크레딧도 그만큼 아낀다).
+ */
+export interface CachedExplain {
+  /** 그때의 판정. 배지가 달라졌으면 다시 묻는다 — 판정이 프롬프트에 들어간다 */
+  lv: string
+  /** Jev 가 잰 것. 참·거짓뿐이라 글자가 섞이지 않는다 */
+  f: Record<string, boolean>
+  /** LLM 이 집어 온 자리 */
+  p: CachedPick[]
+}
+
+/** 떼어 온 글자를 **자리와 지문으로** 바꾼다. 본문에 없는 것은 버린다. */
+export async function packPicks(
+  body: string,
+  picks: readonly { text: string; why: string }[],
+): Promise<CachedPick[]> {
+  const out: CachedPick[] = []
+  for (const x of picks) {
+    const s = body.indexOf(x.text)
+    if (s < 0) continue
+    out.push({ s, e: s + x.text.length, q: await textFingerprint(x.text), w: x.why })
+  }
+  return out
+}
+
+/**
+ * 자리를 다시 글자로 푼다.
+ *
+ * **지문이 맞는 것만 돌려준다.** 기사가 고쳐져 자리가 밀렸으면 엉뚱한 글자를 인용하게
+ * 되는데, 그것은 지어낸 인용과 다르지 않다.
+ */
+export async function unpackPicks(
+  body: string,
+  packed: readonly CachedPick[],
+): Promise<{ text: string; why: string }[]> {
+  const out: { text: string; why: string }[] = []
+  for (const x of packed) {
+    const text = body.slice(x.s, x.e)
+    if (text.length === 0) continue
+    if ((await textFingerprint(text)) !== x.q) continue
+    out.push({ text, why: x.w })
+  }
+  return out
 }
 
 /**
@@ -148,6 +222,56 @@ export async function writeScores(url: string, items: ItemScores): Promise<void>
     await browser.storage.local.set({ [key]: entry })
   } catch {
     // 못 써도 판단은 이미 끝났다. 다음에 다시 부를 뿐이다.
+  }
+}
+
+/**
+ * 이 기사·항목에 **이미 받아 둔 심층 분석 답**. 없거나 판정이 달라졌으면 비어 있다.
+ *
+ * 점수와 같은 칸(같은 키, 같은 만료)에 둔다. 따로 두면 지우는 자리가 둘이 되고,
+ * 한쪽만 지우면 열람 기록이 남는다.
+ */
+export async function readExplain(
+  url: string,
+  itemId: string,
+  level: string,
+): Promise<CachedExplain | undefined> {
+  try {
+    const key = await keyFor(url)
+    const got = (await browser.storage.local.get(key)) as Record<string, Entry | undefined>
+    const e = got[key]
+    if (!e || e.v !== schema.version || e.m !== schema.model || e.exp <= Date.now()) return undefined
+    const hit = e.explain?.[itemId]
+    // 판정이 바뀌었으면 그때 받은 답은 다른 질문의 답이다 (판정이 프롬프트에 들어간다).
+    return hit && hit.lv === level ? hit : undefined
+  } catch {
+    return undefined
+  }
+}
+
+/** 받은 심층 분석 답을 적어 둔다. **만료는 점수와 같이 센다.** */
+export async function writeExplain(
+  url: string,
+  itemId: string,
+  value: CachedExplain,
+): Promise<void> {
+  try {
+    const key = await keyFor(url)
+    const got = (await browser.storage.local.get(key)) as Record<string, Entry | undefined>
+    const old = got[key]
+    const live = old && old.v === schema.version && old.m === schema.model && old.exp > Date.now()
+    const entry: Entry = {
+      v: schema.version,
+      m: schema.model,
+      // **만료를 다시 세지 않는다.** 심층 분석을 누를 때마다 미뤄지면 점수까지 함께
+      // 오래 남는다. 점수를 받은 그 시각이 기준이다.
+      exp: live ? old.exp : Date.now() + TTL_MS,
+      items: live ? old.items : {},
+      explain: { ...(live ? old.explain : {}), [itemId]: value },
+    }
+    await browser.storage.local.set({ [key]: entry })
+  } catch {
+    // 못 써도 화면에는 이미 떴다. 다음에 다시 물을 뿐이다.
   }
 }
 
