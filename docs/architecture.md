@@ -195,6 +195,7 @@ Jev 응답을 **그대로 중계한다.** 서버가 해석하거나 점수로 �
 | `upstream_error` | 게이트웨이 5xx |
 | `invalid_answer` | 응답이 정한 보기 밖 |
 | `budget_exhausted` | **남은 크레딧이 예비분 아래다.** 아래 |
+| `screened_out` | 판단기를 노린 문장을 걷어내고 나니 본문·문장에 남은 글이 없다. Jev 를 부르지 않는다. 규칙은 [packages/shared/src/screen.ts](../packages/shared/src/screen.ts) (GE-35) |
 
 **`reason` 은 로그와 디버깅용이다. 사용자에게 보여 주지 않는다** ([requirements.md](requirements.md) 2절).
 
