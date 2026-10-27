@@ -4,14 +4,75 @@
 // 전역 변수에 캐시나 진행 상태를 두지 말고 chrome.storage 에 쓴다.
 //
 // **여기는 배선만 둔다.** 판단 흐름은 lib/judge.ts 에 있다 — 테스트에서 부를 수 있게.
+import content from '../../../packages/content/ui.ko.json'
 import { sweepExpired } from '../lib/cache'
-import { judgeArticle } from '../lib/judge'
+import { callProxy, judgeArticle, setIconBadge } from '../lib/judge'
+import { judgeSelection, putSelectionPending, putSelectionResult } from '../lib/selection'
 import type { ArticleVerdict, Message } from '../lib/protocol'
+
+/** 오른쪽 클릭 메뉴의 id. 문자열을 두 곳에 적지 않는다. */
+const MENU_ID = 'genuearly-check-selection'
 
 export default defineBackground(() => {
   // **만료된 캐시를 비운다.** 남겨 두면 그 자체가 열람 기록이 된다
   // (docs/security/secure-coding.md 7절). service worker 가 깨어날 때마다 한 번.
   void sweepExpired().then((n) => { if (n) console.info('[GenuEarly] 만료 캐시', n, '건 비움') })
+
+  // --- ③ 선택 텍스트 검사 --------------------------------------------------
+  //
+  // **메뉴는 글을 선택했을 때만 뜬다** (`contexts: ['selection']`, requirements.md 5절).
+  // 메뉴를 만드는 일은 설치·갱신 때 한 번이면 된다. service worker 가 깨어날 때마다
+  // 다시 만들면 같은 id 로 중복 생성되어 에러가 난다.
+  browser.runtime.onInstalled.addListener(() => {
+    browser.contextMenus.create({
+      id: MENU_ID,
+      title: content.selection.menu,
+      contexts: ['selection'],
+    })
+  })
+
+  browser.contextMenus.onClicked.addListener((info, tab) => {
+    if (info.menuItemId !== MENU_ID) return
+    const text = info.selectionText ?? ''
+    if (!text.trim()) return
+
+    // **팝업을 먼저 연다. 기다린 다음이 아니다.**
+    // `openPopup()` 은 사용자 제스처를 요구할 수 있는데, 판단을 기다린 뒤(문장 수만큼,
+    // 1초 남짓) 부르면 그 사이에 제스처가 끝나 **거의 항상 실패한다.** 메뉴 클릭 직후에
+    // 불러야 제스처 안에서 열린다. 팝업은 "살펴보는 중" 을 띄우고 결과를 기다린다.
+    //
+    // **아이콘 배지를 쓰지 않는다.** 아이콘 배지는 "지금 탭의 상태 하나" 인데 ③ 가 올리는 것은
+    // 페이지가 아니라 **고른 글**의 판정이다. 메신저에서 고른 글이 🔴 이면 그 페이지 전체가
+    // 주의 대상처럼 보이고, 기사 페이지에서 고르면 ①이 낸 기사 배지를 덮는다
+    // (requirements.md 2-1절, ②가 목록 제목을 탭 상태로 올리지 않는 것과 같은 이유).
+    // 순서가 중요하다. `openPopup()` 이 **이 틱 안에서** 불려야 한다 —
+    // `await` 를 하나라도 먼저 두면 제스처가 끝난 뒤가 된다.
+    // 팝업이 저장소를 읽기 전에 아래 쓰기가 끝나지만, 늦더라도 팝업이
+    // `storage.session` 변경을 듣고 있어서 받는다 (entrypoints/popup/main.ts).
+    try {
+      void browser.action.openPopup()
+    } catch {
+      console.info('[GenuEarly] 팝업을 자동으로 열지 못했다. 아이콘을 눌러 주세요')
+    }
+    void putSelectionPending(tab?.id)
+
+    void (async () => {
+      const outcome = await judgeSelection(text, callProxy).catch((e) => {
+        console.warn('[GenuEarly] 선택 글 판단 실패', e)
+        return null
+      })
+      // 판단이 통째로 실패해도 ⚪ 를 돌려준다. 팝업이 빈 화면으로 열리는 쪽이 더 나쁘다.
+      const result = outcome ?? {
+        ok: true,
+        verdict: {
+          level: 'UNDETERMINED', score: null, cautionSignals: 0, items: [], reason: 'not_enough_items',
+        } satisfies ArticleVerdict,
+      } as const
+      // 팝업이 이미 열려 있으면 이 쓰기를 듣고 바로 그린다.
+      // 못 열렸으면 사용자가 아이콘을 누를 때 읽는다 (2분 안에).
+      await putSelectionResult(result, tab?.id)
+    })()
+  })
 
   browser.runtime.onMessage.addListener((raw, sender, sendResponse) => {
     const msg = raw as Message

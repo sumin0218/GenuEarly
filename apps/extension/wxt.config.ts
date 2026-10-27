@@ -16,8 +16,11 @@ export default defineConfig({
 
     // 권한은 최소로. 늘리는 PR은 "이 권한 없이는 안 되는 이유"를 본문에 적는다.
     //
-    // **앞으로 늘어날 것은 `contextMenus` 하나뿐이다** (③ 선택 텍스트 검사, GE-24).
-    // 그 기능이 붙는 PR 에서 넣는다. 쓰지도 않는 권한을 미리 받지 않는다.
+    // `contextMenus` 는 ③ 선택 텍스트 검사가 쓴다 (GE-24). **이것으로 끝이다** —
+    // 더 늘릴 계획이 없다. 늘리는 PR 은 "이 권한 없이는 안 되는 이유" 를 본문에 적는다.
+    //
+    // **호스트 권한은 늘지 않는다.** 오른쪽 클릭 메뉴의 `info.selectionText` 는
+    // background 로 바로 오고, 결과는 우리 팝업에 띄운다. 임의의 사이트에 아무것도 넣지 않는다.
     //
     // 한때 필요하다고 보았다가 **설계를 바꿔 없앤 것들** (requirements.md 2-1절, 5-1절):
     //   - scripting, activeTab : ③ 결과를 선택한 글 근처에 띄우려면 임의의 사이트에
@@ -26,7 +29,7 @@ export default defineConfig({
     //
     // 팝업·아이콘 배지는 권한이 아니라 `action` 키다. 설치 경고에 뜨지 않는다.
     // 셋은 tests/manifest.test.ts 의 금지 목록에 들어가 있다 — 다시 넣으려면 결정을 먼저 뒤집어야 한다.
-    permissions: ['storage'],
+    permissions: ['storage', 'contextMenus'],
 
     // 와일드카드 도메인(<all_urls>, *://*/*)을 쓰지 않는다. 호스트를 명시한다.
     // 목록은 match-patterns.ts 가 원본이다. content_scripts 와 같은 값을 쓴다.

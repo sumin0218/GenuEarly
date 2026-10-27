@@ -47,7 +47,7 @@ function plan(feature: string) {
   return { groups, sentenceItem }
 }
 
-async function callProxy(body: JudgeRequest): Promise<JudgeResponse | null> {
+export async function callProxy(body: JudgeRequest): Promise<JudgeResponse | null> {
   try {
     const res = await fetch(`${PROXY_URL}/v1/judge`, {
       method: 'POST',
@@ -89,7 +89,7 @@ const BADGE_COLOR: Record<DisplayLevel, string> = {
 }
 
 /** 아이콘 배지. 권한이 필요 없다 — action 키만 선언한다 (requirements.md 2-1절). */
-function setIconBadge(tabId: number | undefined, level: DisplayLevel) {
+export function setIconBadge(tabId: number | undefined, level: DisplayLevel) {
   if (tabId === undefined) return
   // 탭마다 따로 둔다. 다른 탭의 기사 상태가 섞이면 안 된다.
   void browser.action.setBadgeText({ tabId, text: BADGE_TEXT[level] })

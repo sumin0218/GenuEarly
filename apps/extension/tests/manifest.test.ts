@@ -143,8 +143,14 @@ describe('아이콘 배지와 팝업', () => {
     expect(existsSync(resolve(__dirname, '../.output/chrome-mv3', popup))).toBe(true)
   })
 
-  it('팝업을 붙여도 권한이 늘지 않는다', () => {
-    // action 키는 권한이 아니다. 설치 경고에 뜨지 않는다 (requirements.md 2-1절).
-    expect(permissions).toEqual(['storage'])
+  it('권한 목록이 딱 이 둘이다 — 늘리려면 이 줄을 먼저 고쳐야 한다', () => {
+    // action 키는 권한이 아니다. 팝업을 붙여도 설치 경고에 뜨지 않는다 (requirements.md 2-1절).
+    //
+    // contextMenus 는 ③ 선택 글 검사 때문에 받는다. 이것도 설치 경고가 없고,
+    // **호스트 권한을 늘리지 않는다** — `info.selectionText` 가 background 로 바로 오므로
+    // 글을 읽으려고 임의의 사이트에 콘텐츠 스크립트를 넣을 일이 없다 (requirements.md 5-1절).
+    //
+    // 목록을 고정해 둔다. 권한이 하나 느는 일은 **조용히 일어나면 안 된다.**
+    expect(permissions).toEqual(['storage', 'contextMenus'])
   })
 })
