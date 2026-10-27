@@ -4,21 +4,26 @@
 // 나가서 우리 서버가 거절한다 (서버는 chrome-extension:// 만 받는다).
 
 /**
- * 중계 서버 주소. **빌드할 때 넣는다.**
+ * 중계 서버 주소.
  *
- * 상수로 두었더니 `localhost` 가 제출본에 그대로 들어갈 뻔했다 — 그러면 심사위원 브라우저에서
- * 모든 기사가 ⚪ 가 된다. 주석 하나에 기대지 않고 **빌드 결과를 검사**한다
- * (apps/extension/tests/manifest.test.ts 의 "제출본에 localhost 가 없다").
+ * **기본값이 배포 주소다.** 전에는 기본이 `localhost` 였고 빌드할 때마다
+ * `WXT_PROXY_URL` 을 손으로 넣어야 했는데, **한 번 빠뜨리면 모든 기사가 ⚪ 가 된다.**
+ * 실제로 그렇게 나갔고, background 콘솔에만 `Failed to fetch` 가 찍혀 원인을 찾는 데
+ * 한참 걸렸다 — 화면에는 "판단하지 못함" 으로만 보인다.
  *
- *   WXT_PROXY_URL=https://<배포주소> npm run build -w @genuearly/extension
+ * 빠뜨렸을 때의 결과가 한쪽은 **조용한 고장**이고 다른 쪽은 **개발 중에 진짜 서버를
+ * 쓰는 것**뿐이라, 기본을 뒤집는 편이 안전하다. 로컬 중계를 보려면 값을 준다.
  *
- * 개발에서는 값을 안 주면 로컬 중계를 본다.
+ *   WXT_PROXY_URL=http://localhost:8787 npm run dev -w @genuearly/extension
+ *
+ * 비밀이 아니다 — 주소일 뿐이고 키는 서버만 들고 있다.
  */
 import type { BadgeLevel, Verdict } from '@genuearly/shared'
 
 export type { BadgeLevel, Verdict }
 
-export const PROXY_URL: string = import.meta.env.WXT_PROXY_URL ?? 'http://localhost:8787'
+export const PROXY_URL: string =
+  import.meta.env.WXT_PROXY_URL ?? 'https://genuearly-proxy.genuearly-proxy.workers.dev'
 
 export type Feature = 'page' | 'portal_list' | 'selection' | 'explain'
 

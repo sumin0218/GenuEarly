@@ -102,31 +102,28 @@ describe('대상 사이트', () => {
 })
 
 describe('제출본에 개발용 주소가 없다', () => {
-  // `PROXY_URL` 이 상수였을 때 `localhost` 가 제출본에 그대로 들어갈 뻔했다.
-  // 그러면 심사위원 브라우저에서 **모든 기사가 ⚪** 가 된다.
-  // 주석 하나에 기대지 않고 **빌드 결과**를 본다.
+  // **이 검사가 건너뛴 탓에 `localhost` 가 박힌 빌드가 그대로 나갔다.**
+  // 전에는 테스트를 돌릴 때 `WXT_PROXY_URL` 이 환경에 없으면 통째로 넘어갔는데,
+  // 검사를 돌리는 시점과 빌드를 만드는 시점은 **다르다.** 그래서 환경변수를 보지 않고
+  // **빌드 결과만** 본다.
   //
-  //   WXT_PROXY_URL=https://<배포주소> npm run build -w @genuearly/extension
+  // 그 빌드에서는 background 가 localhost 로 요청을 보내 `Failed to fetch` 가 났고,
+  // 화면에는 "판단하지 못함" 으로만 보였다. 조용한 고장이라 찾는 데 오래 걸렸다.
   const dir = resolve(__dirname, '../.output/chrome-mv3')
   const bundled = () =>
-    readdirSync(resolve(dir, 'background.js') ? dir : dir, { recursive: true, encoding: 'utf8' })
+    readdirSync(dir, { recursive: true, encoding: 'utf8' })
       .filter((f) => typeof f === 'string' && f.endsWith('.js'))
       .map((f) => readFileSync(resolve(dir, f as string), 'utf8'))
 
-  it('WXT_PROXY_URL 을 주면 그 주소가 들어간다', () => {
-    const url = process.env.WXT_PROXY_URL
-    if (!url) {
-      // 개발 빌드다. 여기서는 localhost 가 들어 있는 것이 정상이라 검사만 건너뛴다.
-      expect(bundled().some((s) => s.includes('localhost:8787'))).toBe(true)
-      return
-    }
-    expect(bundled().some((s) => s.includes(url)), '넣은 주소가 번들에 없다').toBe(true)
+  it('빌드에 개발용 주소가 남아 있지 않다', () => {
+    const hit = bundled().filter((s) => s.includes('localhost'))
+    expect(hit, '빌드에 개발용 주소가 남아 있다 — 모든 기사가 ⚪ 가 된다').toHaveLength(0)
   })
 
-  it('WXT_PROXY_URL 을 준 빌드에는 localhost 가 없다', () => {
-    if (!process.env.WXT_PROXY_URL) return   // 개발 빌드는 건너뛴다
-    const hit = bundled().filter((s) => s.includes('localhost'))
-    expect(hit, '제출본에 개발용 주소가 남아 있다').toHaveLength(0)
+  it('중계 주소가 들어 있다', () => {
+    // 기본값이 배포 주소라 환경변수를 빠뜨려도 올바른 빌드가 나온다.
+    const want = process.env.WXT_PROXY_URL ?? 'https://genuearly-proxy'
+    expect(bundled().some((s) => s.includes(want)), `중계 주소가 번들에 없다: ${want}`).toBe(true)
   })
 })
 
