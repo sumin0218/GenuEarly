@@ -168,15 +168,37 @@ describe('설명 문구가 질문과 짝이 맞는다', () => {
     questions: { id: string }[]
   }[]
 
-  it('설명 항목마다 문구 묶음이 있다', () => {
-    for (const item of explainItems) {
-      const copy = (content.explain as unknown as Record<string, unknown>)[item.explain_for]
-      expect(copy, `${item.explain_for} 의 설명 문구가 없다`).toBeTruthy()
-    }
+  /**
+   * **아직 ChatKHU 문구를 받지 못한 항목.** 받으면 여기서 지운다.
+   *
+   * 질문은 먼저 넣고 문구는 뒤에 받는다 — 코딩 도구가 한국어를 지어내지 않기 때문이다
+   * (tools/content-gen/README.md). 문구가 없는 항목은 화면에 펼침이 붙지 않는다.
+   * **이 목록은 줄어들기만 해야 한다.**
+   */
+  const 문구_대기 = [
+    'clickbait_headline',
+    'headline_body_match',
+    'spread_inducement',
+    'emotional_language',
+    'ai_style_signal',
+  ]
+
+  it('설명 항목마다 문구가 있거나, 대기 목록에 있다', () => {
+    const 빠진것 = explainItems
+      .filter((i) => !(content.explain as unknown as Record<string, unknown>)[i.explain_for])
+      .map((i) => i.explain_for)
+      .filter((id) => !문구_대기.includes(id))
+    expect(빠진것, 'ChatKHU 문구를 받아 넣거나 대기 목록에 적는다').toEqual([])
+  })
+
+  it('대기 목록에 이미 받은 것이 남아 있지 않다', () => {
+    const 이미받음 = 문구_대기.filter((id) => (content.explain as unknown as Record<string, unknown>)[id])
+    expect(이미받음, '문구를 받았으면 대기 목록에서 지운다').toEqual([])
   })
 
   it('하위 질문마다 "찾았다"와 "못 찾았다"가 둘 다 있다', () => {
     for (const item of explainItems) {
+      if (문구_대기.includes(item.explain_for)) continue
       const parts = (content.explain as unknown as Record<string, { parts: Record<string, { present?: string; absent?: string }> }>)
         [item.explain_for]?.parts ?? {}
       for (const q of item.questions) {
