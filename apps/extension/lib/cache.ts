@@ -111,6 +111,10 @@ export function normalizeUrl(raw: string): string {
   u.search = ''
   u.protocol = 'https:'
   u.hostname = u.hostname.toLowerCase()
+  // 위키트리는 모바일과 PC 가 호스트만 다르고 같은 기사다 — 모바일 쪽 `canonical` 이
+  // `www` 를 가리킨다 (2026-10-27 확인). 접지 않으면 휴대폰에서 본 기사를 PC 에서
+  // 다시 열 때 또 판단하게 된다.
+  if (u.hostname === 'm.wikitree.co.kr') u.hostname = 'www.wikitree.co.kr'
   u.pathname = u.pathname
     .replace(/^\/mnews\/(?:ranking\/|hotissue\/)?article\/(?:comment\/)?/, '/article/')
     .replace(/\/+$/, '')

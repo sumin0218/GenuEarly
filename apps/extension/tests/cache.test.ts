@@ -58,6 +58,18 @@ describe('URL 정규화 — 같은 기사가 여러 키로 갈라지지 않게',
       .toBe(normalizeUrl(URL1))
   })
 
+  it('위키트리의 모바일과 PC 를 같은 기사로 본다', () => {
+    // 모바일 쪽 canonical 이 www 를 가리킨다 (2026-10-27 확인). 접지 않으면
+    // 휴대폰에서 본 기사를 PC 에서 다시 열 때 또 판단하게 된다 (GE-41).
+    expect(normalizeUrl('https://m.wikitree.co.kr/articles/1169622'))
+      .toBe(normalizeUrl('https://www.wikitree.co.kr/articles/1169622'))
+  })
+
+  it('다른 사이트의 같은 번호는 다른 기사다', () => {
+    expect(normalizeUrl('https://www.insight.co.kr/news/1169622'))
+      .not.toBe(normalizeUrl('https://www.wikitree.co.kr/articles/1169622'))
+  })
+
   it('해시와 끝 슬래시를 버린다', () => {
     expect(normalizeUrl(`${URL1}/#comment`)).toBe(normalizeUrl(URL1))
   })

@@ -205,3 +205,73 @@ describe('리뷰에서 나온 추출 경계', () => {
     expect(out).not.toContain('김지수')
   })
 })
+
+// 포털을 거치지 않고 들어오는 길. 구조는 2026-10-27 에 실제 페이지에서 확인했고,
+// **여기에는 구조만 흉내 낸다** — 실제 기사 본문은 저장소에 넣지 않는다.
+describe('인사이트', () => {
+  beforeEach(() => {
+    load('www.insight.co.kr', `
+      <h1 class="main-news-header-title">  구룡마을에서  불이 났다  </h1>
+      <div class="main-news-article-body news-read-content-memo">
+        <p>첫 문장이다.</p>
+        <p></p>
+        <p>${긴본문}</p>
+        <p class="image">27일 현장에서 소방대원들이 불길을 잡고 있다. 2026.10.27/뉴스1</p>
+        <p>마지막 문장이다.</p>
+        <script>var ad = 1</script>
+      </div>`)
+  })
+
+  it('제목을 꺼낸다', () => {
+    expect(extractArticle()?.headline).toBe('구룡마을에서 불이 났다')
+  })
+
+  it('사진 설명을 걷어낸다 — 문장 하나를 차지하고 출처 판단에도 섞인다', () => {
+    const a = extractArticle()!
+    expect(a.body).not.toContain('소방대원들이')
+    expect(a.body).not.toContain('뉴스1')
+    expect(a.body).not.toContain('var ad')
+  })
+
+  it('본문은 남긴다', () => {
+    const a = extractArticle()!
+    expect(a.body.startsWith('첫 문장이다.')).toBe(true)
+    expect(a.body).toContain('마지막 문장이다.')
+  })
+})
+
+describe('위키트리', () => {
+  beforeEach(() => {
+    load('www.wikitree.co.kr', `
+      <div class="article_head"><h1 id="article" data-idx="1169622">  비상식량을  준비하라  </h1></div>
+      <div class="article_body">
+        <h2 class="lead">'무슨 일 있나' 국민 불안에 두 정부의 답은?</h2>
+        <div class="wikitree_content ar_content">
+          <p>첫 문장이다.</p>
+          <p>${긴본문}</p>
+        </div>
+        <div class="keyword_wrap">비상물품비축 방재청 국난급재해</div>
+        <footer class="article_bottom">기사제보 copyright 위키트리의 콘텐츠는 무단 전재·배포를 금합니다.</footer>
+      </div>`)
+  })
+
+  it('제목을 꺼낸다', () => {
+    expect(extractArticle()?.headline).toBe('비상식량을 준비하라')
+  })
+
+  it('부제를 본문에 넣지 않는다 — 네이버와 같은 결정이다', () => {
+    // 같은 글을 어디서 읽느냐에 따라 다르게 판단하면 안 된다.
+    expect(extractArticle()!.body).not.toContain('무슨 일 있나')
+  })
+
+  it('키워드 목록과 저작권 안내를 넣지 않는다', () => {
+    const a = extractArticle()!
+    expect(a.body).not.toContain('비상물품비축')
+    expect(a.body).not.toContain('기사제보')
+    expect(a.body).not.toContain('무단 전재')
+  })
+
+  it('본문은 남긴다', () => {
+    expect(extractArticle()!.body.startsWith('첫 문장이다.')).toBe(true)
+  })
+})

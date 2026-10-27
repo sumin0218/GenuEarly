@@ -34,7 +34,7 @@
 | --- | --- | --- | --- |
 | `contextMenus` | ③ 선택 텍스트 검사 | 오른쪽 클릭 메뉴를 만드는 유일한 방법이다 | 필요 |
 | `storage` | 설정, 피드백 동의 여부, 판단 결과 캐시 | service worker가 종료돼도 남아야 한다 | 필요 |
-| `host_permissions` (포털 도메인) | ① ② | 그 사이트의 DOM을 읽어야 판단할 내용이 나온다 | 필요 — **도메인과 경로를 명시해서** 받는다. 도메인은 셋이다: `n.news.naver.com`, `v.daum.net`, `news.naver.com`. 경로는 아래 |
+| `host_permissions` (대상 사이트) | ① ② | 그 사이트의 DOM을 읽어야 판단할 내용이 나온다 | 필요 — **도메인과 경로를 명시해서** 받는다. 도메인은 여섯이다. 목록은 아래 |
 | `notifications` | — | OS 알림을 띄울 권한이다. **아이콘 배지와 페이지 안 알림으로 대신한다.** 둘 다 권한이 필요 없고, OS 알림은 윈도우에서 알림 센터로 들어가 놓치기 쉽다 | **쓰지 않는다** |
 | `scripting` / `activeTab` | — | ③의 결과를 **선택한 글 근처**에 띄우려면 임의의 사이트에 UI를 주입해야 해서 둘 다 필요했다. **결과를 확장 팝업으로 옮겨 주입 자체를 없앴다** ([requirements.md](../requirements.md) 5-1절) | **쓰지 않는다** |
 | `tabs` | — | 전체 탭의 URL과 제목을 읽을 수 있다. 필요 없다 | **쓰지 않는다** |
@@ -67,6 +67,9 @@
 | `n.news.naver.com/mnews/ranking/article/*` | ① | **섹션 한 페이지 기사 링크의 절반 가까이**가 이것이다 (2026-10-27 실측: 354개 중 170개) |
 | `n.news.naver.com/mnews/hotissue/article/*` | ① | 같은 측정에서 16개 |
 | `v.daum.net/v/*` | ① | |
+| `www.insight.co.kr/news/*` | ① | 호스트가 하나다 — `m.insight.co.kr` 은 `www` 로 넘긴다 (301) |
+| `www.wikitree.co.kr/articles/*` | ① | |
+| `m.wikitree.co.kr/articles/*` | ① | 모바일 `canonical` 이 `www` 를 가리킨다. `normalizeUrl` 이 한 키로 접는다 |
 | `news.naver.com/section/*` | ② | 목록 |
 
 **빼는 것** (`content_scripts` 의 `exclude_matches` 와 `isArticleUrl` 이 함께 쓴다):
@@ -80,9 +83,14 @@
 `lib/cache.ts` 의 `normalizeUrl` 이 네 경로를 한 키로 접는다. 접지 않으면 **같은 기사가
 네 번 판단되어 크레딧이 네 배로 나간다.**
 
-> **TODO: 언론사 도메인 확정** — 포털 기사 경로는 확인했다(네이버 기사 본문은 `news.naver.com`이 아니라
-> `n.news.naver.com/article/…`에 있다). 언론사 자체 도메인을 어디까지 받을지는 아직 미정이다.
-> 넓게 받고 나중에 줄이는 것보다 좁게 시작해 늘리는 쪽이 안전하다.
+**언론사 자체 도메인을 받는 것은 매체를 지목하는 것이 아니다.** 우리는 매체가 아니라 글을 본다
+([product.md](../product.md) 2절). 사이트를 늘리는 것은 "어디서 읽든 같은 기준으로 본다" 는 쪽이어야지
+"이 언론사는 의심한다" 가 되면 안 된다. **코드에도 문구에도 매체 이름으로 점수를 깎는 규칙을 넣지 않는다.**
+
+> **TODO: 네이버 연예·스포츠** — `m.entertain.naver.com/home/article/…` 은 경로를 확인했지만
+> **SPA 라 서버 HTML 에 본문이 없다.** `extract.ts` 가 그 경우를 다루지 않는다.
+> `m.sports.naver.com` 은 경로조차 확정하지 못했다 — SPA 라 어떤 주소에도 200 을 돌려준다.
+> **확인하지 못한 사이트의 권한을 미리 받아 두지 않는다.**
 > **TODO: `optional_permissions`로 돌릴 수 있는 권한 검토** — 사용자가 그 기능을 쓸 때만 허용을 받는 방식.
 
 ### 원칙

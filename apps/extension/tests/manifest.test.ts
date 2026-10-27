@@ -91,15 +91,24 @@ describe('대상 사이트', () => {
 
   // 설치 경고에 나오는 것은 **경로가 아니라 도메인**이다. 경로를 늘리는 것은
   // 사용자가 보는 문구를 바꾸지 않는다 — 랭킹·hotissue 경로를 받기로 한 근거다 (GE-42).
-  it('도메인이 넷을 넘지 않는다 — 늘리려면 이 수를 먼저 고친다', () => {
+  it('도메인 목록이 권한 표와 같다 — 늘리려면 여기를 먼저 고친다', () => {
     const 도메인 = new Set(
       [...hostPermissions, ...contentScriptMatches].map((m) => new URL(m.replace('*', '')).host),
     )
     expect([...도메인].sort(), '설치 경고 문구가 길어진다. 권한 표도 같이 고쳤는가').toEqual([
+      'm.wikitree.co.kr',
       'n.news.naver.com',
       'news.naver.com',
       'v.daum.net',
+      'www.insight.co.kr',
+      'www.wikitree.co.kr',
     ])
+  })
+
+  it('인사이트는 호스트가 하나다 — 모바일이 www 로 넘어간다', () => {
+    // m.insight.co.kr 은 301 로 www 에 넘긴다 (2026-10-27 확인).
+    // 받아 둘 이유가 없다. 설치 경고만 길어진다.
+    expect(hostPermissions.some((m) => m.includes('m.insight.co.kr'))).toBe(false)
   })
 
   it('네이버의 기사 경로 넷을 다 받는다', () => {

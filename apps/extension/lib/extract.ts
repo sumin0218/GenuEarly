@@ -1,8 +1,12 @@
 // 기사 페이지에서 제목과 본문을 꺼낸다.
 //
-// **사이트별 선택자를 쓴다.** 일반적인 본문 추출기를 만들지 않는다 — 대상이 두 곳뿐이고,
+// **사이트별 선택자를 쓴다.** 일반적인 본문 추출기를 만들지 않는다 — 대상이 손에 꼽히고,
 // 범용 추출기는 무엇을 집어 올지 예측할 수 없다. 광고나 추천 기사가 섞여 들어가면
 // 판단이 통째로 틀어진다 (docs/requirements.md 3-2).
+//
+// 선택자는 **예고 없이 바뀐다.** 바뀌면 `extractArticle` 이 `null` 을 돌려주고
+// 배지는 ⚪ 가 된다 — 조용히 틀린 판단을 내는 것보다 낫지만, 그래도 사용자는
+// 아무것도 못 본다. 사이트를 늘릴 때마다 깨질 자리가 하나씩 는다.
 import { splitSentences } from './sentences'
 
 export interface Article {
@@ -31,6 +35,30 @@ const RULES: SiteRule[] = [
     headline: ['h3.tit_view', '.head_view .tit_view'],
     body: ['div.article_view[data-translation-body="true"]', 'div.article_view', '#harmonyContainer'],
     drop: ['figure', 'figcaption', '.link_figure', '.txt_caption', 'script', 'style', 'table'],
+  },
+  {
+    // 인사이트. 본문은 `<p>` 단락이고 사진 설명만 `<p class="image">` 로 따로 있다.
+    host: /(^|\.)insight\.co\.kr$/,
+    headline: ['h1.main-news-header-title'],
+    body: ['.main-news-article-body'],
+    // `p.image` 가 사진 설명이다 — "…2026.10.27/뉴스1" 처럼 날짜와 통신사가 붙어 있어
+    // 걷어내지 않으면 문장 하나를 차지하고 출처 판단에도 섞인다.
+    drop: ['p.image', 'figure', 'figcaption', 'script', 'style', 'table'],
+  },
+  {
+    // 위키트리. **`.article_body` 가 아니라 그 안의 `.wikitree_content` 를 집는다.**
+    // `.article_body` 에는 부제(`h2.lead`), 키워드 목록, 저작권 안내가 함께 들어 있다.
+    // 안쪽을 바로 집으면 걷어낼 것이 줄어든다.
+    //
+    // 부제를 버리는 것은 네이버와 같은 결정이다 (아래 "맨 앞의 부제를 버린다").
+    // 같은 글을 어디서 읽느냐에 따라 다르게 판단하면 안 된다.
+    host: /(^|\.)wikitree\.co\.kr$/,
+    headline: ['h1#article', '.article_head h1'],
+    body: ['.article_body .wikitree_content', '.article_body'],
+    drop: [
+      '.keyword_wrap', '.article_bottom', '.article_images_wrap', '.rel_articles',
+      'figure', 'figcaption', 'script', 'style', 'table',
+    ],
   },
 ]
 

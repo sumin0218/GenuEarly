@@ -88,6 +88,19 @@ describe('어떤 링크가 기사인가', () => {
         .toBe(true)
     })
 
+    it('언론사 자체 도메인도 기사다', () => {
+      // 포털을 거치지 않고 링크를 받아 바로 들어오는 길 (GE-41).
+      expect(isArticleUrl('https://www.insight.co.kr/news/579405')).toBe(true)
+      expect(isArticleUrl('https://www.wikitree.co.kr/articles/1169622')).toBe(true)
+      expect(isArticleUrl('https://m.wikitree.co.kr/articles/1169622')).toBe(true)
+    })
+
+    it('그 사이트의 목록 페이지는 기사가 아니다', () => {
+      // 기사와 모양이 달라 구분된다 — 숫자가 없거나 경로가 다르다.
+      expect(isArticleUrl('https://www.insight.co.kr/economy/')).toBe(false)
+      expect(isArticleUrl('https://www.wikitree.co.kr/categories/1')).toBe(false)
+    })
+
     it('댓글 화면은 기사가 아니다 — 본문이 없다', () => {
       // `/mnews/article/*` 의 `*` 가 경로 나머지를 전부 덮어서 여기까지 잡힌다.
       // 지금까지 이 화면에 ⚪ 배지가 떴다. 판단해 보고 실패한 것처럼 보이지만

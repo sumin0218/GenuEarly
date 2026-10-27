@@ -36,6 +36,21 @@ export const ARTICLE_MATCHES = [
   'https://n.news.naver.com/mnews/ranking/article/*',
   'https://n.news.naver.com/mnews/hotissue/article/*',
   'https://v.daum.net/v/*',
+
+  // **언론사 자체 도메인.** 포털을 거치지 않고 링크를 받아 바로 들어오는 길이
+  // 더 흔하다. 두 곳 다 우리가 보는 신호(자극적 제목, 감정적 표현, 공유 유도,
+  // 확인하기 어려운 주장)가 자주 나타나는 곳이라 평가 세트의 반대 샘플로도 쓴다 (GE-41).
+  //
+  // **매체 이름으로 점수를 깎지 않는다.** 우리는 매체가 아니라 글을 본다
+  // (docs/product.md 2절). 사이트를 늘리는 것은 "어디서 읽든 같은 기준으로 본다" 는
+  // 쪽이지 "이 언론사는 의심한다" 가 아니다.
+  //
+  // 인사이트는 호스트가 하나다 — `m.insight.co.kr` 은 `www` 로 넘긴다 (301 확인).
+  // 위키트리는 둘이고, 모바일 쪽 `canonical` 이 `www` 를 가리킨다.
+  // `lib/cache.ts` 의 `normalizeUrl` 이 둘을 한 키로 접는다.
+  'https://www.insight.co.kr/news/*',
+  'https://www.wikitree.co.kr/articles/*',
+  'https://m.wikitree.co.kr/articles/*',
 ] as const
 
 /**
@@ -56,7 +71,7 @@ export const ARTICLE_EXCLUDE_MATCHES = [
 /**
  * 포털 목록·섹션 페이지. 제목 옆 동그라미(기능 ②)가 뜨는 곳이다.
  *
- * **네이버만 받는다.** 다음 목록은 제목 링크 모양을 확인하지 못했고,
+ * **네이버만 받는다.** 다음·인사이트·위키트리 목록은 제목 링크 모양을 확인하지 못했고,
  * 확인하지 못한 사이트의 권한을 미리 받아 두지 않는다 (requirements.md 4-5절 TODO).
  */
 export const PORTAL_LIST_MATCHES = [
