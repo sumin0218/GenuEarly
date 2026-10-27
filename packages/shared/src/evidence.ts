@@ -53,16 +53,17 @@ interface Rule {
 const RULES: readonly Rule[] = [
   // --- 제목 표현 (clickbait_headline) ------------------------------------
   // criteria: "'충격', '경악', '역대급', '난리 났다'처럼 사안보다 큰 수식어"
+  //
+  // **id 가 Jev 하위 질문 id 와 같다.** 같은 것을 묻기 때문이다 — Jev 는 "큰 수식어가
+  // 있는가" 를 재고(0.77, docs/jev.md 8절) 코드는 **그게 어느 낱말인지** 찾는다.
+  // id 가 같으면 explainLines 가 둘을 한 줄로 합쳐, Jev 가 낸 문장 밑에 인용이 붙는다.
+  //
+  // 말줄임표·물음표(criteria 의 "궁금증만 남기는 것")는 규칙을 두지 않는다.
+  // 따옴표 안에 물음표 하나가 덩그러니 놓이는 것은 설명이 아니다. 그쪽은 Jev 에 맡긴다.
   {
-    id: 'clk_inflating_words',
+    id: 'clk_inflating',
     field: 'headline',
     pattern: /충격|경악|역대급|난리\s*났다|초유의|발칵/g,
-  },
-  // criteria: "말줄임표·물음표로 궁금증만 남기는 것"
-  {
-    id: 'clk_hiding_marks',
-    field: 'headline',
-    pattern: /\.{3}|…|\?$/g,
   },
 
   // --- 공유 유도 (spread_inducement) --------------------------------------
@@ -117,10 +118,14 @@ const RULES: readonly Rule[] = [
 ]
 
 /** 그 항목에 딸린 규칙들. 항목 id → 규칙 id 묶음. */
-// **제목 표현과 제목·본문은 없다.** 그 둘은 Jev 가 맞힌다 (제목 표현 0.77 / 0.72,
-// docs/jev.md 8절). 겹쳐 물으면 같은 말을 두 번 하게 된다.
+// **제목·본문은 없다.** Jev 가 맞히고(0.72, docs/jev.md 8절) 어긋난 자리는 한 낱말이
+// 아니라 제목과 본문의 **관계**라 떼어 올 글자가 없다.
 // **출처 표시도 없다.** 기관명·실명은 사전이 있어야 하고 우리에게 없다 — LLM 몫이다.
+//
+// 제목 표현은 **Jev 와 코드가 같은 질문을 나눠 맡는다.** 큰 수식어가 있는지는 Jev 가
+// 재고, 그게 어느 낱말인지는 코드가 찾아 같은 줄에 인용으로 붙인다.
 const BY_ITEM: Readonly<Record<string, readonly string[]>> = {
+  clickbait_headline: ['clk_inflating'],
   spread_inducement: ['spr_urging', 'spr_hinting'],
   emotional_language: ['emo_exclaim', 'emo_repeat', 'emo_fear'],
   ai_style_signal: ['ai_summary_phrase', 'ai_both_sides'],
