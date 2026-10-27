@@ -199,3 +199,22 @@ describe('배지와 항목 줄이 같은 말을 한다', () => {
     expect(levels).toEqual(['SAFE', 'SAFE'])
   })
 })
+
+describe('판단이 도는 동안의 팝업', () => {
+  // 팝업은 판단보다 **먼저** 열린다 (제스처를 잃지 않으려고). 그동안 보여 줄 것이 있어야 한다.
+  it('"살펴보는 중" 을 띄운다', () => {
+    render({ level: 'PENDING' }, document, 'selection')
+    expect(document.getElementById('name')?.textContent).toBe(content.badge.PENDING.name)
+    expect(document.body.dataset.level).toBe('PENDING')
+  })
+
+  it('아직 "정보가 충분하지 않다" 고 말하지 않는다 — 끝난 뒤에 할 말이다', () => {
+    render({ level: 'PENDING' }, document, 'selection')
+    expect(document.querySelector('.ge-popup__note')).toBeNull()
+  })
+
+  it('무엇에 대한 판단인지는 먼저 밝힌다', () => {
+    render({ level: 'PENDING' }, document, 'selection')
+    expect((document.getElementById('scope') as HTMLElement).hidden).toBe(false)
+  })
+})

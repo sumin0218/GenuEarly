@@ -8,7 +8,13 @@
 import './style.css'
 import content from '../../../../packages/content/ui.ko.json'
 import { MARK, toRows } from '../../lib/item-view'
-import { takeSelectionResult, type SelectionOutcome } from '../../lib/selection'
+import {
+  SELECTION_KEY,
+  clearSelection,
+  peekSelection,
+  type SelectionOutcome,
+  type SelectionRecord,
+} from '../../lib/selection'
 import type { TabState, TabStateMessage } from '../../lib/protocol'
 
 /**
@@ -34,17 +40,54 @@ async function readTabState(): Promise<TabState> {
   }
 }
 
+/** 지금 활성 탭의 id. ③ 결과가 **그 탭의 것인지** 가리는 데 쓴다. */
+async function activeTabId(): Promise<number | undefined> {
+  try {
+    const [tab] = await browser.tabs.query({ active: true, currentWindow: true })
+    return tab?.id
+  } catch {
+    return undefined
+  }
+}
+
+/** ③ 의 결과 하나를 그린다. 거절이면 거절 화면으로. */
+function drawSelection(outcome: SelectionOutcome): void {
+  if (!outcome.ok) return renderTooLong(outcome.limit)
+  render({ level: outcome.verdict.level, verdict: outcome.verdict }, document, 'selection')
+}
+
 /**
  * 팝업이 열릴 때 **무엇을 보여 줄지 고른다.**
  *
  * ③ 의 결과가 있으면 그것이 먼저다 — 방금 오른쪽 클릭으로 검사했고 팝업은 그것을 보려고 열렸다.
- * `takeSelectionResult` 는 읽으면서 지운다. 안 지우면 다음에 기사에서 아이콘을 눌렀을 때
- * **지난번 선택 결과가 기사 배지를 가린다.**
+ *
+ * **팝업이 판단보다 먼저 열린다.** background 는 제스처를 잃지 않으려고 메뉴 클릭 즉시
+ * 팝업을 열고 그 다음에 판단한다. 그래서 여기서 보는 것은 대개 `pending` 이고,
+ * 결과는 `storage.session` 변경으로 **나중에** 온다.
  */
-async function pick(): Promise<{ selection: SelectionOutcome | null; tab: TabState }> {
-  const selection = await takeSelectionResult()
-  if (selection) return { selection, tab: { level: 'UNDETERMINED' } }
-  return { selection: null, tab: await readTabState() }
+async function run(): Promise<void> {
+  const tabId = await activeTabId()
+
+  // **먼저 듣기 시작한다.** 저장소 쓰기가 이 읽기보다 늦을 수 있다
+  // (background 가 openPopup 을 먼저 부르기 때문이다).
+  browser.storage.session.onChanged?.addListener((changes) => {
+    const rec = changes[SELECTION_KEY]?.newValue as SelectionRecord | undefined
+    if (rec?.state !== 'done' || !rec.outcome) return
+    if (rec.tabId !== undefined && tabId !== undefined && rec.tabId !== tabId) return
+    void clearSelection()
+    drawSelection(rec.outcome)
+  })
+
+  const rec = await peekSelection(tabId)
+  if (rec?.state === 'done' && rec.outcome) {
+    await clearSelection()
+    return drawSelection(rec.outcome)
+  }
+  if (rec?.state === 'pending') {
+    // 판단이 돌고 있다. 결과는 위의 리스너가 받는다.
+    return render({ level: 'PENDING' }, document, 'selection')
+  }
+  render(await readTabState(), document, 'page')
 }
 
 /** 고른 글이 너무 길어 묻지 않은 경우. **판정이 아니라 거절이다.** */
@@ -97,6 +140,8 @@ function render(state: TabState, root: Document = document, kind: 'page' | 'sele
   if (rows.length === 0) {
     // 판단한 적이 없으면 머리말이 이미 할 말을 했다. 밑에 또 붙이면 말이 겹친다.
     if (notJudged) return
+    // 아직 돌고 있다. "정보가 충분하지 않다" 는 **끝난 뒤에** 할 말이다.
+    if (state.level === 'PENDING') return
     // 판단은 했는데 항목이 하나도 안 남았다 — 본문을 못 읽었거나 중계가 전부 실패했다.
     const li = root.createElement('li')
     li.className = 'ge-popup__note'
@@ -122,14 +167,10 @@ function render(state: TabState, root: Document = document, kind: 'page' | 'sele
   }
 }
 
-export { render, renderTooLong, readTabState, pick }
+export { render, renderTooLong, readTabState, drawSelection, run }
 
 // 테스트에서 이 파일을 불러도 팝업이 멋대로 열리지 않게 한다.
 // 팝업 문서에서만 실제로 그린다.
 if (typeof document !== 'undefined' && document.getElementById('items')) {
-  void pick().then(({ selection, tab }) => {
-    if (!selection) return render(tab, document, 'page')
-    if (!selection.ok) return renderTooLong(selection.limit)
-    render({ level: selection.verdict.level, verdict: selection.verdict }, document, 'selection')
-  })
+  void run()
 }

@@ -7,7 +7,7 @@
 import content from '../../../packages/content/ui.ko.json'
 import { sweepExpired } from '../lib/cache'
 import { callProxy, judgeArticle, setIconBadge } from '../lib/judge'
-import { judgeSelection, putSelectionResult } from '../lib/selection'
+import { judgeSelection, putSelectionPending, putSelectionResult } from '../lib/selection'
 import type { ArticleVerdict, Message } from '../lib/protocol'
 
 /** 오른쪽 클릭 메뉴의 id. 문자열을 두 곳에 적지 않는다. */
@@ -36,7 +36,26 @@ export default defineBackground(() => {
     const text = info.selectionText ?? ''
     if (!text.trim()) return
 
-    setIconBadge(tab?.id, 'PENDING')
+    // **팝업을 먼저 연다. 기다린 다음이 아니다.**
+    // `openPopup()` 은 사용자 제스처를 요구할 수 있는데, 판단을 기다린 뒤(문장 수만큼,
+    // 1초 남짓) 부르면 그 사이에 제스처가 끝나 **거의 항상 실패한다.** 메뉴 클릭 직후에
+    // 불러야 제스처 안에서 열린다. 팝업은 "살펴보는 중" 을 띄우고 결과를 기다린다.
+    //
+    // **아이콘 배지를 쓰지 않는다.** 아이콘 배지는 "지금 탭의 상태 하나" 인데 ③ 가 올리는 것은
+    // 페이지가 아니라 **고른 글**의 판정이다. 메신저에서 고른 글이 🔴 이면 그 페이지 전체가
+    // 주의 대상처럼 보이고, 기사 페이지에서 고르면 ①이 낸 기사 배지를 덮는다
+    // (requirements.md 2-1절, ②가 목록 제목을 탭 상태로 올리지 않는 것과 같은 이유).
+    // 순서가 중요하다. `openPopup()` 이 **이 틱 안에서** 불려야 한다 —
+    // `await` 를 하나라도 먼저 두면 제스처가 끝난 뒤가 된다.
+    // 팝업이 저장소를 읽기 전에 아래 쓰기가 끝나지만, 늦더라도 팝업이
+    // `storage.session` 변경을 듣고 있어서 받는다 (entrypoints/popup/main.ts).
+    try {
+      void browser.action.openPopup()
+    } catch {
+      console.info('[GenuEarly] 팝업을 자동으로 열지 못했다. 아이콘을 눌러 주세요')
+    }
+    void putSelectionPending(tab?.id)
+
     void (async () => {
       const outcome = await judgeSelection(text, callProxy).catch((e) => {
         console.warn('[GenuEarly] 선택 글 판단 실패', e)
@@ -49,17 +68,9 @@ export default defineBackground(() => {
           level: 'UNDETERMINED', score: null, cautionSignals: 0, items: [], reason: 'not_enough_items',
         } satisfies ArticleVerdict,
       } as const
-      await putSelectionResult(result)
-      setIconBadge(tab?.id, result.ok ? result.verdict.level : 'UNDETERMINED')
-
-      // **팝업을 열어 준다.** Chrome 127+ 에만 있고 사용자 제스처를 요구할 수 있다.
-      // 안 되면 배지만 바뀌고 사용자가 아이콘을 누르면 된다 — 그래도 권한은 늘지 않는다
-      // (requirements.md 5-1절의 물러서는 길).
-      try {
-        await browser.action.openPopup()
-      } catch {
-        console.info('[GenuEarly] 팝업을 자동으로 열지 못했다. 아이콘을 눌러 주세요')
-      }
+      // 팝업이 이미 열려 있으면 이 쓰기를 듣고 바로 그린다.
+      // 못 열렸으면 사용자가 아이콘을 누를 때 읽는다 (2분 안에).
+      await putSelectionResult(result, tab?.id)
     })()
   })
 

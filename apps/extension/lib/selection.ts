@@ -49,7 +49,17 @@ function plan() {
   return { groups, sentenceItem }
 }
 
-/** 문장 단위 요청 수의 상한. ①과 같은 이유로 둔다 (lib/judge.ts 의 `MAX_SENTENCES`). */
+/**
+ * 문장 단위 요청 수의 상한. ①과 같은 이유로 둔다 (lib/judge.ts 의 `MAX_SENTENCES`).
+ *
+ * > **TODO(리뷰 #21): 글자 상한과 문장 상한이 어긋난다.**
+ * > `MAX_SELECTION_CHARS`(4,000자)는 보통 60~80문장인데 문장 판단은 여기서 잘린다.
+ * > 긴 글을 고르면 **뒤쪽이 말없이 빠지는데** 화면에는 "선택한 글에 대한 결과" 로 나가서
+ * > 고른 글 전체를 본 것으로 읽힌다. 고칠 길은 둘이고 **둘 다 ChatKHU 문구가 필요하다** —
+ * > 문장 수로 거절하거나(그러면 "{limit}자" 안내를 바꿔야 한다), 결과에
+ * > "앞부분만 살펴봄" 을 알리는 줄을 더하거나. 상한을 그냥 낮추면 기사 한 편을
+ * > 통째로 고를 수 없게 되므로 하지 않았다.
+ */
 const MAX_SENTENCES = 40
 
 /**
@@ -114,21 +124,59 @@ export async function judgeSelection(
 // **`storage.session` 을 쓴다.** 디스크에 쓰이지 않고 브라우저를 닫으면 사라진다.
 // `storage.local` 이면 "이 사람이 무엇을 검사해 봤는가" 가 디스크에 남는다
 // (docs/security/secure-coding.md 6절). 담는 것도 **판정뿐이고 고른 글은 넣지 않는다.**
-const KEY = 'selection-result'
+export const SELECTION_KEY = 'selection-result'
 
-export async function putSelectionResult(r: SelectionOutcome): Promise<void> {
-  await browser.storage.session.set({ [KEY]: r })
+/**
+ * 결과가 **언제·어느 탭에서** 나온 것인지 함께 둔다.
+ *
+ * 없으면 이런 일이 생긴다 — 팝업이 바로 안 열렸을 때 결과가 `storage.session` 에 남고,
+ * **몇 시간 뒤 다른 탭에서 아이콘을 눌렀을 때 그 결과가 기사 판정 대신 뜬다.**
+ * 꼬리표("선택한 글에 대한 결과")는 붙지만 어느 사이트에서 고른 글인지는 알 수 없다.
+ */
+export interface SelectionRecord {
+  /** `pending` 은 판단을 시작했다는 뜻이다. 팝업은 이것을 보고 "살펴보는 중" 을 띄운다 */
+  state: 'pending' | 'done'
+  at: number
+  tabId?: number
+  outcome?: SelectionOutcome
 }
 
 /**
- * 읽고 **지운다.**
+ * 결과를 그 자리에서 쓴 것으로 볼 수 있는 시간.
+ *
+ * 메뉴를 누르면 팝업이 바로 열리므로 보통 몇 초다. 넉넉히 2분을 둔다.
+ * 넘으면 버린다 — 오래된 선택 결과가 기사 배지를 가리는 쪽이 더 나쁘다.
+ */
+export const SELECTION_FRESH_MS = 2 * 60 * 1000
+
+/** 판단을 시작했다고 알린다. **팝업을 먼저 열기 때문에** 팝업이 빈 화면을 보면 안 된다. */
+export async function putSelectionPending(tabId?: number): Promise<void> {
+  const rec: SelectionRecord = { state: 'pending', at: Date.now(), tabId }
+  await browser.storage.session.set({ [SELECTION_KEY]: rec })
+}
+
+export async function putSelectionResult(outcome: SelectionOutcome, tabId?: number): Promise<void> {
+  const rec: SelectionRecord = { state: 'done', at: Date.now(), tabId, outcome }
+  await browser.storage.session.set({ [SELECTION_KEY]: rec })
+}
+
+/** 지금 담겨 있는 것. **지우지 않는다** — `pending` 일 때는 더 기다려야 한다. */
+export async function peekSelection(tabId?: number): Promise<SelectionRecord | null> {
+  const got = (await browser.storage.session.get(SELECTION_KEY)) as Record<string, SelectionRecord | undefined>
+  const rec = got[SELECTION_KEY]
+  if (!rec) return null
+  if (Date.now() - rec.at > SELECTION_FRESH_MS) return null
+  // 다른 탭에서 고른 글이면 지금 보고 있는 페이지와 아무 관계가 없다.
+  if (rec.tabId !== undefined && tabId !== undefined && rec.tabId !== tabId) return null
+  return rec
+}
+
+/**
+ * **지운다.**
  *
  * 남겨 두면 다음에 기사에서 아이콘을 눌렀을 때 **지난번 선택 결과가 기사 배지를 가린다.**
  * ③ 의 결과는 "방금 검사한 것" 이라 한 번 보여 주면 역할이 끝난다.
  */
-export async function takeSelectionResult(): Promise<SelectionOutcome | null> {
-  const got = (await browser.storage.session.get(KEY)) as Record<string, SelectionOutcome | undefined>
-  const r = got[KEY]
-  if (r) await browser.storage.session.remove(KEY)
-  return r ?? null
+export async function clearSelection(): Promise<void> {
+  await browser.storage.session.remove(SELECTION_KEY)
 }
