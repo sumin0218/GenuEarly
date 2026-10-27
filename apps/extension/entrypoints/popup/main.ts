@@ -20,6 +20,7 @@ import {
 } from '../../lib/selection'
 import type {
   DisplayLevel,
+  ExplainLevel,
   ExplainRequestMessage,
   ExplainResult,
   TabState,
@@ -275,12 +276,19 @@ function readFacts(): ChromeFacts {
 }
 
 /** 받은 줄을 그린다. 한 줄도 없으면 자리를 비운다 — 빈 상자를 남기지 않는다. */
-function drawWhy(host: HTMLElement, lines: string[], root: Document): void {
+function drawWhy(host: HTMLElement, lines: ExplainLine[], root: Document): void {
   host.replaceChildren()
-  for (const text of lines) {
+  for (const line of lines) {
     const li = root.createElement('li')
     li.className = 'ge-popup__why-line'
-    li.textContent = text
+    li.textContent = line.text
+    // **본문에서 떼어 온 글자.** 우리가 쓴 말과 섞이지 않게 따로 그린다.
+    for (const q of line.quotes ?? []) {
+      const quote = root.createElement('q')
+      quote.className = 'ge-popup__why-quote'
+      quote.textContent = q
+      li.append(quote)
+    }
     host.append(li)
   }
   host.hidden = lines.length === 0
@@ -290,12 +298,20 @@ function drawWhy(host: HTMLElement, lines: string[], root: Document): void {
 interface ExplainCopy {
   title: string
   none: string
-  parts: Record<string, { present: string; absent: string }>
+  /** 본문에서 떼어 온 대목 앞에 놓는 한 줄. LLM 이 집어 오는 항목만 가진다 */
+  found?: string
+  /** 없을 수 있다 — LLM 이 본문에서 집어 오는 항목은 짝 문구를 두지 않는다 */
+  parts?: Record<string, { present: string; absent: string }>
 }
 const EXPLAIN = (content as unknown as { explain?: Record<string, ExplainCopy> }).explain ?? {}
 
-/** 그 항목에 **설명할 말이 있는가.** 문구가 없으면 버튼 자체를 그리지 않는다. */
-const canExplain = (itemId: string): boolean => Boolean(EXPLAIN[itemId]?.parts)
+/**
+ * 그 항목에 **설명할 말이 있는가.** 문구가 없으면 버튼 자체를 그리지 않는다.
+ *
+ * 쪼갠 질문(`parts`)이 있거나, 본문에서 대목을 집어 오는 항목(`found`)이면 된다.
+ */
+const canExplain = (itemId: string): boolean =>
+  Boolean(EXPLAIN[itemId]?.parts ?? EXPLAIN[itemId]?.found)
 
 /**
  * 심층 분석을 **콘텐츠 스크립트에** 시킨다.
@@ -303,11 +319,11 @@ const canExplain = (itemId: string): boolean => Boolean(EXPLAIN[itemId]?.parts)
  * **팝업은 본문을 받지 않는다** (secure-coding.md 6절). 본문을 들고 있는 것은
  * 콘텐츠 스크립트뿐이라, 우리는 항목 id 만 보내고 답만 받는다.
  */
-async function askExplain(itemId: string): Promise<ExplainResult | null> {
+async function askExplain(itemId: string, level: ExplainLevel): Promise<ExplainResult | null> {
   try {
     const [tab] = await browser.tabs.query({ active: true, currentWindow: true })
     if (tab?.id === undefined) return null
-    const msg: ExplainRequestMessage = { kind: 'explain-item', itemId }
+    const msg: ExplainRequestMessage = { kind: 'explain-item', itemId, level }
     return ((await browser.tabs.sendMessage(tab.id, msg)) as ExplainResult | null) ?? null
   } catch {
     return null
@@ -320,19 +336,54 @@ async function askExplain(itemId: string): Promise<ExplainResult | null> {
  * **모름은 빠져 있다** — `judgeExplain` 이 확률이 모름 구간 안인 질문을 넣지 않는다.
  * 그래서 다섯 줄이 다 나오지 않을 수 있다. 억지로 채우지 않는다.
  */
-export function explainLines(itemId: string, result: ExplainResult | null): string[] {
+/** 화면에 놓을 한 줄. `quote` 는 **본문에서 떼어 온 글자**다 — 우리가 쓴 말이 아니다. */
+export interface ExplainLine {
+  text: string
+  quotes?: string[]
+}
+
+/**
+ * 받은 답을 줄로 바꾼다.
+ *
+ * 두 곳에서 온다 — Jev 가 **잰** 것(`found`)과 코드가 **찾은** 것(`spans`).
+ * 찾은 것에는 본문에서 떼어 온 글자를 함께 붙인다. **어디인지**를 말하는 유일한 방법이다.
+ *
+ * **모름은 빠져 있다** — `judgeExplain` 이 확률이 모름 구간 안인 질문을 넣지 않는다.
+ * 억지로 채우지 않는다.
+ */
+export function explainLines(itemId: string, result: ExplainResult | null): ExplainLine[] {
   const copy = EXPLAIN[itemId]
   if (!copy || !result) return []
-  const ids = Object.keys(result.found)
-  if (ids.length === 0) return []
-  // 물어본 것이 **전부 아니오**면 한 줄로 말한다. 다섯 줄을 "못 찾았습니다" 로
-  // 늘어놓는 것보다 낫고, 그때가 가장 분명한 신호다.
-  if (ids.every((id) => result.found[id] === false)) return [copy.none]
-  return ids.flatMap((id) => {
-    const pair = copy.parts[id]
-    if (!pair) return []
-    return [result.found[id] ? pair.present : pair.absent]
-  })
+  const parts = copy.parts ?? {}
+
+  const ids = [...Object.keys(result.found), ...Object.keys(result.spans ?? {})]
+  const 본것 = [...new Set(ids)].filter((id) => parts[id])
+
+  const 있다 = (id: string): boolean =>
+    (result.spans?.[id]?.length ?? 0) > 0 || result.found[id] === true
+
+  const lines: ExplainLine[] = []
+  if (본것.length > 0) {
+    // 본 것이 **전부 아니오**면 한 줄로 말한다. 여러 줄을 "없습니다" 로 늘어놓는 것보다 낫다.
+    if (본것.every((id) => !있다(id))) {
+      lines.push({ text: copy.none })
+    } else {
+      for (const id of 본것) {
+        const pair = parts[id]
+        if (!pair) continue
+        const yes = 있다(id)
+        const quotes = yes ? result.spans?.[id] : undefined
+        lines.push({ text: yes ? pair.present : pair.absent, ...(quotes?.length ? { quotes } : {}) })
+      }
+    }
+  }
+
+  // LLM 이 본문에서 집어 온 대목. **우리가 쓴 한 줄 뒤에 원문 그대로 붙는다.**
+  if (copy.found) {
+    const quotes = result.quotes ?? []
+    lines.push(quotes.length > 0 ? { text: copy.found, quotes } : { text: copy.none })
+  }
+  return lines
 }
 
 /** 머리말 아이콘의 변 길이(px). 제목(18px)보다 조금 작다. */
@@ -477,8 +528,10 @@ function render(state: TabState, root: Document = document, kind: 'page' | 'sele
       if (why.hidden || asked) return
       asked = true
       // **누를 때만 나간다.** 기사를 여는 것만으로는 한 건도 나가지 않는다.
-      drawWhy(why, [content.badge.PENDING.name], root)
-      void askExplain(r.id).then((res) => drawWhy(why, explainLines(r.id, res), root))
+      drawWhy(why, [{ text: content.badge.PENDING.name }], root)
+      void askExplain(r.id, r.level as ExplainLevel).then((res) =>
+        drawWhy(why, explainLines(r.id, res), root),
+      )
     }
 
     li.append(icon, head, body, why)

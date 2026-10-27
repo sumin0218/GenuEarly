@@ -7,6 +7,7 @@
 // 화면에 **있으면 안 되는 것이 새어 나오지 않는가**다.
 import { beforeEach, describe, expect, it } from 'vitest'
 import content from '../../../packages/content/ui.ko.json'
+import schema from '@genuearly/shared/judgment-items.json'
 import { drawChrome, explainLines, render, renderTooLong } from '../entrypoints/popup/main'
 import type { TabState } from '../lib/protocol'
 
@@ -409,54 +410,90 @@ describe('4차 문구가 실제로 쓰인다', () => {
 })
 
 describe('왜 이 판정인가 — 항목별 설명', () => {
-  // Jev 는 이유를 돌려주지 않는다. 그 항목의 criteria 를 쪼갠 질문들을 따로 물어
-  // "무엇이 있고 무엇이 없어서 그렇게 봤는지" 를 보여 준다 (GE-44).
-  const parts = content.explain.source_citation.parts
+  // 두 곳에서 온다 — Jev 가 **잰** 것과 코드가 **찾은** 것.
+  // Jev 는 "이 표현이 있는가" 를 못 센다 (docs/jev.md 8절). 그 일은 코드가 한다.
+  const parts = content.explain.emotional_language.parts
 
-  it('찾은 것과 못 찾은 것을 그대로 말한다', () => {
-    const lines = explainLines('source_citation', {
-      itemId: 'source_citation',
-      found: { src_named_org: false, src_unnamed_only: true },
+  it('코드가 찾은 글자를 그대로 인용한다', () => {
+    const lines = explainLines('emotional_language', {
+      itemId: 'emotional_language',
+      found: {},
+      spans: { emo_exclaim: ['!!'], emo_repeat: [], emo_fear: [] },
     })
-    expect(lines).toEqual([parts.src_named_org.absent, parts.src_unnamed_only.present])
+    expect(lines[0]).toEqual({ text: parts.emo_exclaim.present, quotes: ['!!'] })
+    expect(lines.map((l) => l.text)).toContain(parts.emo_repeat.absent)
   })
 
-  it('물어본 것이 전부 아니오면 한 줄로 말한다', () => {
-    // 다섯 줄을 "못 찾았습니다" 로 늘어놓는 것보다 낫다.
-    const lines = explainLines('source_citation', {
-      itemId: 'source_citation',
-      found: { src_named_org: false, src_named_person: false, src_document: false },
+  it('Jev 가 잰 것과 코드가 찾은 것이 한 목록에 들어간다', () => {
+    const lines = explainLines('ai_style_signal', {
+      itemId: 'ai_style_signal',
+      found: { ai_same_frame: true },
+      spans: { ai_summary_phrase: ['결론적으로'] },
     })
-    expect(lines).toEqual([content.explain.source_citation.none])
+    expect(lines.map((l) => l.text)).toEqual([
+      content.explain.ai_style_signal.parts.ai_same_frame.present,
+      content.explain.ai_style_signal.parts.ai_summary_phrase.present,
+    ])
   })
 
-  it('모름은 줄을 만들지 않는다', () => {
-    // judgeExplain 이 모름 구간 안의 질문을 빼고 준다. 억지로 채우지 않는다.
-    const lines = explainLines('source_citation', {
-      itemId: 'source_citation',
-      found: { src_named_org: true },
+  it('본 것이 전부 아니오면 한 줄로 말한다', () => {
+    const lines = explainLines('emotional_language', {
+      itemId: 'emotional_language',
+      found: {},
+      spans: { emo_exclaim: [], emo_repeat: [], emo_fear: [] },
     })
-    expect(lines).toHaveLength(1)
+    expect(lines).toEqual([{ text: content.explain.emotional_language.none }])
   })
 
   it('답이 없으면 아무 줄도 만들지 않는다', () => {
-    expect(explainLines('source_citation', null)).toEqual([])
-    expect(explainLines('source_citation', { itemId: 'source_citation', found: {} })).toEqual([])
+    expect(explainLines('emotional_language', null)).toEqual([])
+    expect(
+      explainLines('emotional_language', { itemId: 'emotional_language', found: {}, spans: {} }),
+    ).toEqual([])
   })
 
-  it('설명 문구가 없는 항목은 줄을 만들지 않는다', () => {
-    expect(explainLines('clickbait_headline', {
-      itemId: 'clickbait_headline',
-      found: { whatever: true },
-    })).toEqual([])
+  it('짝 문구가 없는 항목은 본문에서 집어 온 대목으로 말한다', () => {
+    // 출처 표시는 기관명·실명이라 목록을 만들 수 없다. 그래서 하위 질문이 아니라
+    // **본문에서 떼어 온 글자**를 보여 준다 (apps/proxy/src/pinpoint.ts).
+    const lines = explainLines('source_citation', {
+      itemId: 'source_citation',
+      found: {},
+      spans: {},
+      quotes: ['통계청은', '한 관계자는'],
+    })
+    expect(lines).toEqual([
+      { text: content.explain.source_citation.found, quotes: ['통계청은', '한 관계자는'] },
+    ])
+  })
+
+  it('집어 온 대목이 없으면 "찾지 못했다" 고 말한다 — 빈 화면을 두지 않는다', () => {
+    // 눌렀는데 아무것도 안 뜨는 것이 가장 나쁘다. 못 찾았으면 못 찾았다고 적는다.
+    expect(
+      explainLines('source_citation', { itemId: 'source_citation', found: {}, spans: {} }),
+    ).toEqual([{ text: content.explain.source_citation.none }])
+  })
+
+  it('집어 온 대목은 우리가 쓴 말과 섞이지 않는다', () => {
+    // 화면의 **문장은 전부 ChatKHU 가 미리 쓴 것**이고, 인용은 본문 글자 그대로다.
+    const quotes = ['한 관계자는 더 오를 것이라고 말했다']
+    const lines = explainLines('unverifiable_claim', {
+      itemId: 'unverifiable_claim',
+      found: {},
+      spans: {},
+      quotes,
+    })
+    const line = lines[0]!
+    expect(line.text).toBe(content.explain.unverifiable_claim.found)
+    expect(line.quotes).toEqual(quotes)
   })
 
   it('점수 숫자가 설명에 새지 않는다', () => {
-    const lines = explainLines('source_citation', {
-      itemId: 'source_citation',
-      found: { src_named_org: false, src_unnamed_only: true },
+    const lines = explainLines('emotional_language', {
+      itemId: 'emotional_language',
+      found: {},
+      spans: { emo_exclaim: ['!!'] },
     })
-    expect(lines.join(' ')).not.toMatch(/0\.\d|\d+%|\d+점/)
+    expect(lines.map((l) => l.text).join(' ')).not.toMatch(/0\.\d|\d+%|\d+점/)
   })
 })
 
@@ -466,34 +503,35 @@ describe('펼침은 걸린 항목에만 붙는다', () => {
 
   it('🔴·🟡 이고 설명할 말이 있는 항목에만 붙는다', () => {
     render(verdict([
-      item('source_citation', 0.9),       // 🔴 + 설명 있음 → 붙는다
-      item('emotional_language', 0.5),    // 🟡 + 설명 있음 → 붙는다
+      item('emotional_language', 0.9),    // 🔴 + 설명 있음 → 붙는다
+      item('clickbait_headline', 0.5),    // 🟡 + 설명 있음 → 붙는다
       item('headline_body_match', 0),     // 🟢 → 안 붙는다
     ], 'CAUTION'))
     expect(opens()).toHaveLength(2)
     expect([...opens()].map((o) => o.textContent))
-      .toEqual([content.items.source_citation.name, content.items.emotional_language.name])
+      .toEqual([content.items.emotional_language.name, content.items.clickbait_headline.name])
   })
 
-  it('설명할 말이 없는 항목에는 붙지 않는다', () => {
-    // 확인하기 어려운 주장은 **문장마다** 판단하는 항목이라 쪼개는 방식이 다르다.
-    // 그래서 설명 문구가 없고, 없으면 펼침도 붙지 않는다 (GE-44).
-    render(verdict([item('unverifiable_claim', 0.9)], 'CAUTION'))
-    expect(opens()).toHaveLength(0)
+  it('걸린 항목은 **하나도 빠짐없이** 펼칠 수 있다', () => {
+    // 어디가 부족한지 모르면 답답하다 (GE-44). 쪼갠 질문이든, 코드가 찾는 규칙이든,
+    // 본문에서 집어 오는 대목이든 — 일곱 항목 모두 설명하는 길이 있다.
+    const 모두 = (schema.items as { id: string }[]).map((i) => i.id)
+    render(verdict(모두.map((id) => item(id, 0.9)), 'CAUTION'))
+    expect(opens()).toHaveLength(모두.length)
   })
 
   it('🟢·⚪ 에는 붙지 않는다', () => {
-    render(verdict([item('source_citation', 0), item('source_citation', null)], 'SAFE'))
+    render(verdict([item('emotional_language', 0), item('clickbait_headline', null)], 'SAFE'))
     expect(opens()).toHaveLength(0)
   })
 
   it('선택한 글에는 붙지 않는다 — 탭의 기사에 물어보는 길이다', () => {
-    render(verdict([item('source_citation', 0.9)], 'CAUTION'), document, 'selection')
+    render(verdict([item('emotional_language', 0.9)], 'CAUTION'), document, 'selection')
     expect(opens()).toHaveLength(0)
   })
 
   it('접혀 있는 것이 기본이다', () => {
-    render(verdict([item('source_citation', 0.9)], 'CAUTION'))
+    render(verdict([item('emotional_language', 0.9)], 'CAUTION'))
     expect(opens()[0]?.getAttribute('aria-expanded')).toBe('false')
     expect((document.querySelector('.ge-popup__why') as HTMLElement).hidden).toBe(true)
   })

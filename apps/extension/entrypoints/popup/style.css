@@ -361,3 +361,22 @@ body {
 .ge-popup__why[hidden] { display: none; }
 
 .ge-popup__why-line { line-height: 1.5; }
+
+/* 본문에서 **그대로 떼어 온 글자.** 우리가 쓴 말과 눈으로 갈라져야 한다 —
+   섞여 보이면 사용자가 "프로그램이 한 말" 로 읽는다. 한 단 내린 면에 얹고
+   글자색을 본문색으로 되돌려, 설명 줄(흐린 회색)보다 한 겹 앞에 오게 한다.
+
+   테두리와 그림자를 함께 쓰지 않는다 (docs/design.md). 면만 쓴다. */
+.ge-popup__why-quote {
+  display: block;
+  margin-top: var(--ge-space-4);
+  padding: var(--ge-space-4) var(--ge-space-8);
+  border-radius: var(--ge-radius-4);
+  background: var(--ge-surface);
+  color: var(--ge-ink);
+  font-size: var(--ge-fs-meta);
+  line-height: 1.5;
+  /* 떼어 온 글이 길면 줄을 접는다. 가로로 넘치면 팝업 전체가 밀린다. */
+  overflow-wrap: anywhere;
+  quotes: '\201C' '\201D';
+}

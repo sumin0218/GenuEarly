@@ -7,6 +7,7 @@
 // 판단기를 노린 문장을 걷어내고(GE-35), Jev 로 넘긴다.
 // **점수로 바꾸거나 해석하지 않는다.** 그건 확장 프로그램의 몫이다 (docs/architecture.md 5절).
 import { buildRequest, isRejection, screenState, SCHEMA_MODEL, SCHEMA_VERSION } from './schema'
+import { canPinpoint, isPinpointLevel, pinpoint } from './pinpoint'
 import { callJev } from './jev'
 import { budgetAllows, creditGuardOn, isPaused } from './credits'
 import { RETRY_AFTER_S, withinLimits } from './ratelimit'
@@ -17,6 +18,13 @@ export interface Env {
   JEV_API_BASE_URL: string
   JEV_MODEL: string
   JEV_TIMEOUT_MS: string
+  /**
+   * 심층 분석에 쓰는 생성 모델. **판단하지 않는다** — 본문에서 조각을 집어 올 뿐이다.
+   * 왜 생성 모델을 쓰는지는 src/pinpoint.ts 머리말에 있다.
+   */
+  EXPLAIN_MODEL: string
+  /** 생성 모델은 분류기보다 느리다. 판단(8초)보다 넉넉히 준다. */
+  EXPLAIN_TIMEOUT_MS: string
   MAX_REQUEST_BYTES: string
   /** 이만큼은 남겨 둔다. 아래로 내려가면 판단을 멈춘다. 0 이면 감시를 끈다 */
   CREDITS_RESERVE: string
@@ -98,6 +106,57 @@ function warnOnModelMismatch(env: Env, upstream: unknown): void {
   )
 }
 
+/**
+ * 두 경로가 **똑같이** 거치는 관문. 어디서 왔는지, 폭주인지, 너무 큰지.
+ *
+ * 하나로 묶어 둔다. 경로가 늘 때 빠뜨리면 그 경로만 무방비가 된다.
+ */
+async function gate(
+  env: Env,
+  request: Request,
+  origin: string | null,
+): Promise<{ ok: true; raw: string } | { ok: false; response: Response }> {
+  if (!isAllowedOrigin(origin)) {
+    // 브라우저 안에서 다른 사이트가 부르는 것을 막는다.
+    // **이것은 인증이 아니다.** isAllowedOrigin 의 TODO 를 본다.
+    return { ok: false, response: json({ error: 'forbidden_origin' }, 403) }
+  }
+  if (request.method !== 'POST') {
+    return { ok: false, response: reply(origin, { error: 'method_not_allowed' }, 405) }
+  }
+
+  // --- 폭주 차단 ----------------------------------------------------------
+  // 본문을 읽기 전에 본다. 폭주면 파싱도 하지 않는다.
+  //
+  // **여기서는 200 이 아니라 429 를 돌려준다.** 다른 실패와 다르다 —
+  // 폭주하는 클라이언트에 200 을 주면 그 클라이언트는 아무것도 배우지 않고 계속 때린다.
+  // 429 와 Retry-After 로 물러서라고 말해야 한다. 확장 프로그램은 이것을 ⚪ 로 보이고
+  // 그 시간만큼 쉰다 (docs/architecture.md 4절).
+  const verdict = await withinLimits(env, request)
+  if (!verdict.ok) {
+    return {
+      ok: false,
+      response: reply(origin, { error: 'rate_limited', scope: verdict.which }, 429, {
+        'Retry-After': String(RETRY_AFTER_S),
+      }),
+    }
+  }
+
+  // --- 크기 상한 ----------------------------------------------------------
+  // 본문을 읽기 전에 먼저 막는다. 큰 요청으로 CPU 와 크레딧을 태우지 못하게 한다.
+  const max = Number(env.MAX_REQUEST_BYTES) || 65536
+  const declared = Number(request.headers.get('Content-Length'))
+  if (Number.isFinite(declared) && declared > max) {
+    return { ok: false, response: reply(origin, { error: 'too_large' }, 400) }
+  }
+  const raw = await request.text()
+  // Content-Length 는 없을 수도, 거짓일 수도 있다. 실제 길이로 다시 본다.
+  if (new TextEncoder().encode(raw).length > max) {
+    return { ok: false, response: reply(origin, { error: 'too_large' }, 400) }
+  }
+  return { ok: true, raw }
+}
+
 export default {
   async fetch(request: Request, env: Env): Promise<Response> {
     const url = new URL(request.url)
@@ -133,46 +192,12 @@ export default {
 
     // --- 판단 요청 -----------------------------------------------------------
     if (url.pathname === '/v1/judge') {
-      if (!isAllowedOrigin(origin)) {
-        // 브라우저 안에서 다른 사이트가 부르는 것을 막는다.
-        // **이것은 인증이 아니다.** 아래 TODO 를 본다.
-        return json({ error: 'forbidden_origin' }, 403)
-      }
-      if (request.method !== 'POST') {
-        return reply(origin, { error: 'method_not_allowed' }, 405)
-      }
-
-      // --- 폭주 차단 --------------------------------------------------------
-      // 본문을 읽기 전에 본다. 폭주면 파싱도 하지 않는다.
-      //
-      // **여기서는 200 이 아니라 429 를 돌려준다.** 다른 실패와 다르다 —
-      // 폭주하는 클라이언트에 200 을 주면 그 클라이언트는 아무것도 배우지 않고 계속 때린다.
-      // 429 와 Retry-After 로 물러서라고 말해야 한다. 확장 프로그램은 이것을 ⚪ 로 보이고
-      // 그 시간만큼 쉰다 (docs/architecture.md 4절).
-      const verdict = await withinLimits(env, request)
-      if (!verdict.ok) {
-        return reply(origin, { error: 'rate_limited', scope: verdict.which }, 429, {
-          'Retry-After': String(RETRY_AFTER_S),
-        })
-      }
-
-
-      // --- 크기 상한 --------------------------------------------------------
-      // 본문을 읽기 전에 먼저 막는다. 큰 요청으로 CPU 와 크레딧을 태우지 못하게 한다.
-      const max = Number(env.MAX_REQUEST_BYTES) || 65536
-      const declared = Number(request.headers.get('Content-Length'))
-      if (Number.isFinite(declared) && declared > max) {
-        return reply(origin, { error: 'too_large' }, 400)
-      }
-      const raw = await request.text()
-      // Content-Length 는 없을 수도, 거짓일 수도 있다. 실제 길이로 다시 본다.
-      if (new TextEncoder().encode(raw).length > max) {
-        return reply(origin, { error: 'too_large' }, 400)
-      }
+      const passed = await gate(env, request, origin)
+      if (!passed.ok) return passed.response
 
       let parsed: unknown
       try {
-        parsed = JSON.parse(raw)
+        parsed = JSON.parse(passed.raw)
       } catch {
         return reply(origin, { error: 'invalid_json' }, 400)
       }
@@ -214,6 +239,49 @@ export default {
       warnOnModelMismatch(env, out.upstreamModel)
       // Jev 응답을 그대로 중계한다. 서버가 해석하거나 점수로 바꾸지 않는다.
       return reply(origin, { model: env.JEV_MODEL, answers: out.answers }, 200)
+    }
+
+    // --- 심층 분석 ----------------------------------------------------------
+    // **판단이 아니다.** 판정은 이미 Jev 가 냈고, 여기서는 그 판정의 근거가 될 대목을
+    // 본문에서 집어 올 뿐이다. 돌려주는 것은 **본문의 부분 문자열**뿐이다 (src/pinpoint.ts).
+    if (url.pathname === '/v1/explain') {
+      const passed = await gate(env, request, origin)
+      if (!passed.ok) return passed.response
+
+      let parsed: unknown
+      try {
+        parsed = JSON.parse(passed.raw)
+      } catch {
+        return reply(origin, { error: 'invalid_json' }, 400)
+      }
+
+      // --- 규약 검증 --------------------------------------------------------
+      // **자유 텍스트 지시를 받지 않는다.** 받으면 우리 키로 남이 생성 모델을 쓰는 길이
+      // 열린다. 받는 것은 아는 항목 id, 정해진 판정 이름, 그리고 본문뿐이다.
+      const req = parsed as { itemId?: unknown; level?: unknown; body?: unknown }
+      if (typeof req.itemId !== 'string' || !canPinpoint(req.itemId)) {
+        return reply(origin, { error: 'unknown_item' }, 400)
+      }
+      if (typeof req.level !== 'string' || !isPinpointLevel(req.level)) {
+        // 🟢·⚪ 는 설명할 것이 없다. 크레딧을 쓸 이유도 없다.
+        return reply(origin, { error: 'unexplainable_level' }, 400)
+      }
+      if (typeof req.body !== 'string' || req.body.trim().length === 0) {
+        return reply(origin, { error: 'empty_body' }, 400)
+      }
+
+      // --- 예산 ------------------------------------------------------------
+      // 판단과 같은 지갑을 쓴다. 심층 분석은 **부수 기능**이라 먼저 포기한다.
+      if (!(await budgetAllows(env))) {
+        return reply(origin, { spans: [], reason: 'budget_exhausted' }, 200)
+      }
+
+      const found = await pinpoint(env, req.itemId, req.level, req.body)
+      if (!found.ok) {
+        // 실패가 아니라 "없음" 이다. 그래서 200 이다 — 화면은 "찾지 못했다" 를 보인다.
+        return reply(origin, { spans: [], reason: found.reason }, 200)
+      }
+      return reply(origin, { spans: found.spans }, 200)
     }
 
     return json({ error: 'not_found' }, 404)

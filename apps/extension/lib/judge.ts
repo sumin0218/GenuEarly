@@ -8,7 +8,7 @@
 // 엔트리포인트는 WXT 의 defineBackground 로 감싸여 있어 그대로는 불러올 수 없다.
 // **점수 규칙은 여기 없다.** `@genuearly/shared` 하나가 원본이고 중계 서버와 함께 쓴다 (GE-15).
 // 두 벌을 두면 조용히 갈라진다.
-import { decideBadge, resolveBand, scoreArticle, type ItemResult } from '@genuearly/shared'
+import { decideBadge, hasCodeEvidence, resolveBand, scoreArticle, type ItemResult } from '@genuearly/shared'
 import schema from '@genuearly/shared/judgment-items.json'
 import {
   headlineFingerprint,
@@ -30,6 +30,7 @@ import {
   type HeadlineVerdict,
   type Message,
   isUndetermined,
+  type ExplainLevel,
   type ExplainResult,
 } from './protocol'
 
@@ -330,6 +331,47 @@ const EXPLAIN_ITEMS = ((schema as unknown as { explain_items?: ExplainItemDef[] 
 export const explainableItems = (): string[] => EXPLAIN_ITEMS.map((i) => i.explain_for)
 
 /**
+ * **아무도 설명하지 못하는 항목.** 여기만 LLM 이 본문에서 대목을 집어 온다.
+ *
+ * 목록을 손으로 적지 않고 **빼서 구한다.** 적어 두면 질문을 쪼개거나 규칙을 더할 때
+ * 조용히 어긋난다 — 두 곳이 같은 항목을 설명하거나, 아무도 설명하지 않게 된다.
+ */
+const NEEDS_PINPOINT: ReadonlySet<string> = new Set(
+  (schema.items as unknown as { id: string }[])
+    .map((i) => i.id)
+    .filter((id) => !explainableItems().includes(id) && !hasCodeEvidence(id)),
+)
+
+/**
+ * 중계 서버에 **본문에서 대목을 집어 달라고** 한다.
+ *
+ * 프롬프트는 **중계 서버가 만든다.** 여기서는 항목 id 와 판정 이름과 본문만 보낸다 —
+ * 자유 텍스트 지시를 보낼 수 있으면 우리 키로 남이 생성 모델을 쓰는 길이 열린다.
+ *
+ * **돌려받은 것을 여기서 한 번 더 대조한다.** 중계 서버도 대조하지만, 화면에 인용으로
+ * 올라가는 글자라 두 번 본다. 본문에 없는 글자는 한 자도 보이지 않는다.
+ */
+async function pinpointQuotes(body: string, itemId: string, level: ExplainLevel): Promise<string[]> {
+  try {
+    const res = await fetch(`${PROXY_URL}/v1/explain`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ itemId, level, body }),
+    })
+    if (!res.ok) {
+      console.warn('[GenuEarly] 심층 분석 거절', res.status)
+      return []
+    }
+    const out = (await res.json()) as { spans?: unknown }
+    if (!Array.isArray(out.spans)) return []
+    return out.spans.filter((q): q is string => typeof q === 'string' && body.includes(q))
+  } catch (e) {
+    console.warn('[GenuEarly] 심층 분석에 닿지 못했다', e)
+    return []
+  }
+}
+
+/**
  * 판정이 **왜 그렇게 나왔는지** 묻는다.
  *
  * Jev 는 이유를 돌려주지 않는다 — 분류기라 "고른 보기 + 확률 + 확신도" 가 전부다
@@ -347,24 +389,33 @@ export async function judgeExplain(
 ): Promise<ExplainResult | null> {
   const def = EXPLAIN_ITEMS.find((i) => i.explain_for === msg.itemId)
   const group = def?.request_group.explain
-  if (!def || !group) return null
+  const pinpoint = NEEDS_PINPOINT.has(msg.itemId)
+  // 둘 다 아니면 이 항목은 코드가 설명한다. 바깥에 물어볼 것이 없다.
+  if ((!def || !group) && !pinpoint) return null
 
-  const out = await callProxy({
-    feature: 'explain',
-    group,
-    items: [def.id],
-    state: { body: msg.body },
-  })
-  if (!out || isUndetermined(out)) return null
-
-  const [lo, hi] = EXPLAIN_BAND
   const found: Record<string, boolean> = {}
-  for (const q of def.questions) {
-    const a = out.answers[q.id] as { type?: string; noul?: unknown } | undefined
-    if (a?.type !== 'noul' || typeof a.noul !== 'number' || !Number.isFinite(a.noul)) continue
-    if (a.noul > hi) found[q.id] = true
-    else if (a.noul < lo) found[q.id] = false
-    // 그 사이는 모름이다. 넣지 않는다.
+  if (def && group) {
+    const out = await callProxy({
+      feature: 'explain',
+      group,
+      items: [def.id],
+      state: { body: msg.body },
+    })
+    if (out && !isUndetermined(out)) {
+      const [lo, hi] = EXPLAIN_BAND
+      for (const q of def.questions) {
+        const a = out.answers[q.id] as { type?: string; noul?: unknown } | undefined
+        if (a?.type !== 'noul' || typeof a.noul !== 'number' || !Number.isFinite(a.noul)) continue
+        if (a.noul > hi) found[q.id] = true
+        else if (a.noul < lo) found[q.id] = false
+        // 그 사이는 모름이다. 넣지 않는다.
+      }
+    } else if (!pinpoint) {
+      return null
+    }
   }
-  return { itemId: msg.itemId, found }
+
+  const quotes = pinpoint ? await pinpointQuotes(msg.body, msg.itemId, msg.level) : []
+  // 코드가 찾은 것은 콘텐츠 스크립트가 채운다 — 여기서는 Jev 가 **잰** 것과 LLM 이 **집어 온** 것만 낸다.
+  return { itemId: msg.itemId, found, spans: {}, ...(quotes.length ? { quotes } : {}) }
 }

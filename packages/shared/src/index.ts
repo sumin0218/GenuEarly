@@ -2,3 +2,4 @@
 export * from './scoring'
 export * from './scoring-config'
 export * from './screen'
+export * from './evidence'
