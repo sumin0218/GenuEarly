@@ -23,6 +23,7 @@
 | 항목별 가중치 | [src/scoring-config.ts](src/scoring-config.ts) — **임시값**, GE-17 측정 후 확정 | [../../docs/product.md](../../docs/product.md) 4절 "원칙" |
 | 확신도 임계값 | [src/scoring-config.ts](src/scoring-config.ts) — **임시값**, GE-17 측정 후 확정 | [../../docs/jev.md](../../docs/jev.md) 5절 |
 | 점수 합산과 배지 단계 경계 | 판정 순서는 [src/scoring.ts](src/scoring.ts), 숫자는 [src/scoring-config.ts](src/scoring-config.ts) — **임시값** | [../../docs/product.md](../../docs/product.md) 3·5절 |
+| 보내기 전 걷어내기 (판단기를 노린 문장) | [src/screen.ts](src/screen.ts) — 아래 "보내기 전 걷어내기" | [../../docs/jev.md](../../docs/jev.md) 3절 ⑥ |
 | 출처 도메인 목록과 대조 규칙 | TODO | |
 
 ## 판단 항목 정의 — `judgment-items.json`
@@ -204,6 +205,26 @@ npm run compile -w @genuearly/shared
 - **밴드로도 1.8% 는 남는다.** 경계가 아니라 한가운데서 갈리는 자리가 있다. 캐시(기사 단위)가
   그것을 사용자 눈에서 가리는 유일한 장치다
 - 측정 방법과 원시값은 [../../eval/experiments/sentence-batching/README.md](../../eval/experiments/sentence-batching/README.md) 에 있다
+
+## 보내기 전 걷어내기 — `src/screen.ts` (GE-35)
+
+**기사 글에서 판단기를 노린 문장을 Jev 에 보내기 전에 뺀다.** 중계 서버가 부르고, eval 의 인젝션 검사(`run.mjs --screen`)도 같은 함수를 부른다.
+질문 문구로 막아 보았지만(GE-33) 효과가 측정되지 않았다. 문구는 모델이 따를지 고르지만, **걷어낸 문장은 모델이 볼 수 없다.**
+
+| 찾는 것 | 걷어내는 범위 | 노리는 공격 |
+| --- | --- | --- |
+| 항목 키·질문 id(`source_citation`, `named_basis` …), 밑줄이 든 보기 이름(`named_source`, `no_spread` …) | 그 문장 | 필드 위장 |
+| `[SYSTEM] … [/SYSTEM]` (system·assistant·user·inst·sys) | 태그 사이. 닫지 않았으면 그 문단 끝까지 | 시스템 문구 흉내 |
+| 짝 없는 역할 태그, `<\|…\|>` 특수 토큰 | 그 문장 | 시스템 문구 흉내 |
+| 닫는 태그 `</…>` (20자 이내) | 그 문장부터 문단 끝까지. 태그 뒤가 진짜 지시다 | 구분자 탈출 |
+
+- **찾는 단어는 `judgment-items.json` 에서 읽는다.** 항목이나 보기를 더하면 따라 바뀐다. 코드에 단어 목록을 따로 적지 않는다
+- **걷어낸 것이 없으면 받은 글을 한 글자도 바꾸지 않는다.** 정상 기사의 요청은 걷어내기 전과 같다
+- **본문(`body`)과 문장(`sentence`)만 본다. 제목은 두지 않는다.** 제목 하나를 지우면 판단할 글이 남지 않는다
+- 걷어내고 남은 글이 없으면 중계 서버는 Jev 를 부르지 않고 `screened_out` 판단 보류로 돌린다
+- 찾지 않는 것: `matches`·`strong` 같은 한 단어 보기 이름(영어 인용문에 흔하다. 필드 위장 문장에는 키가 같이 있어 키로 잡힌다), `출처판정=명시됨`·`<<시스템>>` 같은 한국어·변형 표기
+- 규칙을 바꾸면 `SCREEN_VERSION` 을 올린다. eval 결과에 남는다
+- 측정 결과와 한계는 [../../eval/experiments/robustness/README.md](../../eval/experiments/robustness/README.md) 4절에 있다
 
 ## ⚪ 판단 보류를 만드는 곳
 
