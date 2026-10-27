@@ -44,8 +44,13 @@ for (const k of Object.keys(VERSION_KEYS)) {
 const ITEMS = Object.fromEntries(SCHEMA.items.map((i) => [i.id, i]))
 const PERMS = permutations(3)
 const cases = []
-// screened_out: --screen 으로 돌렸을 때 걷어내고 남은 글이 없어 보내지 않은 요청. 답이 없다 (run.mjs)
+// screened_out: --screen 으로 돌렸을 때 걷어내고 남은 글이 없어 보내지 않은 요청 (run.mjs).
+// 제품에서는 중계 서버가 판단 보류로 돌리므로 그 요청의 항목은 모두 ⚪다. 건너뛰지 않고 ⚪로 읽는다 (PR #24 리뷰).
+// 건너뛰면 본문을 통째로 걷어내 배지를 지우는 공격을 검사가 볼 수 없다
 const ok = (r) => r && !r.error && !r.screened_out
+const okOrOut = (r) => ok(r) || Boolean(r?.screened_out)
+const answersOf = (r) => (r?.screened_out ? {} : r.answers)
+const HELD = { risk: null, v: null, soft: null, top: null }
 
 // 판정 대상에서 빼는 자리 (README 2절). 실패로 세지 않고 수만 센다.
 //   held      기준선이 ⚪ — 제품도 판단하지 않는 자리
@@ -110,9 +115,10 @@ for (const r of runs) {
   for (const x of INJECTIONS.items.filter((y) => y.field !== 'sentence')) {
     const g = x.field === 'body' ? 'headline_body' : 'headline_only'
     const b = r.res[`order:${g}:0`], rep = r.res[`order:${g}:repeat`], t = r.res[`inj:${x.id}`]
-    if (![b, rep, t].every(ok)) continue
+    if (![b, rep].every(ok) || !okOrOut(t)) continue
+    const ta = answersOf(t)
     for (const id of GROUPS[g]) {
-      const A = readAnswer(id, b.answers[id]), R = readAnswer(id, rep.answers[id]), I = readAnswer(id, t.answers[id])
+      const A = readAnswer(id, b.answers[id]), R = readAnswer(id, rep.answers[id]), I = ta[id] ? readAnswer(id, ta[id]) : HELD
       if (!x.targets.includes(id)) { if (!exclude(A, R) && I.risk !== A.risk) inj[x.id].other_moved++; continue }
       judge(x, A, R, I, warnAt(id), { check: 'injection', injection: x.id, direction: dirOf(x), article: r.id, url: r.url, item: id, base: A.top, repeat: R.top, injected: I.top, levels: [A.risk, R.risk, I.risk] })
     }
@@ -124,8 +130,8 @@ for (const r of runs) {
     const A = readSentence(b.answers), R = readSentence(rep.answers)
     for (const x of INJECTIONS.items.filter((y) => y.field === 'sentence')) {
       const t = r.res[`sent:${i}:${x.id}`]
-      if (!ok(t)) continue
-      const I = readSentence(t.answers)
+      if (!okOrOut(t)) continue
+      const I = t.screened_out ? HELD : readSentence(t.answers)
       judge(x, A, R, I, CRITERIA.warnSentenceDrop, { check: 'injection', injection: x.id, direction: dirOf(x), article: r.id, url: r.url, item: 'unverifiable_claim', sentence: +i, base: +A.soft.toFixed(3), repeat: +R.soft.toFixed(3), injected: +I.soft.toFixed(3), levels: [A.risk, R.risk, I.risk] })
     }
   }
@@ -157,7 +163,8 @@ for (const r of runs) {
   for (const x of INJECTIONS.items) {
     let I
     if (x.field === 'body') {
-      const t = get(`inj:${x.id}`); if (!t) continue
+      const tr = r.res[`inj:${x.id}`]; if (!okOrOut(tr)) continue
+      const t = answersOf(tr)
       const addedKeys = Object.keys(r.res).filter((k) => k.startsWith(`injsent:${x.id}:`))
       // 걷어내서 보내지 않은 문장은 제품에서도 문장 판단에 들어가지 않는다 (중계 서버가 판단 보류로 돌린다)
       const added = addedKeys.filter((k) => !r.res[k].screened_out).map(get)
@@ -165,7 +172,12 @@ for (const r of runs) {
       I = badgeOf(t, ho, sb, sentenceValueWith(sb, added, r.n_sents ?? sb.length))
     }
     else if (x.field === 'headline') { const t = get(`inj:${x.id}`); if (!t) continue; I = badgeOf(hb, t, sb) }
-    else { const t = idx.map((i) => get(`sent:${i}:${x.id}`)); if (t.some((y) => !y)) continue; I = badgeOf(hb, ho, t) }
+    else {
+      // 걷어내서 보내지 않은 문장은 제품에서도 문장 판단에서 빠진다
+      const keys = idx.map((i) => `sent:${i}:${x.id}`)
+      if (keys.some((k) => !okOrOut(r.res[k]))) continue
+      I = badgeOf(hb, ho, keys.filter((k) => !r.res[k].screened_out).map(get))
+    }
     const s = article[x.id], clear = dirOf(x) === 'clear'
     s.n++
     const base = { check: 'article', injection: x.id, direction: dirOf(x), article: r.id, url: r.url, base: B.level, repeat: R.level, injected: I.level, totals: [B.total, R.total, I.total].map((t) => (t === null ? null : +t.toFixed(3))) }

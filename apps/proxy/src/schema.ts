@@ -4,7 +4,7 @@
 // 항목의 question 객체는 **그대로** Jev 에 보낸다. 코드가 하는 일은 instructions 뒤에
 // common_instructions 를 붙이는 것 하나뿐이다 (packages/shared/README.md).
 import source from '../../../packages/shared/judgment-items.json'
-import { createScreen } from '../../../packages/shared/src/screen'
+import { createStateScreen } from '../../../packages/shared/src/screen'
 
 export interface Question {
   type: 'choice' | 'score' | 'noul'
@@ -126,32 +126,10 @@ export function buildRequest(body: unknown): Rejection | Accepted {
 export const isRejection = (r: Rejection | Accepted): r is Rejection => 'error' in r
 
 /**
- * 기사 글에서 판단기를 노린 문장을 걷어낸다 (GE-35, packages/shared/src/screen.ts).
- *
- * **제목은 걷어내지 않는다.** 제목 하나를 지우면 판단할 글이 남지 않는다.
- * 본문(① 기사 본문, ③ 고른 글)과 문장 요청의 문장만 본다.
+ * 기사 글에서 판단기를 노린 문장을 걷어낸다 (GE-35). 본문과 문장만 보고 제목은 두지 않는다.
+ * 규칙과 필드 목록은 packages/shared/src/screen.ts 에 있다. eval 의 run.mjs --screen 도 같은 함수를 부른다.
  */
-const SCREENED_FIELDS = ['body', 'sentence'] as const
-const screen = createScreen(SCHEMA)
-
-export type ScreenResult =
-  | { ok: true; state: Record<string, string>; removed: number }
-  /** 걷어내고 나니 그 필드에 남은 글이 없다. Jev 에 물을 것이 없다 */
-  | { ok: false; removed: number }
-
-export function screenState(state: Record<string, string>): ScreenResult {
-  const out = { ...state }
-  let removed = 0
-  for (const f of SCREENED_FIELDS) {
-    if (!Object.hasOwn(out, f)) continue
-    const r = screen(out[f])
-    if (!r.removed) continue
-    removed += r.removed
-    if (!r.text) return { ok: false, removed }
-    out[f] = r.text
-  }
-  return { ok: true, state: out, removed }
-}
+export const screenState = createStateScreen(SCHEMA)
 
 /**
  * Jev 응답이 우리가 정한 답의 범위 안인지 본다.

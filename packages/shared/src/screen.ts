@@ -8,7 +8,13 @@
 //   1. 우리 항목 키·질문 id (`source_citation`, `factual_assertion` …)와 밑줄이 든 보기 이름(`named_source` …)
 //      — 필드 위장. 공개 저장소에 있으니 누구나 그대로 적을 수 있다
 //   2. `[SYSTEM] … [/SYSTEM]` 같은 역할 태그 묶음, `<|…|>` 특수 토큰 — 시스템 문구 흉내
-//   3. `</기사>` 같은 닫는 태그 — 구분자 탈출. 태그 뒤의 문장이 진짜 지시라서 **그 문단 끝까지** 걷어낸다
+//   3. `</기사>` 같은 닫는 태그 — 구분자 탈출. 태그 뒤의 문장이 진짜 지시라서 **뒤 한 문장까지** 걷어낸다
+//
+// **걷어내는 범위는 늘 짧게 묶는다.** 확장 프로그램은 본문을 한 줄로 합쳐 보낸다(extract.ts).
+// "문단 끝까지"는 곧 "기사 끝까지"라서, 본문 첫머리에 `</x>` 하나만 넣어도 기사 전체가 빠지고
+// 본문 항목이 모두 ⚪가 된다 (PR #24 리뷰). 그래서
+//   - 닫는 태그·닫지 않은 역할 태그는 그 문장과 **뒤 한 문장**만 (FOLLOWING)
+//   - 짝이 맞는 역할 태그 묶음도 **300자 안**일 때만 통째로 (ROLE_BLOCK_MAX). 더 길면 태그가 든 문장만
 //
 // 일부러 찾지 않는 것:
 //   - `matches`, `strong`, `mild` 같은 한 단어 보기 이름. 영어 인용문에 흔하다.
@@ -21,7 +27,7 @@
 // node 가 타입만 지우고 바로 읽을 수 있게, 이 파일은 다른 파일을 import 하지 않는다. 항목 정의는 인자로 받는다.
 
 /** 규칙을 바꾸면 올린다. eval 결과에 함께 남는다. */
-export const SCREEN_VERSION = '1.0.0'
+export const SCREEN_VERSION = '1.1.0'
 
 /** judgment-items.json 에서 읽는 부분만 */
 export interface ScreenSchema {
@@ -35,7 +41,7 @@ export interface ScreenSchema {
 export interface Screened {
   /** 걷어낸 뒤의 글. 걷어낸 것이 없으면 받은 글 그대로다 (공백 하나 바꾸지 않는다) */
   text: string
-  /** 걷어낸 덩어리 수 (문장, 역할 태그 묶음, 닫는 태그부터 문단 끝까지) */
+  /** 걷어낸 덩어리 수 (문장, 역할 태그 묶음) */
   removed: number
 }
 
@@ -46,8 +52,14 @@ const wordRe = (words: string[]) =>
   new RegExp(`(?<![A-Za-z0-9_])(?:${words.map(escape).join('|')})(?![A-Za-z0-9_])`, 'i')
 
 const ROLES = 'system|assistant|user|inst|sys'
-/** `[SYSTEM] … [/SYSTEM]`. 닫는 태그가 없으면 그 문단 끝까지 */
-const ROLE_BLOCK = new RegExp(`\\[\\s*(${ROLES})\\s*\\][\\s\\S]*?(?:\\[\\s*\\/\\s*\\1\\s*\\]|$)`, 'gi')
+/** 짝이 맞는 역할 태그 묶음을 통째로 걷어내는 최대 길이. 넘으면 기사 본문을 감싼 것으로 보고 태그가 든 문장만 뺀다 */
+const ROLE_BLOCK_MAX = 300
+/** 닫는 태그·닫지 않은 역할 태그 뒤로 함께 걷어내는 문장 수. 구분자 탈출은 태그 뒤 한 문장이 지시다 */
+const FOLLOWING = 1
+/** `[SYSTEM] … [/SYSTEM]`, 사이가 ROLE_BLOCK_MAX 자 이하일 때만 */
+const ROLE_BLOCK = new RegExp(`\\[\\s*(${ROLES})\\s*\\][\\s\\S]{0,${ROLE_BLOCK_MAX}}?\\[\\s*\\/\\s*\\1\\s*\\]`, 'gi')
+/** 여는 역할 태그 (`[SYSTEM]`). 묶음으로 걷히지 않고 남았으면 뒤 문장도 지시로 본다 */
+const ROLE_OPEN = new RegExp(`\\[\\s*(?:${ROLES})\\s*\\]`, 'i')
 /** 짝 없이 남은 역할 태그(`[/SYSTEM]`만 있는 경우)와 `<|im_start|>` 같은 특수 토큰 */
 const ROLE_TOKEN = new RegExp(`\\[\\s*\\/?\\s*(?:${ROLES})\\s*\\]|<\\|[^|<>\\s]{1,30}\\|>`, 'i')
 /** `</기사>`, `</input>` */
@@ -101,16 +113,17 @@ export function createScreen(schema: ScreenSchema): (text: string) => Screened {
     const parts = rest.split(new RegExp(`(${SENTENCE_END.source})`))
     let out = ''
     let dropped = 0
-    let cut = false
+    let carry = 0 // 앞 문장의 태그 때문에 함께 걷어낼 남은 문장 수
     for (let i = 0; i < parts.length; i += 2) {
       const s = parts[i]
       const sep = parts[i + 1] ?? ''
-      // 닫는 태그가 나오면 그 문장부터 문단 끝까지다
-      if (!cut && s && CLOSE_TAG.test(s)) { cut = true; dropped++ }
-      if (cut || (s && (ROLE_TOKEN.test(s) || SPOOF.test(s)))) {
-        if (!cut) dropped++
+      let drop = false
+      if (s && (CLOSE_TAG.test(s) || ROLE_OPEN.test(s))) { drop = true; carry = FOLLOWING }
+      else if (s && (ROLE_TOKEN.test(s) || SPOOF.test(s))) drop = true
+      else if (s && carry > 0) { drop = true; carry-- }
+      if (drop) {
+        dropped++
         if (out) out = out.replace(/\s+$/, '')   // 앞의 공백과 함께 지운다
-        if (cut) break
         continue
       }
       out += out && /\S$/.test(out) && !/^\s/.test(s) ? ' ' + s : s
@@ -123,12 +136,47 @@ export function createScreen(schema: ScreenSchema): (text: string) => Screened {
   return (text: string): Screened => {
     let removed = 0
     const lines = text.split('\n').map((line) => {
-      const r = screenLine(line)
+      // \r\n 줄이면 \r 를 떼고 보고 다시 붙인다. 끝 공백을 지울 때 \r 까지 지우지 않게 (PR #24 리뷰)
+      const cr = line.endsWith('\r') ? '\r' : ''
+      const r = screenLine(cr ? line.slice(0, -1) : line)
       removed += r.removed
+      if (!r.removed) return line
       // 걷어내서 빈 줄이 된 줄은 뺀다. 원래 빈 줄은 문단 구분이므로 둔다
-      return r.removed && !r.text.trim() ? null : r.text
+      return r.text.trim() ? r.text + cr : null
     })
     if (!removed) return { text, removed: 0 }
     return { text: lines.filter((l): l is string => l !== null).join('\n').trim(), removed }
+  }
+}
+
+/**
+ * 요청의 `state` 에서 걷어내는 필드. **제목은 걷어내지 않는다.** 제목 하나를 지우면 판단할 글이 남지 않는다.
+ * 본문(① 기사 본문, ③ 고른 글)과 문장 요청의 문장만 본다.
+ */
+export const SCREENED_FIELDS = ['body', 'sentence'] as const
+
+export type StateScreenResult =
+  | { ok: true; state: Record<string, string>; removed: number }
+  /** 걷어내고 나니 그 필드에 남은 글이 없다. Jev 에 물을 것이 없다 */
+  | { ok: false; removed: number }
+
+/**
+ * 요청의 `state` 를 걷어내는 함수를 만든다. 중계 서버와 eval(`run.mjs --screen`)이 같은 함수를 부른다.
+ * 걷어낸 것이 없으면 받은 `state` 객체를 그대로 돌려준다.
+ */
+export function createStateScreen(schema: ScreenSchema): (state: Record<string, string>) => StateScreenResult {
+  const screen = createScreen(schema)
+  return (state) => {
+    let out = state
+    let removed = 0
+    for (const f of SCREENED_FIELDS) {
+      if (!Object.hasOwn(out, f)) continue
+      const r = screen(out[f])
+      if (!r.removed) continue
+      removed += r.removed
+      if (!r.text) return { ok: false, removed }
+      out = { ...out, [f]: r.text }
+    }
+    return { ok: true, state: out, removed }
   }
 }

@@ -23,31 +23,17 @@ import { resolve } from 'node:path'
 import { post } from '../sentence-batching/jev.mjs'
 import { splitSentences } from '../sentence-batching/split.mjs'
 import { INJECTIONS, groupRequest, sentenceRequest, permutations, SCHEMA } from './lib.mjs'
-import { createScreen, SCREEN_VERSION } from '../../../packages/shared/src/screen.ts'
+import { createStateScreen, SCREEN_VERSION } from '../../../packages/shared/src/screen.ts'
 
 const W = resolve(process.argv[2] ?? '')
 const arg = (k, d) => { const i = process.argv.indexOf(k); return i > 0 ? Number(process.argv[i + 1]) : d }
 const LIMIT = arg('--limit', Infinity)
 const K = arg('--sentences', 3)
 const ADOPT = process.argv.includes('--adopt-unhashed')
-const screen = process.argv.includes('--screen') ? createScreen(SCHEMA) : null
-// 중계 서버의 screenState 와 같다 (apps/proxy/src/schema.ts): body·sentence 만, 하나라도 비면 보내지 않는다
-const SCREENED_FIELDS = ['body', 'sentence']
-function screenRequest(body) {
-  let removed = 0
-  const state = { ...body.state }
-  for (const f of SCREENED_FIELDS) {
-    if (!(f in state)) continue
-    const r = screen(state[f])
-    if (!r.removed) continue
-    removed += r.removed
-    if (!r.text) return { out: true, removed }
-    state[f] = r.text
-  }
-  return { body: removed ? { ...body, state } : body, removed }
-}
+// 중계 서버와 같은 함수다 (apps/proxy/src/schema.ts 의 screenState). 걷어내는 필드와 "비면 보내지 않는다" 규칙이 한곳에 있다
+const screenState = process.argv.includes('--screen') ? createStateScreen(SCHEMA) : null
 // 답마다 남기는 버전. 요청 본문에는 들어가지 않으므로 해시와 따로 적는다
-const V = { question_set: SCHEMA.version, injections: INJECTIONS.version, screen: screen ? SCREEN_VERSION : null }
+const V = { question_set: SCHEMA.version, injections: INJECTIONS.version, screen: screenState ? SCREEN_VERSION : null }
 const hash = (body) => createHash('sha256').update(JSON.stringify(body)).digest('hex').slice(0, 16)
 // 키는 실제로 보낼 요청이 생길 때 확인한다. 보낼 것이 없으면(버전만 고쳐 적는 경우 등) 키 없이 돌아간다
 const needKey = () => { if (!process.env.CHATKHU_API_KEY || !process.env.CHATKHU_API_BASE_URL) throw new Error('보낼 요청이 있다. CHATKHU_API_KEY, CHATKHU_API_BASE_URL 이 필요하다 (--env-file)') }
@@ -79,7 +65,8 @@ async function call(body, h, extra) {
   try { const j = await post(body); model ??= j.model; return { answers: j.answers, tokens: j.usage?.input_tokens, model: j.model, h, at, ...extra, ...V } }
   catch (e) { errors++; return { error: String(e.message ?? e), h, at, ...extra, ...V } }
 }
-let screenedReq = 0, screenedOut = 0
+// 이번 실행에서 실제로 보낸(또는 보내지 않기로 새로 적은) 것만 센다. 옛 답을 다시 쓴 것은 세지 않는다
+let screenedSent = 0, screenedOut = 0
 
 for (const a of articles) {
   const old = prev.get(a.id)?.res ?? {}
@@ -91,19 +78,18 @@ for (const a of articles) {
   const want = (key, make) => {
     wanted.add(key)
     let body = make(), extra = {}
-    if (screen) {
-      const s = screenRequest(body)
+    if (screenState) {
+      const s = screenState(body.state)
       if (s.removed) extra = { screened: s.removed }
-      if (s.out) {
+      if (!s.ok) {
         // 보낼 글이 남지 않았다. 해시는 걷어내기 전 요청으로 붙인다 (같은 요청이면 다시 만들지 않게)
         const h = hash(body), o = old[key]
-        wanted.add(key); screenedOut++
         if (o && o.screened_out && o.h === h) { if (relabel(o)) touched = true; return }
+        screenedOut++
         jobs[key] = Promise.resolve({ screened_out: true, ...extra, h, at: new Date().toISOString(), ...V })
         return
       }
-      body = s.body
-      if (s.removed) screenedReq++
+      if (s.removed) body = { ...body, state: s.state }
     }
     const h = hash(body), o = old[key]
     if (o && !o.error && !o.screened_out && o.h === h) { if (relabel(o)) { relabeled++; touched = true } return }
@@ -112,6 +98,7 @@ for (const a of articles) {
     if (ADOPT) return
     if (!isRepeat(key) && byHash.has(h)) { reused++; jobs[key] = Promise.resolve(byHash.get(h)).then((v) => (v.error ? v : { ...v, ...V })); return }
     needKey()
+    if (extra.screened) screenedSent++
     const p = call(body, h, extra)
     if (!isRepeat(key)) byHash.set(h, p)
     jobs[key] = p
@@ -149,4 +136,4 @@ for (const a of articles) {
   console.log(`${a.id}  요청 ${Object.keys(jobs).length}건  (누적 ${requests}, 실패 ${errors})`)
 }
 
-console.log(`끝. 요청 ${requests}건, 같은 요청이라 나눠 쓴 답 ${reused}건, 실패 ${errors}건, 바뀌어서 다시 보냄 ${stale}건, 해시를 붙인 옛 답 ${adopted}건, 버전만 고쳐 적은 답 ${relabeled}건, 응답 model=${model}, 질문 세트 ${SCHEMA.version}, 인젝션 ${INJECTIONS.version}, 걷어내기 ${V.screen ?? '끔'} (걷어내고 보낸 요청 ${screenedReq}건, 남은 글이 없어 보내지 않은 요청 ${screenedOut}건)`)
+console.log(`끝. 요청 ${requests}건, 같은 요청이라 나눠 쓴 답 ${reused}건, 실패 ${errors}건, 바뀌어서 다시 보냄 ${stale}건, 해시를 붙인 옛 답 ${adopted}건, 버전만 고쳐 적은 답 ${relabeled}건, 응답 model=${model}, 질문 세트 ${SCHEMA.version}, 인젝션 ${INJECTIONS.version}, 걷어내기 ${V.screen ?? '끔'} (걷어내고 새로 보낸 요청 ${screenedSent}건, 남은 글이 없어 보내지 않기로 새로 적은 요청 ${screenedOut}건)`)
