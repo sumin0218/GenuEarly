@@ -42,6 +42,22 @@ describe('URL 정규화 — 같은 기사가 여러 키로 갈라지지 않게',
     expect(normalizeUrl('https://n.news.naver.com/mnews/article/001/0001')).toBe(normalizeUrl(URL1))
   })
 
+  // **접지 않으면 같은 기사가 네 키로 갈라져 네 번 판단된다** (GE-42).
+  // 네이버가 정규화해 주지 않는다 — 랭킹 주소의 og:url 이 랭킹 주소 그대로고
+  // canonical 태그는 아예 없다 (2026-10-27 확인).
+  it.each([
+    ['https://n.news.naver.com/mnews/ranking/article/001/0001', '랭킹'],
+    ['https://n.news.naver.com/mnews/hotissue/article/001/0001', 'hotissue'],
+    ['https://n.news.naver.com/mnews/article/comment/001/0001', '댓글'],
+  ])('%s (%s) 도 같은 기사로 본다', (url) => {
+    expect(normalizeUrl(url)).toBe(normalizeUrl(URL1))
+  })
+
+  it('랭킹 주소의 ntype 쿼리는 키를 가르지 않는다', () => {
+    expect(normalizeUrl('https://n.news.naver.com/mnews/ranking/article/001/0001?ntype=RANKING'))
+      .toBe(normalizeUrl(URL1))
+  })
+
   it('해시와 끝 슬래시를 버린다', () => {
     expect(normalizeUrl(`${URL1}/#comment`)).toBe(normalizeUrl(URL1))
   })

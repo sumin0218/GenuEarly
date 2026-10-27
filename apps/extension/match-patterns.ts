@@ -13,15 +13,44 @@
  * 네이버 기사 본문은 news.naver.com 이 아니라 n.news.naver.com/article/… 에 있다.
  * news.naver.com 에는 목록·섹션 페이지만 있다.
  *
- * **`/mnews/article/` 도 받는다.** 포털 목록(②)이 거는 링크가 이 경로다.
- * 받지 않으면 사용자가 목록에서 제목을 눌러 들어간 기사에 **배지가 아예 뜨지 않는다** —
- * `lib/cache.ts` 의 `normalizeUrl` 이 두 경로를 같은 키로 모으고 있는데도 그렇다.
- * 호스트가 같아서 설치 경고는 늘지 않는다 (GE-23).
+ * **같은 기사가 네 경로로 열린다.** 섹션 한 페이지(news.naver.com/section/100)의
+ * 기사 링크를 세어 본 값이다 (2026-10-27).
+ *
+ * | 경로 | 그 페이지에서 |
+ * |---|---|
+ * | `/mnews/article/…` | 184 |
+ * | `/mnews/ranking/article/…` | **170** |
+ * | `/mnews/article/comment/…` | 50 — 댓글 화면. 아래에서 뺀다 |
+ * | `/mnews/hotissue/article/…` | 16 |
+ *
+ * **기사 링크의 절반 가까이가 랭킹 경로다.** 받지 않으면 사용자가 목록에서 제목을
+ * 눌러 들어간 기사에 배지가 뜨지 않는다 — 그런데 ②는 동그라미를 달아 두었으므로
+ * **표시는 떴는데 눌러 들어가면 아무것도 없는** 상태가 된다. 확장이 죽은 것처럼 보인다.
+ *
+ * 호스트가 전부 `n.news.naver.com` 이라 **설치 경고는 늘지 않는다.** 경고에는
+ * 경로가 아니라 도메인만 나온다 (GE-42).
  */
 export const ARTICLE_MATCHES = [
   'https://n.news.naver.com/article/*',
   'https://n.news.naver.com/mnews/article/*',
+  'https://n.news.naver.com/mnews/ranking/article/*',
+  'https://n.news.naver.com/mnews/hotissue/article/*',
   'https://v.daum.net/v/*',
+] as const
+
+/**
+ * 위 목록이 잡지만 **기사 본문이 없는** 페이지.
+ *
+ * `/mnews/article/comment/056/0012281659` 은 같은 기사의 **댓글 화면**이다.
+ * 제목은 있고 본문이 없다. 그런데 `/mnews/article/*` 의 `*` 가 경로 나머지를 전부
+ * 덮어서 **지금까지 여기에도 배지가 떴다** — 본문을 못 읽으니 늘 ⚪ 였다.
+ * 판단을 해 보고 실패한 것처럼 보이지만 애초에 기사 페이지가 아니다.
+ *
+ * match pattern 에는 "빼기" 가 없다. 그래서 따로 둔다 —
+ * `content_scripts` 의 `excludeMatches` 와 `isArticleUrl` 이 **같이** 쓴다.
+ */
+export const ARTICLE_EXCLUDE_MATCHES = [
+  'https://n.news.naver.com/mnews/article/comment/*',
 ] as const
 
 /**
@@ -59,6 +88,7 @@ export function matchPatternToRegExp(pattern: string): RegExp {
 }
 
 const ARTICLE_RES = ARTICLE_MATCHES.map(matchPatternToRegExp)
+const ARTICLE_EXCLUDE_RES = ARTICLE_EXCLUDE_MATCHES.map(matchPatternToRegExp)
 
 /**
  * 이 주소가 **①이 배지를 띄울 수 있는 기사**인가.
@@ -76,5 +106,7 @@ export function isArticleUrl(raw: string): boolean {
   // javascript: 같은 스킴을 여기서 먼저 떨어뜨린다 (secure-coding.md 4절).
   if (url.protocol !== 'https:') return false
   const bare = `${url.origin}${url.pathname}`
+  // **빼는 쪽을 먼저 본다.** 댓글 화면은 `/mnews/article/*` 에 걸리지만 기사가 아니다.
+  if (ARTICLE_EXCLUDE_RES.some((re) => re.test(bare))) return false
   return ARTICLE_RES.some((re) => re.test(bare))
 }

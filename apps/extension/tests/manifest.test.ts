@@ -89,6 +89,36 @@ describe('대상 사이트', () => {
     })
   }
 
+  // 설치 경고에 나오는 것은 **경로가 아니라 도메인**이다. 경로를 늘리는 것은
+  // 사용자가 보는 문구를 바꾸지 않는다 — 랭킹·hotissue 경로를 받기로 한 근거다 (GE-42).
+  it('도메인이 넷을 넘지 않는다 — 늘리려면 이 수를 먼저 고친다', () => {
+    const 도메인 = new Set(
+      [...hostPermissions, ...contentScriptMatches].map((m) => new URL(m.replace('*', '')).host),
+    )
+    expect([...도메인].sort(), '설치 경고 문구가 길어진다. 권한 표도 같이 고쳤는가').toEqual([
+      'n.news.naver.com',
+      'news.naver.com',
+      'v.daum.net',
+    ])
+  })
+
+  it('네이버의 기사 경로 넷을 다 받는다', () => {
+    // 섹션 한 페이지에서 실제로 센 값: 랭킹 170, hotissue 16 (2026-10-27).
+    for (const 경로 of ['/article/', '/mnews/article/', '/mnews/ranking/article/', '/mnews/hotissue/article/']) {
+      expect(
+        contentScriptMatches.some((m) => m.startsWith(`https://n.news.naver.com${경로}`)),
+        `${경로} 를 받지 않는다 — 목록에서 눌러 들어간 기사에 배지가 안 뜬다`,
+      ).toBe(true)
+    }
+  })
+
+  it('댓글 화면을 빼 둔다 — 본문이 없는 곳에서 돌지 않는다', () => {
+    const excludes: string[] = (manifest.content_scripts ?? []).flatMap(
+      (cs: any) => cs.exclude_matches ?? [],
+    )
+    expect(excludes).toContain('https://n.news.naver.com/mnews/article/comment/*')
+  })
+
   it('content_scripts 가 붙는 곳은 host_permissions 에도 있다', () => {
     for (const m of contentScriptMatches) {
       expect(hostPermissions, `content_scripts 대상인데 host_permissions 에 없음: ${m}`).toContain(m)

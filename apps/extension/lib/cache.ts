@@ -87,9 +87,23 @@ interface Entry {
 /**
  * 같은 기사가 여러 키로 갈라지지 않게 주소를 정리한다.
  *
- * 네이버는 같은 기사를 `/article/…` 과 `/mnews/article/…` 두 경로로 준다.
- * 쿼리(`sid`, `utm_*`, `cds`…)는 기사를 가리는 데 쓰이지 않으므로 **전부 버린다** —
- * 우리가 보는 사이트가 둘뿐이라 이 단순한 규칙이 안전하다.
+ * **네이버는 같은 기사를 네 경로로 준다** (match-patterns.ts 의 표).
+ *
+ *     /article/056/0012281659
+ *     /mnews/article/056/0012281659
+ *     /mnews/ranking/article/056/0012281659
+ *     /mnews/hotissue/article/056/0012281659
+ *
+ * 언론사 번호와 기사 번호가 같으면 같은 기사다. **네이버가 정규화해 주지 않는다** —
+ * 랭킹 주소의 `og:url` 이 랭킹 주소 그대로고 `canonical` 태그는 아예 없다
+ * (2026-10-27 확인). 접지 않으면 **같은 기사가 네 키로 갈라져 네 번 판단된다.**
+ * 크레딧이 네 배로 나가고, 목록에서 본 판단을 기사 페이지에서 다시 쓰지 못한다.
+ *
+ * 댓글 화면(`/mnews/article/comment/…`)도 같이 접는다. 배지를 띄우지는 않지만
+ * (`isArticleUrl` 이 뺀다) 주소를 정리하는 규칙은 한 군데 두는 쪽이 낫다.
+ *
+ * 쿼리(`sid`, `utm_*`, `ntype`, `cds`…)는 기사를 가리는 데 쓰이지 않으므로
+ * **전부 버린다** — 우리가 보는 사이트가 적어 이 단순한 규칙이 안전하다.
  */
 export function normalizeUrl(raw: string): string {
   const u = new URL(raw)
@@ -97,7 +111,9 @@ export function normalizeUrl(raw: string): string {
   u.search = ''
   u.protocol = 'https:'
   u.hostname = u.hostname.toLowerCase()
-  u.pathname = u.pathname.replace('/mnews/article/', '/article/').replace(/\/+$/, '')
+  u.pathname = u.pathname
+    .replace(/^\/mnews\/(?:ranking\/|hotissue\/)?article\/(?:comment\/)?/, '/article/')
+    .replace(/\/+$/, '')
   return u.toString()
 }
 
