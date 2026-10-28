@@ -715,8 +715,17 @@ function drawReport(rows: readonly ReportRow[], kind: 'page' | 'selection', root
         btn.disabled = false
         btn.textContent = R.button
         note.hidden = false
-        // **왜 못 만드는지 말한다.** 날짜가 없으면 기록과 견줄 수가 없다.
-        note.textContent = answer?.reason === 'no_date' ? R.noDate : R.failed
+        // **왜 못 만드는지 말한다.** 셋을 가른다.
+        //
+        // 답이 **아예 없으면** 그 탭이 옛 코드를 들고 있는 것이다 — 확장을 새로 넣거나
+        // 고쳐도 **이미 열려 있던 탭의 콘텐츠 스크립트는 바뀌지 않는다.** 크롬은
+        // 페이지를 다시 불러올 때만 새로 넣는다. 그때 "다시 눌러 보세요" 는 **틀린 안내**다 —
+        // 몇 번을 눌러도 안 된다. 실제로 이 자리에서 세 번 헤맸다.
+        note.textContent = !answer
+          ? R.reload
+          : answer.reason === 'no_date'
+            ? R.noDate
+            : R.failed
       }
     })()
   }
