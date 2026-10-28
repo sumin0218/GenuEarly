@@ -11,12 +11,14 @@
 // 그 변화를 들으며 채운다 — 스무 초를 빈 화면으로 두지 않기 위해서다 (lib/report.ts).
 import './style.css'
 import content from '../../../../packages/content/ui.ko.json'
+import { clearArchive, listArchive, removeArchived } from '../../lib/archive'
 import { createIcon } from '../../lib/icon'
 import { LEVEL_ICON, LEVEL_INK_DARK } from '../../lib/item-view'
 import { peekReport, REPORT_KEY, type Report, type ReportClaim, type ReportRecord } from '../../lib/report'
 import type { DisplayLevel } from '../../lib/protocol'
 
 const C = content.report
+const A = C.archive
 
 /** 요소 하나 만들기. 글은 **언제나 `textContent`** 로 넣는다. */
 function el<K extends keyof HTMLElementTagNameMap>(
@@ -226,10 +228,14 @@ function drawLimits(): HTMLElement {
 }
 
 // ── 그리기 ───────────────────────────────────────────────
-function render(r: Report | null): void {
+function render(r: Report | null, archived = false): void {
   const host = document.getElementById('body')
   if (!host) return
   host.replaceChildren()
+
+  // **보관해 둔 것은 그때의 모습이다.** 그 뒤에 기사도 주변 보도도 달라졌을 수 있다 —
+  // 말하지 않으면 사용자는 방금 조사한 결과로 읽는다 (ChatKHU 14차).
+  if (archived && r) host.append(el('p', 'ge-archive__restored', A.restored))
 
   if (!r) {
     host.append(el('p', 'ge-waiting', C.empty))
@@ -278,11 +284,103 @@ function paintChrome(): void {
   }
 }
 
+// ── 지난 리포트 보관함 ───────────────────────────────────
+//
+// 보관되는 것은 **사용자가 버튼을 눌러 만든 리포트뿐**이고, 여기서 전부 지울 수 있다
+// (lib/archive.ts 머리말의 세 조건 중 둘째가 이 화면이다).
+
+/** 지금 화면에 띄워 둔 보관본의 주소. 없으면 `null` — 그때는 session 을 따라간다. */
+let 보는중: string | null = null
+
+/** 목록 한 줄. 제목을 누르면 열리고, 옆 단추로 지운다. */
+function archiveRow(r: Report, redraw: () => void): HTMLElement {
+  const li = el('li', 'ge-archive__row')
+
+  const openBtn = el('button', 'ge-archive__open')
+  openBtn.type = 'button'
+  openBtn.append(el('span', 'ge-archive__title', r.headline))
+  const meta = el('span', 'ge-archive__meta')
+  meta.textContent = `${r.date} · ${new Date(r.at).toLocaleString('ko-KR', { dateStyle: 'short', timeStyle: 'short' })}`
+  openBtn.append(meta)
+  if (보는중 === r.url) openBtn.append(el('span', 'ge-archive__now', A.viewing))
+  openBtn.onclick = () => {
+    보는중 = r.url
+    render(r, true)
+    redraw()
+    window.scrollTo({ top: 0 })
+  }
+  li.append(openBtn)
+
+  const del = el('button', 'ge-archive__del', A.remove)
+  del.type = 'button'
+  del.onclick = () => {
+    void removeArchived(r.url).then(() => {
+      // 지운 것을 보고 있었다면 더는 "현재 열림" 이 아니다. 화면은 그대로 둔다 —
+      // 읽던 글이 눈앞에서 사라지는 편이 더 당황스럽다.
+      if (보는중 === r.url) 보는중 = null
+      redraw()
+    })
+  }
+  li.append(del)
+  return li
+}
+
+function drawArchive(): void {
+  const host = document.getElementById('archive')
+  if (!host) return
+  void listArchive().then((items) => {
+    host.hidden = false
+    host.replaceChildren()
+
+    const head = el('div', 'ge-archive__head')
+    head.append(el('h2', 'ge-card__title', A.title))
+    const spacer = el('span', 'ge-archive__spacer')
+    head.append(spacer)
+
+    if (items.length > 0) {
+      // **두 번 묻는다.** 한 번에 지워지면 되돌릴 길이 없다.
+      const all = el('button', 'ge-report__ghost', A.removeAll)
+      all.type = 'button'
+      all.onclick = () => {
+        all.textContent = A.confirmAll
+        all.classList.add('ge-archive__danger')
+        const no = el('button', 'ge-report__ghost', A.cancel)
+        no.type = 'button'
+        no.onclick = () => drawArchive()
+        head.append(no)
+        all.onclick = () => {
+          void clearArchive().then(() => {
+            보는중 = null
+            drawArchive()
+          })
+        }
+      }
+      head.append(all)
+    }
+    host.append(head)
+    host.append(el('p', 'ge-archive__note', A.note))
+
+    if (items.length === 0) {
+      host.append(el('p', 'ge-archive__empty', A.empty))
+      return
+    }
+    const ul = el('ul', 'ge-archive__list')
+    for (const r of items) ul.append(archiveRow(r, drawArchive))
+    host.append(ul)
+  })
+}
+
 paintChrome()
-void peekReport().then(render)
+void peekReport().then((r) => render(r))
+drawArchive()
 
 // 만드는 쪽이 단계마다 적는다. 그때마다 다시 그린다.
 browser.storage.onChanged.addListener((changes, area) => {
   if (area !== 'session' || !changes[REPORT_KEY]) return
-  render((changes[REPORT_KEY].newValue as Report | undefined) ?? null)
+  // **보관본을 보고 있으면 끼어들지 않는다.** 읽던 글이 눈앞에서 바뀌면 안 된다.
+  if (보는중 !== null) return
+  const next = (changes[REPORT_KEY].newValue as Report | undefined) ?? null
+  render(next)
+  // 다 됐으면 보관함에 한 줄이 늘었다.
+  if (next?.stage === 'done') drawArchive()
 })

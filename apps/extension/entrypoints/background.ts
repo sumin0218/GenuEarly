@@ -7,6 +7,7 @@
 import content from '../../../packages/content/ui.ko.json'
 import { sweepExpired } from '../lib/cache'
 import { buildReport, clearReport } from '../lib/report'
+import { sweepArchive } from '../lib/archive'
 import { callProxy, judgeArticle, judgeExplain, judgeHeadline, setIconBadge } from '../lib/judge'
 import { judgeSelection, putSelectionPending, putSelectionResult } from '../lib/selection'
 import type { ArticleVerdict, HeadlineVerdict, Message } from '../lib/protocol'
@@ -18,6 +19,10 @@ export default defineBackground(() => {
   // **만료된 캐시를 비운다.** 남겨 두면 그 자체가 열람 기록이 된다
   // (docs/security/secure-coding.md 7절). service worker 가 깨어날 때마다 한 번.
   void sweepExpired().then((n) => { if (n) console.info('[GenuEarly] 만료 캐시', n, '건 비움') })
+
+  // 보관한 리포트도 같은 이유로 쓸어낸다. 사용자가 지우지 않아도 서른 날이 지나면
+  // 사라진다 — 상한과 함께, 아카이브가 영구 열람 기록이 되지 않게 하는 둘째 장치다.
+  void sweepArchive().then((n) => { if (n) console.info('[GenuEarly] 만료 리포트', n, '건 비움') })
 
   // --- ③ 선택 텍스트 검사 --------------------------------------------------
   //

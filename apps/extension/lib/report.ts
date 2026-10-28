@@ -19,6 +19,10 @@
 // (docs/security/secure-coding.md 7절). session 은 브라우저를 닫으면 사라진다.
 //
 // 하나만 들고 있는다. 리포트를 새로 만들면 앞의 것은 지운다.
+//
+// **다 된 리포트는 따로 한 벌 보관된다** (lib/archive.ts). 그쪽은 `local` 이다 —
+// 사용자가 직접 만든 것만, 사용자가 지울 수 있는 형태로 남는다.
+import { saveToArchive } from './archive'
 import { PROXY_URL, type ExplainLevel, type ReportRow } from './protocol'
 
 /** 저장소 열쇠. 하나만 둔다 — 쌓이면 그것이 곧 열람 기록이다. */
@@ -229,5 +233,9 @@ export async function buildReport(
   // **글이 없어도 리포트는 끝난 것이다.** 기록과 인용은 이미 있다.
   report = { ...report, stage: 'done', ...(woven?.brief ? { brief: woven.brief } : {}) }
   await put(report)
+
+  // **아카이브에 넣는 자리는 여기 하나뿐이다.** 다 된 것만, 사용자가 버튼을 눌러
+  // 만든 것만 남는다 — 기사를 열기만 해서는 한 줄도 쌓이지 않는다 (lib/archive.ts).
+  await saveToArchive(report)
   return report
 }

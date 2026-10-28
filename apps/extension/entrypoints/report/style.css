@@ -357,6 +357,131 @@ a:hover {
   color: var(--ge-muted);
 }
 
+/* ── 지난 리포트 보관함 ──────────────────────────────────
+ *
+ * **카드보다 한 톤 낮다.** 리포트 본문과 같은 무게로 보이면 지난 것이 지금 것과
+ * 나란히 서 버린다. 바탕을 `--ge-ground` 로 두고 선 하나로만 가른다.
+ */
+.ge-archive {
+  max-width: var(--ge-measure);
+  width: 100%;
+  margin: var(--ge-space-16) auto 0;
+  padding: var(--ge-space-24) var(--ge-space-32);
+  border-top: 1px solid var(--ge-rule);
+}
+
+.ge-archive__head {
+  display: flex;
+  align-items: center;
+  gap: var(--ge-space-8);
+}
+.ge-archive__spacer {
+  flex: 1;
+}
+/* 되돌릴 수 없는 단추. **색은 여기서만 경고로 쓴다** — 판정이 아니라 동작이다 */
+.ge-archive__danger {
+  color: var(--ge-caution);
+}
+
+.ge-archive__note,
+.ge-archive__empty {
+  margin: var(--ge-space-4) 0 0;
+  color: var(--ge-muted);
+  font-size: var(--ge-fs-meta);
+}
+
+.ge-archive__list {
+  list-style: none;
+  margin: var(--ge-space-16) 0 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+}
+
+.ge-archive__row {
+  display: flex;
+  align-items: center;
+  gap: var(--ge-space-8);
+  border-top: 1px solid var(--ge-rule);
+}
+.ge-archive__row:first-child {
+  border-top: 0;
+}
+
+.ge-archive__open {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  align-items: baseline;
+  gap: var(--ge-space-8);
+  font: inherit;
+  text-align: left;
+  color: var(--ge-ink);
+  background: none;
+  border: 0;
+  border-radius: var(--ge-radius-4);
+  padding: var(--ge-space-12) var(--ge-space-4);
+  cursor: pointer;
+  transition: color var(--ge-ease);
+}
+.ge-archive__open:hover .ge-archive__title {
+  color: var(--ge-brand);
+}
+.ge-archive__open:focus-visible {
+  outline: 0;
+  box-shadow: var(--ge-focus-ring);
+}
+
+/* 제목이 길면 한 줄로 자른다 — 목록은 훑는 자리다 */
+.ge-archive__title {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  transition: color var(--ge-ease);
+}
+.ge-archive__meta {
+  flex: none;
+  color: var(--ge-muted);
+  font-size: var(--ge-fs-meta);
+  font-variant-numeric: tabular-nums;
+}
+.ge-archive__now {
+  flex: none;
+  color: var(--ge-brand);
+  font-size: var(--ge-fs-meta);
+}
+
+.ge-archive__del {
+  flex: none;
+  font: inherit;
+  font-size: var(--ge-fs-meta);
+  color: var(--ge-quiet);
+  background: none;
+  border: 0;
+  border-radius: var(--ge-radius-4);
+  padding: var(--ge-space-8);
+  cursor: pointer;
+  transition: color var(--ge-ease);
+}
+.ge-archive__del:hover {
+  color: var(--ge-caution);
+}
+.ge-archive__del:focus-visible {
+  outline: 0;
+  box-shadow: var(--ge-focus-ring);
+}
+
+/* 보관본을 열었을 때 맨 위에 붙는 한 줄 */
+.ge-archive__restored {
+  max-width: var(--ge-measure);
+  width: 100%;
+  margin: 0 auto;
+  color: var(--ge-muted);
+  font-size: var(--ge-fs-meta);
+}
+
 /* ── 좁은 화면 ────────────────────────────────────────── */
 @media (max-width: 720px) {
   .ge-card {
@@ -373,5 +498,17 @@ a:hover {
   .ge-record {
     flex-direction: column;
     gap: var(--ge-space-4);
+  }
+  .ge-archive {
+    padding: var(--ge-space-24) var(--ge-space-16);
+  }
+  /* 좁으면 제목과 시각이 한 줄에 안 들어간다 */
+  .ge-archive__open {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: var(--ge-space-2);
+  }
+  .ge-archive__title {
+    white-space: normal;
   }
 }

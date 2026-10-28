@@ -28,6 +28,12 @@
       <main id="body" class="ge-report__body">
         <!-- main.ts 가 채운다 -->
       </main>
+
+      <!--
+        지난 리포트 보관함. **`#body` 바깥이다** — 지금 보고 있는 리포트가 없어도
+        (브라우저를 다시 켠 뒤 등) 목록은 보여야 하기 때문이다.
+      -->
+      <aside id="archive" class="ge-archive" hidden></aside>
     </div>
     <script type="module" src="./main.ts"></script>
   </body>
