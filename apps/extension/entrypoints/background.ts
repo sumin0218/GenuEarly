@@ -6,6 +6,7 @@
 // **여기는 배선만 둔다.** 판단 흐름은 lib/judge.ts 에 있다 — 테스트에서 부를 수 있게.
 import content from '../../../packages/content/ui.ko.json'
 import { sweepExpired } from '../lib/cache'
+import { buildReport, clearReport } from '../lib/report'
 import { callProxy, judgeArticle, judgeExplain, judgeHeadline, setIconBadge } from '../lib/judge'
 import { judgeSelection, putSelectionPending, putSelectionResult } from '../lib/selection'
 import type { ArticleVerdict, HeadlineVerdict, Message } from '../lib/protocol'
@@ -114,6 +115,22 @@ export default defineBackground(() => {
           console.warn('[GenuEarly] 심층 분석 실패', e)
           sendResponse(null)
         })
+      return true
+    }
+
+    // 심층 분석 리포트. **답을 기다리지 않는다** — 스무 초가 걸려서 메시지로 돌려주면
+    // 그 사이에 팝업이 닫히거나 service worker 가 꺼진다. 진행은 storage.session 에 적고
+    // 팝업과 리포트 탭이 그것을 읽는다 (lib/report.ts).
+    if (msg?.kind === 'build-report') {
+      void clearReport()
+        .then(() =>
+          buildReport(
+            { url: msg.url, headline: msg.headline, date: msg.date, body: msg.body },
+            msg.rows,
+          ),
+        )
+        .catch((e) => console.warn('[GenuEarly] 리포트 만들기 실패', e))
+      sendResponse({ started: true })
       return true
     }
 

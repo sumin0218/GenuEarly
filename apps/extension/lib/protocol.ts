@@ -149,7 +149,41 @@ export interface ExplainPick {
   why: string
 }
 
-export type Message = JudgeArticleMessage | JudgeHeadlineMessage | ExplainMessage
+/**
+ * 리포트를 만들어 달라. **콘텐츠 스크립트가 background 에 보낸다.**
+ *
+ * 본문이 들어 있다. 팝업은 본문을 모르므로 이 메시지를 직접 보내지 못한다 —
+ * 팝업은 콘텐츠 스크립트에 `make-report` 로 부탁하고, 본문은 여기서만 실린다.
+ */
+export interface BuildReportMessage {
+  kind: 'build-report'
+  url: string
+  headline: string
+  /** `YYYY-MM-DD`. **없으면 리포트를 만들지 않는다** — 날짜 없이 기록을 맞추면 거짓 안심이 된다 */
+  date: string
+  body: string
+  /** 일곱 항목의 판정 줄. **팝업이 이미 그리고 있는 값을 그대로 넘긴다** — 다시 판단하지 않는다 */
+  rows: ReportRow[]
+}
+
+/**
+ * 리포트에 싣는 판정 줄 하나.
+ *
+ * 리포트의 "기사를 열었을 때의 신호" 가 이것을 그대로 그린다. **다시 판단하지 않는다** —
+ * 리포트와 배지가 다른 말을 하면 사용자는 둘 중 어느 쪽도 믿지 못한다.
+ */
+export interface ReportRow {
+  id: string
+  name: string
+  text: string
+  level: DisplayLevel
+}
+
+export type Message =
+  | JudgeArticleMessage
+  | JudgeHeadlineMessage
+  | ExplainMessage
+  | BuildReportMessage
 
 // ── 팝업이 콘텐츠 스크립트에 보내는 것 ──────────────────────────────────────
 //
@@ -171,6 +205,23 @@ export interface TabStateMessage {
  * 콘텐츠 스크립트뿐이라, 팝업은 "이 항목을 설명해 달라" 고만 하고
  * 콘텐츠 스크립트가 background 를 거쳐 물어본 뒤 **답만** 돌려준다.
  */
+/**
+ * 리포트를 만들어 달라. **팝업이 콘텐츠 스크립트에 보낸다.**
+ *
+ * 본문을 들고 있는 것은 콘텐츠 스크립트뿐이라, 팝업은 판정만 넘기고 부탁한다
+ * (심층 분석의 `explain-item` 과 같은 이유다).
+ */
+export interface MakeReportMessage {
+  kind: 'make-report'
+  /** 일곱 항목의 판정 줄 */
+  rows: ReportRow[]
+}
+
+/** 리포트를 만들 수 있는가, 왜 못 만드는가. */
+export type MakeReportAnswer =
+  | { ok: true }
+  | { ok: false; reason: 'not_article' | 'no_date' }
+
 export interface ExplainRequestMessage {
   kind: 'explain-item'
   itemId: string

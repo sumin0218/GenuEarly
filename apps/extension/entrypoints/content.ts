@@ -16,6 +16,8 @@ import type {
   ArticleVerdict,
   DisplayLevel,
   ExplainRequestMessage,
+  MakeReportAnswer,
+  MakeReportMessage,
   Message,
   TabState,
   TabStateMessage,
@@ -111,9 +113,32 @@ export default defineContentScript({
     //
     // **보낸 곳을 확인한다.** 이 핸들러는 판정 전체를 돌려준다
     // (AGENT.md 전역 규칙, docs/security/secure-coding.md 5절).
-    browser.runtime.onMessage.addListener((raw: TabStateMessage | ExplainRequestMessage, sender) => {
+    browser.runtime.onMessage.addListener(
+      (raw: TabStateMessage | ExplainRequestMessage | MakeReportMessage, sender) => {
       if (sender.id !== browser.runtime.id) return
       if (raw?.kind === 'get-tab-state') return Promise.resolve(badge.state())
+
+      // **리포트도 본문이 여기서만 나간다.** 팝업은 판정만 넘기고 부탁한다.
+      // 만드는 일은 background 가 하고, 진행은 storage.session 으로 전해진다 —
+      // 스무 초가 걸려서 메시지로 기다리면 팝업이 닫히는 순간 날아간다.
+      if (raw?.kind === 'make-report') {
+        if (!article) return Promise.resolve({ ok: false, reason: 'not_article' } satisfies MakeReportAnswer)
+        // **날짜가 없으면 만들지 않는다.** 날짜 없이 기록을 맞추면 다른 날 기록에
+        // "뒷받침됨" 이 뜬다 (실측 21%, apps/proxy/src/records.ts).
+        if (!article.date) return Promise.resolve({ ok: false, reason: 'no_date' } satisfies MakeReportAnswer)
+        const ask: Message = {
+          kind: 'build-report',
+          url: location.href,
+          headline: article.headline,
+          date: article.date,
+          body: article.body,
+          rows: raw.rows,
+        }
+        void browser.runtime.sendMessage(ask).catch((e) => {
+          console.warn('[GenuEarly] 리포트를 만들지 못했다', e)
+        })
+        return Promise.resolve({ ok: true } satisfies MakeReportAnswer)
+      }
 
       // **본문은 여기서만 나간다.** 팝업은 본문을 받지 않는다 (secure-coding.md 6절).
       // 팝업이 "이 항목을 설명해 달라" 고만 하고, 본문을 들고 있는 우리가 물어본 뒤
@@ -175,7 +200,8 @@ export default defineContentScript({
         })()
       }
       return
-    })
+      },
+    )
 
     if (!article) {
       // **기사 구조를 못 읽었다. 그래도 ⚪ 를 띄운다** (docs/requirements.md 2절).

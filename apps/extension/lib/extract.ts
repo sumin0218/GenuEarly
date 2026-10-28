@@ -13,6 +13,17 @@ export interface Article {
   headline: string
   body: string
   sentences: string[]
+  /**
+   * 기사가 나온 날. `YYYY-MM-DD`. **못 읽으면 없다.**
+   *
+   * 심층 분석 리포트가 쓴다. 기록을 찾을 때 "이 문장은 그날 기사의 것" 이라고 적어
+   * 보내고, 찾아온 기록의 날짜와 견준다. **없으면 리포트를 만들지 않는다** —
+   * 날짜 없이 맞춰 보면 다른 날 기록을 두고 "뒷받침됨" 이 뜬다
+   * (실측 21%, apps/proxy/src/records.ts).
+   *
+   * 판단(①②③)은 이 값을 쓰지 않는다. 없어도 배지는 그대로 뜬다.
+   */
+  date?: string
 }
 
 interface SiteRule {
@@ -197,5 +208,34 @@ export function extractArticle(): Article | null {
     .replace(CREDIT_TAIL, '')
 
   if (!headline || body.length < 150) return null
-  return { headline, body, sentences: splitSentences(body) }
+  const date = extractDate()
+  return { headline, body, sentences: splitSentences(body), ...(date ? { date } : {}) }
+}
+
+/**
+ * 기사가 나온 날을 찾는다. **사이트별 선택자를 두지 않는다.**
+ *
+ * 본문과 달리 날짜는 표준 자리에 있다 — Open Graph, schema.org, 네이버의 `data-date-time`.
+ * 넷 중 하나는 거의 늘 있고, 없으면 없는 대로 둔다. 여기서 사이트별 규칙을 또 만들면
+ * 사이트를 늘릴 때마다 깨질 자리가 하나 더 는다.
+ *
+ * **지어내지 않는다.** 오늘 날짜로 때우면 다른 날 기록이 "같은 날" 로 둔갑한다.
+ */
+function extractDate(): string | undefined {
+  const 후보 = [
+    document.querySelector('meta[property="article:published_time"]')?.getAttribute('content'),
+    document.querySelector('meta[itemprop="datePublished"]')?.getAttribute('content'),
+    document.querySelector('[data-date-time]')?.getAttribute('data-date-time'),
+    document.querySelector('time[datetime]')?.getAttribute('datetime'),
+  ]
+  for (const raw of 후보) {
+    const m = /(\d{4})-(\d{2})-(\d{2})/.exec(raw ?? '')
+    if (m) return m[0]
+  }
+  // JSON-LD 는 마지막에 본다. 파싱이 실패할 수 있고, 한 페이지에 여럿일 수 있다.
+  for (const el of document.querySelectorAll('script[type="application/ld+json"]')) {
+    const m = /"datePublished"\s*:\s*"(\d{4}-\d{2}-\d{2})/.exec(el.textContent ?? '')
+    if (m?.[1]) return m[1]
+  }
+  return undefined
 }

@@ -18,10 +18,14 @@ import {
   type SelectionOutcome,
   type SelectionRecord,
 } from '../../lib/selection'
+import { REPORT_KEY, type Report } from '../../lib/report'
 import type {
   DisplayLevel,
   ExplainLevel,
   ExplainRequestMessage,
+  MakeReportAnswer,
+  MakeReportMessage,
+  ReportRow,
   ExplainResult,
   TabState,
   TabStateMessage,
@@ -508,9 +512,11 @@ function render(state: TabState, root: Document = document, kind: 'page' | 'sele
   // (판단한 적 없음 / 살펴보는 중 / 항목이 비었음), 끝에서 그리면 그 셋에서
   // 틀이 통째로 안 그려진다. 기사가 아닌 페이지에서 로고가 깨져 보이던 원인이다.
   drawFrame(state, root, kind)
+  drawWrongButton(root)
 
   items.replaceChildren()
   const rows = toRows(state.verdict)
+  drawReport(rows, kind, root)
   if (rows.length === 0) {
     // 판단한 적이 없으면 머리말이 이미 할 말을 했다. 밑에 또 붙이면 말이 겹친다.
     if (notJudged) return
@@ -608,6 +614,16 @@ function drawFrame(state: TabState, root: Document, kind: 'page' | 'selection'):
  * 주의 쪽인 항목이 있어도 모델이 확신하지 못했으면 🔴 이 되지 못하고 🟡 에 머문다.
  * 화면은 지금까지 그 둘을 같은 말로 보여 줬다 (PR #20 리뷰).
  */
+/** 제보 자리. **아직 아무것도 보내지 않는다** (GE-26). */
+function drawWrongButton(root: Document): void {
+  const btn = root.getElementById('report-wrong')
+  if (!btn) return
+  btn.textContent = content.report.wrong
+  btn.onclick = () => {
+    btn.textContent = content.report.wrongSoon
+  }
+}
+
 function isLowConfidence(state: TabState): boolean {
   if (state.level !== 'CHECK') return false
   return (state.verdict?.items ?? []).some(
@@ -615,7 +631,98 @@ function isLowConfidence(state: TabState): boolean {
   )
 }
 
-export { render, renderTooLong, readTabState, drawSelection, run, readFacts }
+// ── 공개 기록 리포트 ──────────────────────────────────────────────────────
+//
+// **팝업은 본문을 모른다.** 콘텐츠 스크립트에 부탁하고, 만드는 일은 background 가
+// 한다. 스무 초가 걸려서 답을 기다리지 않는다 — 진행은 storage.session 으로 온다.
+// 팝업을 닫았다 열어도 이어서 보인다 (lib/report.ts).
+
+const R = content.report
+
+/** 지금 상태에 맞는 버튼 글과 눌러도 되는지. */
+function reportFace(r: Report | null): { label: string; busy: boolean; note?: string } {
+  if (!r) return { label: R.button, busy: false }
+  switch (r.stage) {
+    case 'claims':
+      return { label: R.progress.claims, busy: true }
+    case 'records': {
+      const done = r.claims.filter((c) => !c.pending).length
+      return { label: `${R.progress.records} ${done}/${r.claims.length}`, busy: true }
+    }
+    case 'brief':
+      return { label: R.progress.brief, busy: true }
+    case 'done':
+      return { label: R.open, busy: false }
+    case 'failed':
+      return { label: R.button, busy: false, note: r.reason === 'no_claims' ? R.noClaims : R.failed }
+  }
+}
+
+/** 리포트 자리를 그린다. **걸린 항목이 있을 때만 보인다.** */
+function drawReport(rows: readonly ReportRow[], kind: 'page' | 'selection', root: Document): void {
+  const box = root.getElementById('report-box')
+  const btn = root.getElementById('report-run') as HTMLButtonElement | null
+  const note = root.getElementById('report-note')
+  if (!box || !btn || !note) return
+
+  // ③ 선택 글에는 기사 주소도 날짜도 없다. 리포트를 만들 수 없다.
+  const loud = rows.some((r) => r.level === 'CAUTION' || r.level === 'CHECK')
+  box.hidden = kind !== 'page' || !loud
+  if (box.hidden) return
+
+  const paint = (r: Report | null) => {
+    const face = reportFace(r)
+    btn.textContent = face.label
+    btn.disabled = face.busy
+    note.hidden = !face.note
+    note.textContent = face.note ?? ''
+  }
+
+  void (async () => {
+    try {
+      const got = (await browser.storage.session.get(REPORT_KEY)) as Record<string, Report | undefined>
+      paint(got[REPORT_KEY] ?? null)
+    } catch {
+      paint(null)
+    }
+  })()
+
+  browser.storage.onChanged.addListener((changes, area) => {
+    if (area !== 'session' || !changes[REPORT_KEY]) return
+    paint((changes[REPORT_KEY].newValue as Report | undefined) ?? null)
+  })
+
+  btn.onclick = () => {
+    void (async () => {
+      // 다 된 리포트가 있으면 연다.
+      try {
+        const got = (await browser.storage.session.get(REPORT_KEY)) as Record<string, Report | undefined>
+        if (got[REPORT_KEY]?.stage === 'done') {
+          await browser.tabs.create({ url: browser.runtime.getURL('/report.html') })
+          return
+        }
+      } catch {
+        /* 못 읽었으면 새로 만든다 */
+      }
+
+      btn.disabled = true
+      btn.textContent = R.progress.claims
+      const [tab] = await browser.tabs.query({ active: true, currentWindow: true })
+      if (tab?.id === undefined) return
+      const msg: MakeReportMessage = { kind: 'make-report', rows: [...rows] }
+      const answer = (await browser.tabs.sendMessage(tab.id, msg).catch(() => null)) as MakeReportAnswer | null
+      if (!answer?.ok) {
+        btn.disabled = false
+        btn.textContent = R.button
+        note.hidden = false
+        // **왜 못 만드는지 말한다.** 날짜가 없으면 기록과 견줄 수가 없다.
+        note.textContent = answer?.reason === 'no_date' ? R.noDate : R.failed
+      }
+    })()
+  }
+}
+
+export { render, renderTooLong, readTabState, drawSelection, run, readFacts, reportFace }
 
 // 테스트에서 이 파일을 불러도 팝업이 멋대로 열리지 않게 한다.
 // 팝업 문서에서만 실제로 그린다.

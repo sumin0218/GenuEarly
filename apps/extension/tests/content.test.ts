@@ -143,7 +143,16 @@ describe('길이', () => {
   })
 
   it('한 줄 설명이 50자를 넘지 않는다', () => {
-    const long = visible.filter(([p, v]) => !p.startsWith('feedback.notice') && len(v) > 50)
+    // **리포트는 빠진다.** 50자는 340px 팝업에서 한 줄에 들어가야 한다는 뜻이었다.
+    // 리포트는 전체 탭(760px)이라 그 이유가 없다 — 대신 아래에서 따로 재 둔다.
+    const 예외 = (p: string) => p.startsWith('feedback.notice') || p.startsWith('report.')
+    const long = visible.filter(([p, v]) => !예외(p) && len(v) > 50)
+    expect(long.map(([p, v]) => `${p} (${len(v)}자)`)).toEqual([])
+  })
+
+  it('리포트 문구가 120자를 넘지 않는다', () => {
+    // 전체 탭이라 50자보다 길어도 되지만, 상한이 없으면 문단이 된다.
+    const long = visible.filter(([p, v]) => p.startsWith('report.') && len(v) > 120)
     expect(long.map(([p, v]) => `${p} (${len(v)}자)`)).toEqual([])
   })
 })
