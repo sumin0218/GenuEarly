@@ -98,6 +98,36 @@ body {
     "Segoe UI", "Malgun Gothic", sans-serif;
 }
 
+/* --- 제품을 밝히는 줄 -----------------------------------------------------
+   **판정보다 약하다.** 판정이 주인공이고 이것은 "무엇이 말하고 있는가" 일 뿐이다.
+   그래서 가장 작은 크기에 흐린 색이고, 굵게 쓰지 않는다. */
+.ge-popup__brand {
+  display: flex;
+  align-items: center;
+  gap: var(--ge-space-8);
+  margin-bottom: var(--ge-space-12);
+  font-size: var(--ge-fs-meta);
+  color: var(--ge-muted);
+}
+
+.ge-popup__brand-icon {
+  display: block;
+  flex: 0 0 auto;
+  border-radius: var(--ge-radius-4);
+}
+
+/* **이름만 제품의 색이다.** LinKHU 가 머리말의 제품 이름을 학교 빨강으로 쓰는
+   자리인데, 우리는 그 색을 아이콘에서 가져왔다 (docs/design.md 7절).
+   크기는 따라가지 않았다 — LinKHU 의 팝업은 제품 이름이 주인공이지만
+   우리 팝업은 **판정이 주인공**이다. 20px/700 으로 두면 판정 제목과 겨룬다. */
+.ge-popup__brand-name {
+  color: var(--ge-brand);
+  font-weight: 600;
+}
+
+/* 버전은 흐린 채로 둔다 — 사용자가 찾을 때만 보면 된다. */
+.ge-popup__brand-version { font-variant-numeric: tabular-nums; }
+
 /* --- 머리말 -------------------------------------------------------------
    **왼쪽 색 막대를 두지 않는다.** 아이콘이 이미 모양과 색으로 단계를 말한다.
    같은 사실을 두 번 칠하면 화면에서 색이 차지하는 몫만 늘어난다 — 색은 한 곳에서
@@ -210,4 +240,64 @@ body {
   border-top: 1px solid var(--ge-rule);
   font-size: var(--ge-fs-meta);
   color: var(--ge-muted);
+}
+
+/* --- 판단의 근거 ---------------------------------------------------------
+   접혀 있는 것이 기본이다. 펼쳐도 판정보다 세면 안 되므로 가장 작은 크기에
+   흐린 색이다. 줄마다 선을 긋지 않는다 (docs/design.md 4절). */
+.ge-popup__details {
+  margin: var(--ge-space-12) 0 0;
+  padding: var(--ge-space-12) 0 0;
+  border-top: 1px solid var(--ge-rule);
+  list-style: none;
+  display: flex;
+  flex-direction: column;
+  gap: var(--ge-space-4);
+  font-size: var(--ge-fs-meta);
+  line-height: 1.5;
+  color: var(--ge-muted);
+}
+.ge-popup__details[hidden] { display: none; }
+
+/* --- 꼬리말 ---------------------------------------------------------------
+   **버튼과 링크가 같은 생김새다.** 하는 일이 "누르면 뭔가 더 보인다" 로 같다.
+   서로 다르게 그리면 둘 중 하나가 덜 눌리는 것처럼 보인다. */
+.ge-popup__foot {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: var(--ge-space-8);
+  margin-top: var(--ge-space-12);
+  padding-top: var(--ge-space-12);
+  border-top: 1px solid var(--ge-rule);
+}
+.ge-popup__foot[hidden] { display: none; }
+
+.ge-popup__link {
+  padding: 0;
+  border: 0;
+  background: none;
+  font: inherit;
+  font-size: var(--ge-fs-meta);
+  color: var(--ge-muted);
+  cursor: pointer;
+  /* **평소에는 밑줄이 없다.** 340px 안에서 밑줄 두 줄은 선 두 개가 더 보이는 셈이다.
+     올렸을 때만 제품의 색이 되고 밑줄이 생긴다 (LinKHU 의 꼬리말 방식). */
+  text-decoration: none;
+  text-underline-offset: 0.18em;
+  text-decoration-thickness: 0.07em;
+  transition: color var(--ge-ease);
+}
+.ge-popup__link[hidden] { display: none; }
+
+.ge-popup__link:hover {
+  color: var(--ge-brand);
+  text-decoration: underline;
+}
+
+/* 초점은 테두리가 아니라 **링**이다. 자리를 밀지 않는다. */
+.ge-popup__link:focus-visible {
+  outline: none;
+  border-radius: var(--ge-radius-4);
+  box-shadow: var(--ge-focus-ring);
 }

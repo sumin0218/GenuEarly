@@ -13,6 +13,17 @@
   </head>
   <body>
     <main class="ge-popup">
+      <!--
+        제품을 밝히는 줄. **판정보다 약하다** — 판정이 주인공이다 (docs/design.md).
+        이름과 버전은 문구가 아니라 사실이라 ChatKHU 를 거치지 않는다.
+        버전은 manifest 에서 읽는다. 두 곳에 적지 않는다.
+      -->
+      <div class="ge-popup__brand">
+        <img class="ge-popup__brand-icon" id="brand-icon" src="" alt="" width="16" height="16" />
+        <span class="ge-popup__brand-name">GenuEarly</span>
+        <span class="ge-popup__brand-version" id="version"></span>
+      </div>
+
       <header class="ge-popup__head">
         <span class="ge-popup__mark" id="mark"></span>
         <div class="ge-popup__head-text">
@@ -23,6 +34,19 @@
       <!-- 무엇에 대한 판단인지. ③ 결과일 때만 채운다 (requirements.md 5절). -->
       <p class="ge-popup__scope" id="scope" hidden></p>
       <ul class="ge-popup__items" id="items"></ul>
+
+      <!--
+        판단의 근거. **접혀 있는 것이 기본이다** — 사용자는 판정을 보러 열었지
+        설명을 보러 연 것이 아니다.
+        여기 글자는 전부 ChatKHU 가 쓴다. **문구가 없으면 자리 자체를 그리지 않는다**
+        (tools/content-gen/prompt.md 4차).
+      -->
+      <ul class="ge-popup__details" id="details" hidden></ul>
+
+      <footer class="ge-popup__foot" id="foot" hidden>
+        <button class="ge-popup__link" id="details-toggle" type="button" aria-expanded="false" aria-controls="details"></button>
+        <a class="ge-popup__link" id="homepage" href="" target="_blank" rel="noreferrer noopener"></a>
+      </footer>
     </main>
     <script type="module" src="./main.ts"></script>
   </body>
