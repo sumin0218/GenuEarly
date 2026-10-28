@@ -37,7 +37,13 @@ export function resetCreditCache(): void {
 async function fetchRemaining(env: Env): Promise<number | null> {
   try {
     const res = await fetch(`${env.JEV_API_BASE_URL}/credits`, {
-      headers: { Authorization: `Bearer ${env.JEV_API_KEY}` },
+      headers: {
+        Authorization: `Bearer ${env.JEV_API_KEY}`,
+        // **게이트웨이 앞단 WAF 가 User-Agent 없는 요청을 403 으로 막는다** (jev.ts 와 같은 이유).
+        // 빠뜨린 탓에 이 조회가 늘 403 이었고, 감시가 **조용히 꺼진 채** 돌고 있었다.
+        // 한 번도 못 읽으면 통과시키도록 되어 있어 아무 증상이 없었다 — 로그에만 남았다.
+        'User-Agent': 'GenuEarly/0.0.0 (+https://github.com/sumin0218/GenuEarly)',
+      },
       signal: AbortSignal.timeout(Number(env.CREDITS_TIMEOUT_MS) || 3000),
     })
     if (!res.ok) {

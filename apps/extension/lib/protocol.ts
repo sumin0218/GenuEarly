@@ -4,23 +4,28 @@
 // 나가서 우리 서버가 거절한다 (서버는 chrome-extension:// 만 받는다).
 
 /**
- * 중계 서버 주소. **빌드할 때 넣는다.**
+ * 중계 서버 주소.
  *
- * 상수로 두었더니 `localhost` 가 제출본에 그대로 들어갈 뻔했다 — 그러면 심사위원 브라우저에서
- * 모든 기사가 ⚪ 가 된다. 주석 하나에 기대지 않고 **빌드 결과를 검사**한다
- * (apps/extension/tests/manifest.test.ts 의 "제출본에 localhost 가 없다").
+ * **기본값이 배포 주소다.** 전에는 기본이 `localhost` 였고 빌드할 때마다
+ * `WXT_PROXY_URL` 을 손으로 넣어야 했는데, **한 번 빠뜨리면 모든 기사가 ⚪ 가 된다.**
+ * 실제로 그렇게 나갔고, background 콘솔에만 `Failed to fetch` 가 찍혀 원인을 찾는 데
+ * 한참 걸렸다 — 화면에는 "판단하지 못함" 으로만 보인다.
  *
- *   WXT_PROXY_URL=https://<배포주소> npm run build -w @genuearly/extension
+ * 빠뜨렸을 때의 결과가 한쪽은 **조용한 고장**이고 다른 쪽은 **개발 중에 진짜 서버를
+ * 쓰는 것**뿐이라, 기본을 뒤집는 편이 안전하다. 로컬 중계를 보려면 값을 준다.
  *
- * 개발에서는 값을 안 주면 로컬 중계를 본다.
+ *   WXT_PROXY_URL=http://localhost:8787 npm run dev -w @genuearly/extension
+ *
+ * 비밀이 아니다 — 주소일 뿐이고 키는 서버만 들고 있다.
  */
 import type { BadgeLevel, Verdict } from '@genuearly/shared'
 
 export type { BadgeLevel, Verdict }
 
-export const PROXY_URL: string = import.meta.env.WXT_PROXY_URL ?? 'http://localhost:8787'
+export const PROXY_URL: string =
+  import.meta.env.WXT_PROXY_URL ?? 'https://genuearly-proxy.genuearly-proxy.workers.dev'
 
-export type Feature = 'page' | 'portal_list' | 'selection'
+export type Feature = 'page' | 'portal_list' | 'selection' | 'explain'
 
 export interface JudgeRequest {
   feature: Feature
@@ -76,7 +81,75 @@ export interface HeadlineVerdict {
   basis: 'headline' | 'full'
 }
 
-export type Message = JudgeArticleMessage | JudgeHeadlineMessage
+/**
+ * 심층 분석. **점수에 들어가지 않는다** — 판정은 이미 났고 그 이유만 묻는다.
+ *
+ * 사용자가 누를 때만 나간다. 기사를 여는 것만으로는 한 건도 나가지 않는다
+ * (judgment-items.json 의 `explain_items`, GE-44).
+ */
+export interface ExplainMessage {
+  kind: 'judge-explain'
+  url: string
+  body: string
+  /** 설명할 판단 항목. `explain_items[].explain_for` 와 같은 값 */
+  itemId: string
+  /** 이미 나온 판정. **중계 서버가 프롬프트에 적어 준다** — 모델은 이것을 바꾸지 않는다 */
+  level: ExplainLevel
+  /**
+   * **코드가 찾아봤는데 빈손이었는가.**
+   *
+   * 코드 사전은 criteria 에 적힌 낱말만 안다. 다른 말로 감정을 자극하면 못 찾고,
+   * 그러면 판정은 걸렸는데 보여 줄 것이 없다. 그때만 LLM 에 넘긴다 —
+   * 코드가 찾았으면 부르지 않는다. 더 정확하고, 빠르고, 크레딧을 쓰지 않는다.
+   */
+  noEvidence?: boolean
+}
+
+/**
+ * 심층 분석을 할 수 있는 판정.
+ *
+ * 🟢·⚪ 는 없다. 설명할 것이 없고, 크레딧을 쓸 이유도 없다.
+ * 중계 서버도 같은 둘만 받는다 (apps/proxy/src/pinpoint.ts).
+ */
+export type ExplainLevel = 'CAUTION' | 'CHECK'
+
+/**
+ * 심층 분석 결과. **두 곳에서 온다.**
+ *
+ * - `found` — Jev 가 **잰** 것. 하위 질문 id → 그런가. 확률은 접어서 준다
+ * - `spans` — 코드가 **찾은** 것. 규칙 id → 본문에서 떼어 온 글자
+ * - `picks` — LLM 이 **집어 온** 것. 목록으로 담을 수 없는 항목(출처·근거)만
+ *
+ * Jev 는 "이 글이 어떤가" 는 재지만 "이 표현이 있는가" 는 못 센다 (docs/jev.md 8절).
+ * 코드는 **정해진 표현**만 찾을 수 있다. 남는 것 — 기관명·실명처럼 목록이 없는 것 —
+ * 만 LLM 이 집어 오고, **집어 온 것은 본문과 글자 대조해 거른다.**
+ *
+ * **셋 다 사람에게 하는 말을 쓰지 않는다.** 화면의 문장은 전부 ChatKHU 가 미리 쓴
+ * 문구이고, 여기 담기는 것은 본문에서 떼어 온 글자와 **고른 이유의 id** 뿐이다.
+ */
+export interface ExplainResult {
+  itemId: string
+  found: Record<string, boolean>
+  /** **원문 그대로다.** 화면에 인용한다 */
+  spans: Record<string, string[]>
+  /** 떼어 온 문장과 **왜 떼어 왔는지.** 하위 질문으로 나뉘지 않는 항목만 */
+  picks?: ExplainPick[]
+}
+
+/**
+ * 떼어 온 문장 하나.
+ *
+ * `why` 는 **미리 정해 둔 이유의 id** 다 (apps/proxy/src/pinpoint.ts 의 REASONS).
+ * 화면에 뜨는 문장은 packages/content 의 `explain.*.reasons` 가 들고 있다 —
+ * **모델은 그 문장을 쓰지 않고 고르기만 한다.**
+ */
+export interface ExplainPick {
+  /** **원문 그대로다.** 화면에 인용한다 */
+  text: string
+  why: string
+}
+
+export type Message = JudgeArticleMessage | JudgeHeadlineMessage | ExplainMessage
 
 // ── 팝업이 콘텐츠 스크립트에 보내는 것 ──────────────────────────────────────
 //
@@ -88,6 +161,21 @@ export type Message = JudgeArticleMessage | JudgeHeadlineMessage
 // (docs/security/secure-coding.md 6절).
 export interface TabStateMessage {
   kind: 'get-tab-state'
+}
+
+/**
+ * 심층 분석을 **콘텐츠 스크립트에** 시킨다.
+ *
+ * **팝업은 본문을 받지 않는다** (secure-coding.md 6절, tests/popup.test.ts).
+ * 그래서 팝업이 본문을 들고 중계 서버로 보낼 수 없다. 본문을 들고 있는 것은
+ * 콘텐츠 스크립트뿐이라, 팝업은 "이 항목을 설명해 달라" 고만 하고
+ * 콘텐츠 스크립트가 background 를 거쳐 물어본 뒤 **답만** 돌려준다.
+ */
+export interface ExplainRequestMessage {
+  kind: 'explain-item'
+  itemId: string
+  /** 팝업이 그리고 있는 그 항목의 판정. 콘텐츠 스크립트가 그대로 넘긴다 */
+  level: ExplainLevel
 }
 
 /** 콘텐츠 스크립트가 지금 그리고 있는 상태. 팝업은 이것을 그대로 그린다. */

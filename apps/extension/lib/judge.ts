@@ -8,7 +8,7 @@
 // 엔트리포인트는 WXT 의 defineBackground 로 감싸여 있어 그대로는 불러올 수 없다.
 // **점수 규칙은 여기 없다.** `@genuearly/shared` 하나가 원본이고 중계 서버와 함께 쓴다 (GE-15).
 // 두 벌을 두면 조용히 갈라진다.
-import { decideBadge, scoreArticle, type ItemResult } from '@genuearly/shared'
+import { decideBadge, hasCodeEvidence, resolveBand, scoreArticle, type ItemResult } from '@genuearly/shared'
 import schema from '@genuearly/shared/judgment-items.json'
 import {
   headlineFingerprint,
@@ -30,6 +30,9 @@ import {
   type HeadlineVerdict,
   type Message,
   isUndetermined,
+  type ExplainLevel,
+  type ExplainPick,
+  type ExplainResult,
 } from './protocol'
 
 /**
@@ -304,4 +307,144 @@ export async function judgeHeadline(msg: Extract<Message, { kind: 'judge-headlin
 
   const verdict = decideBadge(toResults(cached))
   return { level: verdict.level, basis: 'headline' }
+}
+
+// ── 심층 분석 ───────────────────────────────────────────────────────────────
+
+/**
+ * "모름" 구간. Noul 확률이 이 안이면 **그 질문은 답하지 않은 것으로 본다.**
+ *
+ * `@genuearly/shared` 의 문장 판단이 쓰는 것과 같은 구간이다. 찾았는지 못 찾았는지를
+ * 0.5 근처에서 억지로 가르면, 모델이 모르겠다고 말한 것을 우리가 단정하는 셈이 된다.
+ */
+const EXPLAIN_BAND = resolveBand(null)
+
+/** 설명 전용 항목. **`items` 가 아니라 `explain_items` 다** (judgment-items.json). */
+interface ExplainItemDef {
+  id: string
+  explain_for: string
+  request_group: Record<string, string>
+  questions: { id: string }[]
+}
+const EXPLAIN_ITEMS = ((schema as unknown as { explain_items?: ExplainItemDef[] }).explain_items ?? [])
+
+/** 그 판단 항목을 설명하는 질문 묶음이 있는가. */
+export const explainableItems = (): string[] => EXPLAIN_ITEMS.map((i) => i.explain_for)
+
+/**
+ * **아무도 설명하지 못하는 항목.** 여기만 LLM 이 본문에서 대목을 집어 온다.
+ *
+ * 목록을 손으로 적지 않고 **빼서 구한다.** 적어 두면 질문을 쪼개거나 규칙을 더할 때
+ * 조용히 어긋난다 — 두 곳이 같은 항목을 설명하거나, 아무도 설명하지 않게 된다.
+ */
+const NEEDS_PINPOINT: ReadonlySet<string> = new Set(
+  (schema.items as unknown as { id: string }[])
+    .map((i) => i.id)
+    .filter((id) => !explainableItems().includes(id) && !hasCodeEvidence(id)),
+)
+
+/**
+ * **코드만 설명하는 항목.** 코드가 빈손일 때 LLM 이 대신 찾아 준다.
+ *
+ * 코드 사전은 criteria 에 적힌 낱말만 안다 — 다른 말로 감정을 자극하면 못 찾는다.
+ * 그러면 판정은 걸렸는데 보여 줄 것이 없다. 그때만 부른다.
+ *
+ * Jev 하위 질문이 있는 항목은 여기 없다. 그쪽은 Jev 가 이미 "무엇이 그런가" 를 답했고,
+ * 그 답이 전부 아니오인데 LLM 이 무언가 집어 오면 **Jev 와 어긋난다.**
+ */
+const CODE_ONLY: ReadonlySet<string> = new Set(
+  (schema.items as unknown as { id: string }[])
+    .map((i) => i.id)
+    .filter((id) => !explainableItems().includes(id) && hasCodeEvidence(id)),
+)
+
+/**
+ * 중계 서버에 **본문에서 대목을 집어 달라고** 한다.
+ *
+ * 프롬프트는 **중계 서버가 만든다.** 여기서는 항목 id 와 판정 이름과 본문만 보낸다 —
+ * 자유 텍스트 지시를 보낼 수 있으면 우리 키로 남이 생성 모델을 쓰는 길이 열린다.
+ *
+ * **돌려받은 것을 여기서 한 번 더 대조한다.** 중계 서버도 대조하지만, 화면에 인용으로
+ * 올라가는 글자라 두 번 본다. 본문에 없는 글자는 한 자도 보이지 않는다.
+ */
+async function pinpointPicks(
+  body: string,
+  itemId: string,
+  level: ExplainLevel,
+): Promise<ExplainPick[]> {
+  try {
+    const res = await fetch(`${PROXY_URL}/v1/explain`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ itemId, level, body }),
+    })
+    if (!res.ok) {
+      console.warn('[GenuEarly] 심층 분석 거절', res.status)
+      return []
+    }
+    const out = (await res.json()) as { picks?: unknown }
+    if (!Array.isArray(out.picks)) return []
+    return out.picks.filter(
+      (x): x is ExplainPick =>
+        typeof x === 'object' &&
+        x !== null &&
+        typeof (x as ExplainPick).text === 'string' &&
+        typeof (x as ExplainPick).why === 'string' &&
+        body.includes((x as ExplainPick).text),
+    )
+  } catch (e) {
+    console.warn('[GenuEarly] 심층 분석에 닿지 못했다', e)
+    return []
+  }
+}
+
+/**
+ * 판정이 **왜 그렇게 나왔는지** 묻는다.
+ *
+ * Jev 는 이유를 돌려주지 않는다 — 분류기라 "고른 보기 + 확률 + 확신도" 가 전부다
+ * (docs/jev.md 2절). 그래서 그 항목의 criteria 를 쪼갠 질문들을 **따로** 물어
+ * "무엇이 있고 무엇이 없어서 그렇게 봤는지" 를 알아낸다.
+ *
+ * **점수에 들어가지 않는다.** 판정은 이미 났고 바뀌지 않는다 (GE-44).
+ * **사용자가 누를 때만 불린다.** 기사를 여는 것만으로는 한 건도 나가지 않는다.
+ *
+ * 모름 구간 안의 답은 **빼고 준다.** 억지로 가르면 모델이 모르겠다고 한 것을
+ * 우리가 단정하게 된다.
+ */
+export async function judgeExplain(
+  msg: Extract<Message, { kind: 'judge-explain' }>,
+): Promise<ExplainResult | null> {
+  const def = EXPLAIN_ITEMS.find((i) => i.explain_for === msg.itemId)
+  const group = def?.request_group.explain
+  // 늘 LLM 이 맡는 항목이거나, 코드만 맡는 항목인데 코드가 빈손이었을 때.
+  const pinpoint =
+    NEEDS_PINPOINT.has(msg.itemId) || (CODE_ONLY.has(msg.itemId) && msg.noEvidence === true)
+  // 둘 다 아니면 이 항목은 코드가 설명한다. 바깥에 물어볼 것이 없다.
+  if ((!def || !group) && !pinpoint) return null
+
+  const found: Record<string, boolean> = {}
+  if (def && group) {
+    const out = await callProxy({
+      feature: 'explain',
+      group,
+      items: [def.id],
+      state: { body: msg.body },
+    })
+    if (out && !isUndetermined(out)) {
+      const [lo, hi] = EXPLAIN_BAND
+      for (const q of def.questions) {
+        const a = out.answers[q.id] as { type?: string; noul?: unknown } | undefined
+        if (a?.type !== 'noul' || typeof a.noul !== 'number' || !Number.isFinite(a.noul)) continue
+        if (a.noul > hi) found[q.id] = true
+        else if (a.noul < lo) found[q.id] = false
+        // 그 사이는 모름이다. 넣지 않는다.
+      }
+    } else if (!pinpoint) {
+      return null
+    }
+  }
+
+  const picks = pinpoint ? await pinpointPicks(msg.body, msg.itemId, msg.level) : []
+  // 코드가 찾은 것은 콘텐츠 스크립트가 채운다 — 여기서는 Jev 가 **잰** 것과 LLM 이 **집어 온** 것만 낸다.
+  return { itemId: msg.itemId, found, spans: {}, ...(picks.length ? { picks } : {}) }
 }

@@ -7,7 +7,8 @@
 // 화면에 **있으면 안 되는 것이 새어 나오지 않는가**다.
 import { beforeEach, describe, expect, it } from 'vitest'
 import content from '../../../packages/content/ui.ko.json'
-import { drawChrome, render, renderTooLong } from '../entrypoints/popup/main'
+import schema from '@genuearly/shared/judgment-items.json'
+import { drawChrome, explainLines, render, renderTooLong } from '../entrypoints/popup/main'
 import type { TabState } from '../lib/protocol'
 
 /** 팝업 문서의 뼈대. entrypoints/popup/index.html 과 id 가 같아야 한다. */
@@ -391,7 +392,10 @@ describe('왜 이 판정인가 — 확신이 모자란 🟡', () => {
 describe('4차 문구가 실제로 쓰인다', () => {
   // 문구를 받아 놓고 배선을 안 하면 ui.ko.json 에만 남는다.
   it('app 의 문구가 전부 어딘가에서 쓰인다', () => {
-    const used = new Set(['homepage', 'details', 'basis', 'coverage', 'criteria', 'lowConfidence', 'disclaimer'])
+    const used = new Set([
+      'homepage', 'details', 'basis', 'coverage', 'criteria', 'lowConfidence', 'disclaimer',
+      'unpinned',
+    ])
     const keys = Object.keys(content.app).filter((k) => !k.startsWith('$'))
     expect(keys.filter((k) => !used.has(k)), '배선하지 않은 문구가 있다').toEqual([])
   })
@@ -405,5 +409,274 @@ describe('4차 문구가 실제로 쓰인다', () => {
     expect(content.app.coverage.sentences).toContain('{judged}')
     expect(content.app.criteria).toContain('{version}')
     expect(content.app.criteria).toContain('{model}')
+  })
+})
+
+describe('왜 이 판정인가 — 항목별 설명', () => {
+  // 두 곳에서 온다 — Jev 가 **잰** 것과 코드가 **찾은** 것.
+  // Jev 는 "이 표현이 있는가" 를 못 센다 (docs/jev.md 8절). 그 일은 코드가 한다.
+  const parts = content.explain.emotional_language.parts
+
+  it('코드가 찾은 글자를 그대로 인용한다', () => {
+    const lines = explainLines('emotional_language', {
+      itemId: 'emotional_language',
+      found: {},
+      spans: { emo_exclaim: ['!!'], emo_repeat: [], emo_fear: [] },
+    })
+    expect(lines[0]).toEqual({ text: parts.emo_exclaim.present, quotes: ['!!'] })
+    expect(lines.map((l) => l.text)).toContain(parts.emo_repeat.absent)
+  })
+
+  it('Jev 가 잰 것과 코드가 찾은 것이 한 목록에 들어간다', () => {
+    const lines = explainLines('ai_style_signal', {
+      itemId: 'ai_style_signal',
+      found: { ai_same_frame: true },
+      spans: { ai_summary_phrase: ['결론적으로'] },
+    })
+    expect(lines.map((l) => l.text)).toEqual([
+      content.explain.ai_style_signal.parts.ai_same_frame.present,
+      content.explain.ai_style_signal.parts.ai_summary_phrase.present,
+    ])
+  })
+
+  it('본 것이 전부 아니오면 한 줄로 말한다', () => {
+    const lines = explainLines('emotional_language', {
+      itemId: 'emotional_language',
+      found: {},
+      spans: { emo_exclaim: [], emo_repeat: [], emo_fear: [] },
+    })
+    expect(lines).toEqual([{ text: content.explain.emotional_language.none }])
+  })
+
+  it('답 자체가 없으면 아무 줄도 만들지 않는다', () => {
+    // 묻지도 못한 경우다. 접힌 채로 둔다.
+    expect(explainLines('emotional_language', null)).toEqual([])
+  })
+
+  it('빈 답에는 **빈 화면 대신 한 줄**을 둔다', () => {
+    // 눌렀는데 아무것도 안 뜨는 것이 가장 나쁘다. 못 찾았으면 못 찾았다고 적는다.
+    expect(explainLines('emotional_language', { itemId: 'emotional_language', found: {}, spans: {} }))
+      .toEqual([{ text: content.explain.emotional_language.none }])
+  })
+
+  it('짝 문구가 없는 항목은 떼어 온 문장마다 **왜** 를 붙인다', () => {
+    // 출처 표시는 기관명·실명이라 목록을 만들 수 없다. 그래서 하위 질문이 아니라
+    // **본문에서 떼어 온 문장**에 이유 하나씩을 붙인다 (apps/proxy/src/pinpoint.ts).
+    const lines = explainLines('source_citation', {
+      itemId: 'source_citation',
+      found: {},
+      spans: {},
+      picks: [
+        { text: '한 관계자는', why: 'src_group_only' },
+        { text: '업계에서는 이미 예견된 일이었다', why: 'src_none' },
+      ],
+    })
+    expect(lines).toEqual([
+      { text: content.explain.source_citation.reasons.src_group_only, quotes: ['한 관계자는'] },
+      {
+        text: content.explain.source_citation.reasons.src_none,
+        quotes: ['업계에서는 이미 예견된 일이었다'],
+      },
+    ])
+  })
+
+  it('같은 이유는 한 줄로 모은다', () => {
+    // 똑같은 말을 두 번 적으면 두 가지를 짚은 것처럼 보인다.
+    const lines = explainLines('source_citation', {
+      itemId: 'source_citation',
+      found: {},
+      spans: {},
+      picks: [
+        { text: '앞 문장', why: 'src_none' },
+        { text: '뒤 문장', why: 'src_none' },
+      ],
+    })
+    expect(lines).toEqual([
+      { text: content.explain.source_citation.reasons.src_none, quotes: ['앞 문장', '뒤 문장'] },
+    ])
+  })
+
+  it('모르는 이유는 버린다 — 화면에 띄울 문구가 없다', () => {
+    // 여기가 모델이 쓴 한국어가 새어 들어올 수 있는 유일한 구멍이다. 막아 둔다.
+    expect(
+      explainLines('source_citation', {
+        itemId: 'source_citation',
+        found: {},
+        spans: {},
+        picks: [{ text: '한 관계자는', why: '이 기사는 거짓입니다' }],
+      }),
+    ).toEqual([{ text: content.explain.source_citation.none }])
+  })
+
+  it('집어 온 대목이 없으면 "찾지 못했다" 고 말한다 — 빈 화면을 두지 않는다', () => {
+    // 눌렀는데 아무것도 안 뜨는 것이 가장 나쁘다. 못 찾았으면 못 찾았다고 적는다.
+    expect(
+      explainLines('source_citation', { itemId: 'source_citation', found: {}, spans: {} }),
+    ).toEqual([{ text: content.explain.source_citation.none }])
+  })
+
+  it('집어 온 문장은 우리가 쓴 말과 섞이지 않는다', () => {
+    // 화면의 **문장은 전부 ChatKHU 가 미리 쓴 것**이고, 인용은 본문 글자 그대로다.
+    const text = "앤트로픽의 기업공개 소식이 국내 주식시장에 '산소호흡기'가 됐다."
+    const lines = explainLines('unverifiable_claim', {
+      itemId: 'unverifiable_claim',
+      found: {},
+      spans: {},
+      picks: [{ text, why: 'uvc_causal' }],
+    })
+    const line = lines[0]!
+    expect(line.text).toBe(content.explain.unverifiable_claim.reasons.uvc_causal)
+    expect(line.quotes).toEqual([text])
+  })
+
+  it('같은 id 면 Jev 가 낸 줄에 코드가 찾은 글자가 붙는다', () => {
+    // 제목 표현은 **둘이 나눠 맡는다** — Jev 가 "큰 수식어가 있는가" 를 재고,
+    // 코드가 그게 어느 낱말인지 찾는다. id 가 같아서 한 줄로 합쳐진다.
+    const lines = explainLines('clickbait_headline', {
+      itemId: 'clickbait_headline',
+      found: { clk_inflating: true, clk_hiding: false },
+      spans: { clk_inflating: ['충격'] },
+    })
+    expect(lines).toContainEqual({
+      text: content.explain.clickbait_headline.parts.clk_inflating.present,
+      quotes: ['충격'],
+    })
+    // 코드가 맡지 않는 쪽은 Jev 의 답만 글로 남는다. 인용이 붙지 않는다.
+    expect(lines).toContainEqual({
+      text: content.explain.clickbait_headline.parts.clk_hiding.absent,
+    })
+  })
+
+  it('걸린 항목에 "신호가 보이지 않습니다" 라고 적지 않는다', () => {
+    // 실제로 이렇게 떴다 — 윗줄은 "제목이 내용을 감추거나 부풀린 표현을 씁니다",
+    // 아랫줄은 "제목 표현에서 주의할 신호가 보이지 않습니다". 정면으로 어긋난다.
+    // 판정을 내리는 물음과 쪼갠 물음은 서로 다른 물음이라 이 일이 생긴다.
+    const 빈답 = { itemId: 'clickbait_headline', found: { clk_hiding: false }, spans: {} }
+    for (const level of ['CAUTION', 'CHECK'] as const) {
+      expect(explainLines('clickbait_headline', 빈답, level), level).toEqual([
+        { text: content.app.unpinned },
+      ])
+    }
+  })
+
+  it('걸리지 않은 항목에는 그대로 "보이지 않습니다" 라고 적는다', () => {
+    // 판정과 어긋나지 않으니 바꿀 이유가 없다. 여기서 바꾸면 되레 겁을 준다.
+    const 빈답 = { itemId: 'clickbait_headline', found: { clk_hiding: false }, spans: {} }
+    expect(explainLines('clickbait_headline', 빈답, 'SAFE')).toEqual([
+      { text: content.explain.clickbait_headline.none },
+    ])
+  })
+
+  it('집어 올 항목에서도 어긋나지 않는다', () => {
+    // 출처 표시·확인하기 어려운 주장도 같은 일이 난다 (LLM 이 못 집었을 때).
+    const 빈답 = { itemId: 'unverifiable_claim', found: {}, spans: {} }
+    expect(explainLines('unverifiable_claim', 빈답, 'CAUTION')).toEqual([
+      { text: content.app.unpinned },
+    ])
+  })
+  it('코드가 빈손이면 LLM 이 집어 온 것을 **같은 문구로** 보인다', () => {
+    // 감정적 표현·공유 유도는 전용 "왜" 문구가 없다. 코드가 찾던 것과 같은
+    // 하위 항목이라, 이미 있는 문구를 그대로 쓴다.
+    const lines = explainLines('emotional_language', {
+      itemId: 'emotional_language',
+      found: {},
+      spans: {},
+      picks: [{ text: '참을 수 없는 배신', why: 'emo_repeat' }],
+    }, 'CAUTION')
+    expect(lines).toEqual([
+      {
+        text: content.explain.emotional_language.parts.emo_repeat.present,
+        quotes: ['참을 수 없는 배신'],
+      },
+    ])
+  })
+  it('점수 숫자가 설명에 새지 않는다', () => {
+    const lines = explainLines('emotional_language', {
+      itemId: 'emotional_language',
+      found: {},
+      spans: { emo_exclaim: ['!!'] },
+    })
+    expect(lines.map((l) => l.text).join(' ')).not.toMatch(/0\.\d|\d+%|\d+점/)
+  })
+})
+
+describe('펼침은 걸린 항목에만 붙는다', () => {
+  // 일곱 줄이 전부 눌리는 것처럼 보이면 안 된다.
+  const opens = () => document.querySelectorAll('.ge-popup__item-open')
+
+  it('🔴·🟡 이고 설명할 말이 있는 항목에만 붙는다', () => {
+    render(verdict([
+      item('emotional_language', 0.9),    // 🔴 + 설명 있음 → 붙는다
+      item('clickbait_headline', 0.5),    // 🟡 + 설명 있음 → 붙는다
+      item('headline_body_match', 0),     // 🟢 → 안 붙는다
+    ], 'CAUTION'))
+    expect(opens()).toHaveLength(2)
+    expect([...opens()].map((o) => o.textContent))
+      .toEqual([content.items.emotional_language.name, content.items.clickbait_headline.name])
+  })
+
+  it('걸린 항목은 **하나도 빠짐없이** 펼칠 수 있다', () => {
+    // 어디가 부족한지 모르면 답답하다 (GE-44). 쪼갠 질문이든, 코드가 찾는 규칙이든,
+    // 본문에서 집어 오는 대목이든 — 일곱 항목 모두 설명하는 길이 있다.
+    const 모두 = (schema.items as { id: string }[]).map((i) => i.id)
+    render(verdict(모두.map((id) => item(id, 0.9)), 'CAUTION'))
+    expect(opens()).toHaveLength(모두.length)
+  })
+
+  it('🟢·⚪ 에는 붙지 않는다', () => {
+    render(verdict([item('emotional_language', 0), item('clickbait_headline', null)], 'SAFE'))
+    expect(opens()).toHaveLength(0)
+  })
+
+  it('선택한 글에는 붙지 않는다 — 탭의 기사에 물어보는 길이다', () => {
+    render(verdict([item('emotional_language', 0.9)], 'CAUTION'), document, 'selection')
+    expect(opens()).toHaveLength(0)
+  })
+
+  it('접혀 있는 것이 기본이다', () => {
+    render(verdict([item('emotional_language', 0.9)], 'CAUTION'))
+    expect(opens()[0]?.getAttribute('aria-expanded')).toBe('false')
+    expect((document.querySelector('.ge-popup__why') as HTMLElement).hidden).toBe(true)
+  })
+})
+
+describe('하지 않은 일을 했다고 말하지 않는다', () => {
+  beforeEach(() => {
+    mountDocument()
+    const img = document.createElement('img')
+    img.id = 'brand-icon'
+    const version = document.createElement('span')
+    version.id = 'version'
+    const details = document.createElement('ul')
+    details.id = 'details'
+    details.hidden = true
+    const foot = document.createElement('footer')
+    foot.id = 'foot'
+    const toggle = document.createElement('button')
+    toggle.id = 'details-toggle'
+    const home = document.createElement('a')
+    home.id = 'homepage'
+    foot.append(toggle, home)
+    document.body.append(img, version, details, foot)
+  })
+
+  const detailText = () => document.getElementById('details')?.textContent ?? ''
+
+  it('판단한 적이 없으면 무엇을 보았다고 말하지 않는다', () => {
+    // 기사 페이지가 아닌 곳에서 아이콘을 누른 경우.
+    render({ level: 'UNDETERMINED' })
+    expect(detailText(), '하지 않은 일을 했다고 말하면 안 된다')
+      .not.toContain(content.app.basis.page)
+  })
+
+  it('판단했으면 무엇을 보았는지 말한다', () => {
+    render(verdict([item('source_citation', 0.2)], 'SAFE'))
+    expect(detailText()).toContain(content.app.basis.page)
+  })
+
+  it('판단한 적이 없어도 틀은 그린다 — 빈 화면을 남기지 않는다', () => {
+    render({ level: 'UNDETERMINED' })
+    // 전제 한 줄은 판단 여부와 상관없이 할 말이다.
+    expect(detailText()).toContain(content.app.disclaimer)
   })
 })

@@ -115,6 +115,9 @@ body {
   flex: 0 0 auto;
   border-radius: var(--ge-radius-4);
 }
+/* **`display` 를 적어 두면 `hidden` 이 안 먹는다.** 작성자 스타일이 브라우저 기본
+   `[hidden] { display: none }` 을 이긴다. 주소를 넣기 전에 16x16 빈 상자가 보이던 원인이다. */
+.ge-popup__brand-icon[hidden] { display: none; }
 
 /* **이름만 제품의 색이다.** LinKHU 가 머리말의 제품 이름을 학교 빨강으로 쓰는
    자리인데, 우리는 그 색을 아이콘에서 가져왔다 (docs/design.md 7절).
@@ -300,4 +303,80 @@ body {
   outline: none;
   border-radius: var(--ge-radius-4);
   box-shadow: var(--ge-focus-ring);
+}
+
+/* --- 왜 이 판정인가 (항목별) ---------------------------------------------
+   걸린 항목(🔴·🟡)에만, 설명할 말이 있을 때만 붙는다. 일곱 줄이 전부 눌리는
+   것처럼 보이면 안 된다 (docs/design.md 8절).
+
+   **이름 자체가 버튼이다.** 따로 "심층 분석" 같은 글자를 두지 않는다 —
+   그 말은 ChatKHU 가 쓴 적이 없고, 코딩 도구가 한국어를 지어내지 않는다. */
+.ge-popup__item-open {
+  display: flex;
+  align-items: center;
+  gap: var(--ge-space-4);
+  width: fit-content;
+  padding: 0;
+  border: 0;
+  background: none;
+  font: inherit;
+  font-size: var(--ge-fs-body);
+  font-weight: 500;
+  line-height: 1.4;
+  color: inherit;
+  text-align: left;
+  cursor: pointer;
+  transition: color var(--ge-ease);
+}
+
+.ge-popup__item-open:hover { color: var(--ge-brand); }
+
+.ge-popup__item-open:focus-visible {
+  outline: none;
+  border-radius: var(--ge-radius-4);
+  box-shadow: var(--ge-focus-ring);
+}
+
+/* 꺾쇠는 펼침 상태를 말한다. 색을 주지 않는다 — 색은 단계가 쓴다. */
+.ge-popup__item-open svg {
+  color: var(--ge-muted);
+  transition: transform var(--ge-ease);
+}
+.ge-popup__item-open[aria-expanded='true'] svg { transform: rotate(180deg); }
+
+/* 설명 줄. 항목 글자와 같은 칸에 들어가 한 덩어리로 읽힌다.
+   왼쪽에 굵은 막대를 세워 **그 항목에 딸린 말**임을 보인다 —
+   가는 선이 아니라 막대다 (docs/design.md 4절). */
+.ge-popup__why {
+  grid-column: 2;
+  margin: var(--ge-space-4) 0 0;
+  padding: 0 0 0 var(--ge-space-8);
+  border-left: 2px solid var(--ge-rule);
+  list-style: none;
+  display: flex;
+  flex-direction: column;
+  gap: var(--ge-space-2);
+  color: var(--ge-muted);
+}
+.ge-popup__why[hidden] { display: none; }
+
+.ge-popup__why-line { line-height: 1.5; }
+
+/* 본문에서 **그대로 떼어 온 글자.** 우리가 쓴 말과 눈으로 갈라져야 한다 —
+   섞여 보이면 사용자가 "프로그램이 한 말" 로 읽는다. 한 단 내린 면에 얹고
+   글자색을 본문색으로 되돌려, 설명 줄(흐린 회색)보다 한 겹 앞에 오게 한다.
+
+   테두리와 그림자를 함께 쓰지 않는다 (docs/design.md). 면만 쓴다. */
+.ge-popup__why-quote {
+  display: block;
+  margin-top: var(--ge-space-4);
+  padding: var(--ge-space-4) var(--ge-space-8);
+  border-radius: var(--ge-radius-4);
+  background: var(--ge-surface);
+  color: var(--ge-ink);
+  font-size: var(--ge-fs-meta);
+  line-height: 1.5;
+  /* 떼어 온 글이 길면 줄을 접는다. 가로로 넘치면 팝업 전체가 밀린다. */
+  overflow-wrap: anywhere;
+  quotes: '\201C' '\201D';
 }

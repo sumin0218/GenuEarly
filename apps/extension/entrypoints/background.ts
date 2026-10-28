@@ -6,7 +6,7 @@
 // **여기는 배선만 둔다.** 판단 흐름은 lib/judge.ts 에 있다 — 테스트에서 부를 수 있게.
 import content from '../../../packages/content/ui.ko.json'
 import { sweepExpired } from '../lib/cache'
-import { callProxy, judgeArticle, judgeHeadline, setIconBadge } from '../lib/judge'
+import { callProxy, judgeArticle, judgeExplain, judgeHeadline, setIconBadge } from '../lib/judge'
 import { judgeSelection, putSelectionPending, putSelectionResult } from '../lib/selection'
 import type { ArticleVerdict, HeadlineVerdict, Message } from '../lib/protocol'
 
@@ -101,6 +101,18 @@ export default defineBackground(() => {
         .catch((e) => {
           console.warn('[GenuEarly] 제목 판단 실패', e)
           sendResponse({ level: 'UNDETERMINED', basis: 'headline' } satisfies HeadlineVerdict)
+        })
+      return true
+    }
+
+    // 심층 분석. **아이콘 배지도 판정도 건드리지 않는다** — 판정은 이미 났고
+    // 이것은 그 이유를 묻는 것뿐이다 (GE-44).
+    if (msg?.kind === 'judge-explain') {
+      judgeExplain(msg)
+        .then(sendResponse)
+        .catch((e) => {
+          console.warn('[GenuEarly] 심층 분석 실패', e)
+          sendResponse(null)
         })
       return true
     }

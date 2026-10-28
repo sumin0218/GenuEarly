@@ -60,14 +60,15 @@
 **설치 경고에 나오는 것은 경로가 아니라 도메인이다.** 같은 도메인 안에서 경로를 늘리는 것은
 사용자가 보는 문구를 바꾸지 않는다. 도메인을 늘리는 것은 바꾼다.
 
+네이버는 호스트 와일드카드를 쓰므로 경고가 **"naver.com 사이트의 데이터"** 로 넓어진다.
+`blog.naver.com`·`cafe.naver.com` 의 `article` 주소에도 콘텐츠 스크립트가 들어간다 —
+본문을 못 읽으면 "기사 페이지가 아닙니다" 만 뜨지만, **경고 문구는 그만큼 넓어진 것이 맞다.**
+호스트 와일드카드는 **맨 앞 `*.` 하나만** 쓴다. 가운데 `*` 를 허용하면 `*.com` 이 조용히 통과한다
+(`matchPatternToRegExp` 가 거절한다).
+
 | 경로 | 기능 | 비고 |
 | --- | --- | --- |
-| `n.news.naver.com/article/*` | ① | PC 경로 |
-| `n.news.naver.com/mnews/article/*` | ① | 목록이 거는 경로 |
-| `n.news.naver.com/mnews/ranking/article/*` | ① | **섹션 한 페이지 기사 링크의 절반 가까이**가 이것이다 (2026-10-27 실측: 354개 중 170개) |
-| `n.news.naver.com/mnews/hotissue/article/*` | ① | 같은 측정에서 16개 |
-| `m.sports.naver.com/*/article/*` | ① | 가운데 한 칸이 분류(`kbaseball`, `wfootball`…)다. 분류를 전부 적으면 새 분류가 생길 때 조용히 빠진다 |
-| `m.entertain.naver.com/*/article/*` | ① | 같은 틀이다 |
+| `*.naver.com/*article*` | ① | **호스트를 세지 않는다.** 기사가 사는 곳이 계속 늘어난다 — `n.news`(일반), `m.sports`(스포츠), `m.entertain`(연예)이 다르고, 같은 호스트에서도 `/article/`, `/mnews/article/`, `/mnews/ranking/article/`(섹션 한 페이지 기사 링크의 절반 가까이, 2026-10-27 실측 354개 중 170개), `/mnews/hotissue/article/`(16개)로 갈린다. 하나씩 적으면 **빠뜨린 줄도 모른다** |
 | `v.daum.net/v/*` | ① | |
 | `www.insight.co.kr/news/*` | ① | 호스트가 하나다 — `m.insight.co.kr` 은 `www` 로 넘긴다 (301) |
 | `www.wikitree.co.kr/articles/*` | ① | |
@@ -78,7 +79,7 @@
 
 | 경로 | 왜 |
 | --- | --- |
-| `n.news.naver.com/mnews/article/comment/*` | 같은 기사의 **댓글 화면**이라 본문이 없다. `/mnews/article/*` 의 `*` 가 경로 나머지를 덮어 여기까지 잡혔고, 본문을 못 읽어 늘 ⚪ 배지가 떴다 |
+| `*.naver.com/*/comment/*` | 같은 기사의 **댓글 화면**이라 본문이 없다. 주소에 `article` 이 들어 있어 위 목록에 걸리는데, 본문을 못 읽어 늘 ⚪ 배지가 떴다. 호스트를 좁히지 않는다 — 스포츠·연예에도 댓글 화면이 있다 |
 
 **네이버가 주소를 정규화해 주지 않는다.** 랭킹 주소의 `og:url` 이 랭킹 주소 그대로이고
 `canonical` 태그는 아예 없다. 같은 기사인지는 언론사 번호와 기사 번호로 우리가 판단한다 —

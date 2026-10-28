@@ -7,10 +7,19 @@
 import '../assets/content.css'
 import { ARTICLE_EXCLUDE_MATCHES, ARTICLE_MATCHES } from '../match-patterns'
 import content from '../../../packages/content/ui.ko.json'
+import { findEvidence } from '@genuearly/shared'
+import { packPicks, readExplain, unpackPicks, writeExplain } from '../lib/cache'
 import { extractArticle } from '../lib/extract'
 import { createIcon } from '../lib/icon'
 import { LEVEL_ICON, LEVEL_INK, LEVEL_INK_DARK } from '../lib/item-view'
-import type { ArticleVerdict, DisplayLevel, Message, TabState, TabStateMessage } from '../lib/protocol'
+import type {
+  ArticleVerdict,
+  DisplayLevel,
+  ExplainRequestMessage,
+  Message,
+  TabState,
+  TabStateMessage,
+} from '../lib/protocol'
 
 /** 아이콘 크기(px). 글자(14px)와 같은 줄에 선다. */
 const MARK_SIZE = 16
@@ -72,8 +81,7 @@ export default defineContentScript({
   // 대상 페이지의 원본은 match-patterns.ts 다. host_permissions 와 같은 값을 쓴다.
   matches: [...ARTICLE_MATCHES],
 
-  // **댓글 화면에서는 아예 돌지 않는다.** `/mnews/article/*` 의 `*` 가 경로 나머지를
-  // 전부 덮어서 `/mnews/article/comment/…` 까지 잡힌다. 거기에는 본문이 없어
+// **댓글 화면에서는 아예 돌지 않는다.** 주소에 `article` 이 들어 있지만 본문이 없어
   // 지금까지 ⚪ 배지가 떴다 — 판단해 보고 실패한 것처럼 보이지만 기사 페이지가 아니다.
   // `isArticleUrl` 도 같은 목록을 보고 뺀다 (match-patterns.ts).
   excludeMatches: [...ARTICLE_EXCLUDE_MATCHES],
@@ -103,9 +111,70 @@ export default defineContentScript({
     //
     // **보낸 곳을 확인한다.** 이 핸들러는 판정 전체를 돌려준다
     // (AGENT.md 전역 규칙, docs/security/secure-coding.md 5절).
-    browser.runtime.onMessage.addListener((msg: TabStateMessage, sender) => {
-      if (sender.id !== browser.runtime.id || msg?.kind !== 'get-tab-state') return
-      return Promise.resolve(badge.state())
+    browser.runtime.onMessage.addListener((raw: TabStateMessage | ExplainRequestMessage, sender) => {
+      if (sender.id !== browser.runtime.id) return
+      if (raw?.kind === 'get-tab-state') return Promise.resolve(badge.state())
+
+      // **본문은 여기서만 나간다.** 팝업은 본문을 받지 않는다 (secure-coding.md 6절).
+      // 팝업이 "이 항목을 설명해 달라" 고만 하고, 본문을 들고 있는 우리가 물어본 뒤
+      // **답만** 돌려준다. 기사를 못 읽었으면 물어볼 것도 없다.
+      if (raw?.kind === 'explain-item') {
+        if (!article) return Promise.resolve(null)
+        const itemId = raw.itemId
+
+        // **코드가 찾는 것은 여기서 끝난다.** 바깥에 묻지 않는다 — 글자가 거기 있는지는
+        // 문자열 찾기지 판단이 아니다 (docs/jev.md 3절 "피해야 할 것").
+        const spans: Record<string, string[]> = {}
+        for (const e of findEvidence(itemId, { headline: article.headline, body: article.body })) {
+          spans[e.id] = e.spans.map((x) => x.text)
+        }
+
+        const body = article.body
+        const ask: Message = {
+          kind: 'judge-explain',
+          url: location.href,
+          body,
+          itemId,
+          // 판정은 **이미 나와 있다.** 바깥에 다시 묻는 것이 아니라 적어 보낼 뿐이다.
+          level: raw.level,
+          // 코드가 빈손이면 LLM 에 넘긴다. 찾았으면 부르지 않는다 (lib/judge.ts).
+          noEvidence: Object.values(spans).every((v) => v.length === 0),
+        }
+
+        return (async () => {
+          // **받아 둔 답이 있으면 그것을 쓴다.** 생성 모델은 같은 글에도 매번 다르게
+          // 답한다. 눌렀다 접었다 할 때마다 짚는 문장이 바뀌면 어느 쪽을 믿어야 할지
+          // 알 수 없다. 캐시가 곧 **재현성**이다 (lib/cache.ts).
+          const hit = await readExplain(location.href, itemId, raw.level)
+          if (hit) {
+            const picks = await unpackPicks(body, hit.p)
+            return { itemId, found: hit.f, spans, ...(picks.length ? { picks } : {}) }
+          }
+
+          const res = await browser.runtime.sendMessage(ask).catch((e) => {
+            // Jev 쪽이 실패해도 **코드가 찾은 것은 보여 준다.**
+            console.warn('[GenuEarly] 심층 분석을 받지 못했다', e)
+            return null
+          })
+          const out = res as
+            | { found?: Record<string, boolean>; picks?: { text: string; why: string }[] }
+            | null
+          if (!out) return Object.keys(spans).length === 0 ? null : { itemId, found: {}, spans }
+
+          // **집어 온 글자를 여기서 또 대조한다.** 중계 서버와 background 에 이어 셋째다.
+          // 본문을 들고 있는 것은 우리뿐이라, 마지막으로 거를 수 있는 자리이기도 하다.
+          const picks = (out.picks ?? []).filter((x) => body.includes(x.text))
+          const found = out.found ?? {}
+          // 받은 답만 적어 둔다. 못 받은 것을 적어 두면 6시간 동안 빈 채로 보인다.
+          await writeExplain(location.href, itemId, {
+            lv: raw.level,
+            f: found,
+            p: await packPicks(body, picks),
+          })
+          return { itemId, found, spans, ...(picks.length ? { picks } : {}) }
+        })()
+      }
+      return
     })
 
     if (!article) {

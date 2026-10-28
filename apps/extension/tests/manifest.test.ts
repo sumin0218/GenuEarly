@@ -12,6 +12,7 @@ import { readFileSync, existsSync, readdirSync } from 'node:fs'
 declare const process: { env: Record<string, string | undefined> }
 import { resolve } from 'node:path'
 import { describe, expect, it } from 'vitest'
+import { isArticleUrl } from '../match-patterns'
 
 const MANIFEST_PATH = resolve(__dirname, '../.output/chrome-mv3/manifest.json')
 
@@ -45,8 +46,14 @@ const 금지_권한 = [
   'notifications', 'scripting', 'activeTab',
 ]
 
-/** 호스트가 비어 있는 패턴. https://news.naver.com/* 같은 경로 와일드카드는 허용한다. */
-const 와일드카드_호스트 = /^(\*|https?|\*:\/\/\*)(:\/\/)?(\*\/|\*$|\/\*)/
+/**
+ * 받아도 되는 호스트 모양.
+ *
+ * - 경로의 `*` 는 얼마든지 — 어차피 경고에 뜨지 않는다
+ * - 맨 앞의 `*.` 하나는 받는다 — `*.naver.com` (naver.com 과 하위 도메인)
+ * - **라벨이 둘 이상이어야 한다.** 호스트가 `*.com` 이거나 아예 `*` 인 것을 막는 자리다
+ */
+const 받는_호스트 = /^https:\/\/(\*\.)?[a-z0-9-]+(\.[a-z0-9-]+)+\//i
 
 describe('빌드된 manifest', () => {
   it('manifest_version 이 3 이다', () => {
@@ -81,10 +88,9 @@ describe('대상 사이트', () => {
   ]
 
   for (const [이름, 목록] of 호스트를_담은_목록) {
-    it(`${이름} 에 와일드카드 호스트가 없다`, () => {
+    it(`${이름} 의 호스트가 너무 넓지 않다`, () => {
       for (const p of 목록) {
-        expect(p, `${이름} 의 와일드카드 호스트: ${p}`).not.toMatch(와일드카드_호스트)
-        expect(p, `${이름} 의 호스트가 비었음: ${p}`).toMatch(/^https:\/\/[a-z0-9.-]+\//i)
+        expect(p, `${이름} 의 호스트가 너무 넓음: ${p}`).toMatch(받는_호스트)
       }
     })
   }
@@ -96,10 +102,11 @@ describe('대상 사이트', () => {
       [...hostPermissions, ...contentScriptMatches].map((m) => new URL(m.replace('*', '')).host),
     )
     expect([...도메인].sort(), '설치 경고 문구가 길어진다. 권한 표도 같이 고쳤는가').toEqual([
-      'm.entertain.naver.com',
-      'm.sports.naver.com',
+      // **네이버는 호스트를 세지 않는다.** 기사가 사는 호스트가 계속 늘어나고,
+      // 하나씩 적으면 빠뜨린 줄도 모른다 (GE-42). 대신 경고가 "naver.com 사이트" 로
+      // 넓어진다 — 경고에 나오는 것은 경로가 아니라 도메인이다.
+      '.naver.com',
       'm.wikitree.co.kr',
-      'n.news.naver.com',
       'news.naver.com',
       'v.daum.net',
       'www.insight.co.kr',
@@ -113,13 +120,19 @@ describe('대상 사이트', () => {
     expect(hostPermissions.some((m) => m.includes('m.insight.co.kr'))).toBe(false)
   })
 
-  it('네이버의 기사 경로 넷을 다 받는다', () => {
+  it('네이버의 기사 주소를 호스트·경로 가리지 않고 받는다', () => {
     // 섹션 한 페이지에서 실제로 센 값: 랭킹 170, hotissue 16 (2026-10-27).
-    for (const 경로 of ['/article/', '/mnews/article/', '/mnews/ranking/article/', '/mnews/hotissue/article/']) {
-      expect(
-        contentScriptMatches.some((m) => m.startsWith(`https://n.news.naver.com${경로}`)),
-        `${경로} 를 받지 않는다 — 목록에서 눌러 들어간 기사에 배지가 안 뜬다`,
-      ).toBe(true)
+    // **패턴 글자를 세지 않고 실제 주소로 본다** — 와일드카드라 문자열 비교가 통하지 않고,
+    // 통하더라도 "그 패턴이 있는가" 가 아니라 "그 주소가 걸리는가" 가 지키려던 것이다.
+    for (const url of [
+      'https://n.news.naver.com/article/366/0001200528',
+      'https://n.news.naver.com/mnews/article/366/0001200528',
+      'https://n.news.naver.com/mnews/ranking/article/422/0000919981',
+      'https://n.news.naver.com/mnews/hotissue/article/001/0001',
+      'https://m.sports.naver.com/kbaseball/article/076/0004459867',
+      'https://m.entertain.naver.com/home/article/076/0004459769',
+    ]) {
+      expect(isArticleUrl(url), `${url} 를 받지 않는다 — 배지가 안 뜬다`).toBe(true)
     }
   })
 
@@ -127,7 +140,14 @@ describe('대상 사이트', () => {
     const excludes: string[] = (manifest.content_scripts ?? []).flatMap(
       (cs: any) => cs.exclude_matches ?? [],
     )
-    expect(excludes).toContain('https://n.news.naver.com/mnews/article/comment/*')
+    expect(excludes).toContain('https://*.naver.com/*/comment/*')
+    // 호스트를 좁히지 않는 이유 — 스포츠·연예에도 댓글 화면이 있다.
+    for (const url of [
+      'https://n.news.naver.com/mnews/article/comment/056/0012281659',
+      'https://m.sports.naver.com/kbaseball/article/comment/076/0004459867',
+    ]) {
+      expect(isArticleUrl(url), `${url} 는 기사가 아니다`).toBe(false)
+    }
   })
 
   it('content_scripts 가 붙는 곳은 host_permissions 에도 있다', () => {
@@ -138,31 +158,28 @@ describe('대상 사이트', () => {
 })
 
 describe('제출본에 개발용 주소가 없다', () => {
-  // `PROXY_URL` 이 상수였을 때 `localhost` 가 제출본에 그대로 들어갈 뻔했다.
-  // 그러면 심사위원 브라우저에서 **모든 기사가 ⚪** 가 된다.
-  // 주석 하나에 기대지 않고 **빌드 결과**를 본다.
+  // **이 검사가 건너뛴 탓에 `localhost` 가 박힌 빌드가 그대로 나갔다.**
+  // 전에는 테스트를 돌릴 때 `WXT_PROXY_URL` 이 환경에 없으면 통째로 넘어갔는데,
+  // 검사를 돌리는 시점과 빌드를 만드는 시점은 **다르다.** 그래서 환경변수를 보지 않고
+  // **빌드 결과만** 본다.
   //
-  //   WXT_PROXY_URL=https://<배포주소> npm run build -w @genuearly/extension
+  // 그 빌드에서는 background 가 localhost 로 요청을 보내 `Failed to fetch` 가 났고,
+  // 화면에는 "판단하지 못함" 으로만 보였다. 조용한 고장이라 찾는 데 오래 걸렸다.
   const dir = resolve(__dirname, '../.output/chrome-mv3')
   const bundled = () =>
-    readdirSync(resolve(dir, 'background.js') ? dir : dir, { recursive: true, encoding: 'utf8' })
+    readdirSync(dir, { recursive: true, encoding: 'utf8' })
       .filter((f) => typeof f === 'string' && f.endsWith('.js'))
       .map((f) => readFileSync(resolve(dir, f as string), 'utf8'))
 
-  it('WXT_PROXY_URL 을 주면 그 주소가 들어간다', () => {
-    const url = process.env.WXT_PROXY_URL
-    if (!url) {
-      // 개발 빌드다. 여기서는 localhost 가 들어 있는 것이 정상이라 검사만 건너뛴다.
-      expect(bundled().some((s) => s.includes('localhost:8787'))).toBe(true)
-      return
-    }
-    expect(bundled().some((s) => s.includes(url)), '넣은 주소가 번들에 없다').toBe(true)
+  it('빌드에 개발용 주소가 남아 있지 않다', () => {
+    const hit = bundled().filter((s) => s.includes('localhost'))
+    expect(hit, '빌드에 개발용 주소가 남아 있다 — 모든 기사가 ⚪ 가 된다').toHaveLength(0)
   })
 
-  it('WXT_PROXY_URL 을 준 빌드에는 localhost 가 없다', () => {
-    if (!process.env.WXT_PROXY_URL) return   // 개발 빌드는 건너뛴다
-    const hit = bundled().filter((s) => s.includes('localhost'))
-    expect(hit, '제출본에 개발용 주소가 남아 있다').toHaveLength(0)
+  it('중계 주소가 들어 있다', () => {
+    // 기본값이 배포 주소라 환경변수를 빠뜨려도 올바른 빌드가 나온다.
+    const want = process.env.WXT_PROXY_URL ?? 'https://genuearly-proxy'
+    expect(bundled().some((s) => s.includes(want)), `중계 주소가 번들에 없다: ${want}`).toBe(true)
   })
 })
 
