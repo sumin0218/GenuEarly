@@ -12,6 +12,7 @@ import { readFileSync, existsSync, readdirSync } from 'node:fs'
 declare const process: { env: Record<string, string | undefined> }
 import { resolve } from 'node:path'
 import { describe, expect, it } from 'vitest'
+import { isArticleUrl } from '../match-patterns'
 
 const MANIFEST_PATH = resolve(__dirname, '../.output/chrome-mv3/manifest.json')
 
@@ -101,10 +102,11 @@ describe('대상 사이트', () => {
       [...hostPermissions, ...contentScriptMatches].map((m) => new URL(m.replace('*', '')).host),
     )
     expect([...도메인].sort(), '설치 경고 문구가 길어진다. 권한 표도 같이 고쳤는가').toEqual([
-      'm.entertain.naver.com',
-      'm.sports.naver.com',
+      // **네이버는 호스트를 세지 않는다.** 기사가 사는 호스트가 계속 늘어나고,
+      // 하나씩 적으면 빠뜨린 줄도 모른다 (GE-42). 대신 경고가 "naver.com 사이트" 로
+      // 넓어진다 — 경고에 나오는 것은 경로가 아니라 도메인이다.
+      '.naver.com',
       'm.wikitree.co.kr',
-      'n.news.naver.com',
       'news.naver.com',
       'v.daum.net',
       'www.insight.co.kr',
@@ -118,13 +120,19 @@ describe('대상 사이트', () => {
     expect(hostPermissions.some((m) => m.includes('m.insight.co.kr'))).toBe(false)
   })
 
-  it('네이버의 기사 경로 넷을 다 받는다', () => {
+  it('네이버의 기사 주소를 호스트·경로 가리지 않고 받는다', () => {
     // 섹션 한 페이지에서 실제로 센 값: 랭킹 170, hotissue 16 (2026-10-27).
-    for (const 경로 of ['/article/', '/mnews/article/', '/mnews/ranking/article/', '/mnews/hotissue/article/']) {
-      expect(
-        contentScriptMatches.some((m) => m.startsWith(`https://n.news.naver.com${경로}`)),
-        `${경로} 를 받지 않는다 — 목록에서 눌러 들어간 기사에 배지가 안 뜬다`,
-      ).toBe(true)
+    // **패턴 글자를 세지 않고 실제 주소로 본다** — 와일드카드라 문자열 비교가 통하지 않고,
+    // 통하더라도 "그 패턴이 있는가" 가 아니라 "그 주소가 걸리는가" 가 지키려던 것이다.
+    for (const url of [
+      'https://n.news.naver.com/article/366/0001200528',
+      'https://n.news.naver.com/mnews/article/366/0001200528',
+      'https://n.news.naver.com/mnews/ranking/article/422/0000919981',
+      'https://n.news.naver.com/mnews/hotissue/article/001/0001',
+      'https://m.sports.naver.com/kbaseball/article/076/0004459867',
+      'https://m.entertain.naver.com/home/article/076/0004459769',
+    ]) {
+      expect(isArticleUrl(url), `${url} 를 받지 않는다 — 배지가 안 뜬다`).toBe(true)
     }
   })
 
@@ -132,7 +140,14 @@ describe('대상 사이트', () => {
     const excludes: string[] = (manifest.content_scripts ?? []).flatMap(
       (cs: any) => cs.exclude_matches ?? [],
     )
-    expect(excludes).toContain('https://n.news.naver.com/mnews/article/comment/*')
+    expect(excludes).toContain('https://*.naver.com/*/comment/*')
+    // 호스트를 좁히지 않는 이유 — 스포츠·연예에도 댓글 화면이 있다.
+    for (const url of [
+      'https://n.news.naver.com/mnews/article/comment/056/0012281659',
+      'https://m.sports.naver.com/kbaseball/article/comment/076/0004459867',
+    ]) {
+      expect(isArticleUrl(url), `${url} 는 기사가 아니다`).toBe(false)
+    }
   })
 
   it('content_scripts 가 붙는 곳은 host_permissions 에도 있다', () => {

@@ -65,22 +65,15 @@ export const ARTICLE_MATCHES = [
  * 위 목록이 잡지만 **기사 본문이 없는** 페이지.
  *
  * `/mnews/article/comment/056/0012281659` 은 같은 기사의 **댓글 화면**이다.
- * 제목은 있고 본문이 없다. 그런데 `/mnews/article/*` 의 `*` 가 경로 나머지를 전부
- * 덮어서 **지금까지 여기에도 배지가 떴다** — 본문을 못 읽으니 늘 ⚪ 였다.
- * 판단을 해 보고 실패한 것처럼 보이지만 애초에 기사 페이지가 아니다.
+ * 제목은 있고 본문이 없다. 주소에 `article` 이 들어 있어 위 목록에 걸리는데,
+ * 본문을 못 읽으니 **지금까지 늘 ⚪ 가 떴다** — 판단해 보고 실패한 것처럼 보이지만
+ * 애초에 기사 페이지가 아니다.
+ *
+ * 호스트를 `n.news` 로 좁히지 않는다. 스포츠·연예에도 댓글 화면이 있고,
+ * 위 목록이 그 호스트들을 와일드카드로 받기 때문이다.
  *
  * match pattern 에는 "빼기" 가 없다. 그래서 따로 둔다 —
  * `content_scripts` 의 `excludeMatches` 와 `isArticleUrl` 이 **같이** 쓴다.
- */
-export const ARTICLE_EXCLUDE_MATCHES = [
-  'https://n.news.naver.com/mnews/article/comment/*',
-] as const
-
-/**
- * 받지 않을 곳. **`matches` 보다 먼저 걸린다.**
- *
- * 댓글 페이지는 주소에 `article` 이 들어 있지만 본문이 없다. 들어가 봐야
- * "기사 페이지가 아닙니다" 만 뜨므로 아예 끼어들지 않는다.
  */
 export const ARTICLE_EXCLUDE_MATCHES = [
   'https://*.naver.com/*/comment/*',
