@@ -137,8 +137,24 @@ export function createScreen(schema: ScreenSchema): (text: string) => Screened {
       let drop = false
       if (s && (CLOSE_TAG.test(s) || ROLE_OPEN.test(s))) { drop = true; carry = FOLLOWING }
       else if (s && (ROLE_TOKEN.test(s) || SPOOF.test(s))) {
-        // **이 문장도 "뒤 한 문장" 을 쓴 것이다.** 안 줄이면 다음 멀쩡한 문장까지 걷힌다 —
-        // 태그 문장 뒤에 항목 키 문장이 오면 셋이 사라졌다 (GE-46).
+        // **이 문장도 "뒤 한 문장" 을 쓴 것으로 본다** (GE-46).
+        //
+        // **열린 자리다. 둘 중 하나만 고를 수 있다.**
+        // 태그 다음 문장이 멀쩡한지 공격인지 코드는 모른다 — 공격 문장은 이미 위에서
+        // 걸러졌고, 여기 남는 것은 "모르는 문장" 하나다.
+        //
+        //   이 줄이 있으면   태그 → 공격 → 멀쩡   멀쩡한 문장이 남는다 (좋다)
+        //                    태그 → 공격 → 지시문  **지시문이 남는다** (나쁘다)
+        //   이 줄을 빼면     반대가 된다
+        //
+        // **재 봤더니 판정은 한 번도 뒤집히지 않았다** — 실제 기사 3건에 심어
+        // 양쪽을 각각 물었고 확신만 ±0.03 움직였다
+        // (eval/experiments/robustness/results/2026-10-28-ge46).
+        // 수치로 가릴 수 없는 자리라 지금 모양으로 두되, **정리된 자리가 아니다.**
+        //
+        // 처음 이 줄을 넣은 이유는 머리말의 "뒤 한 문장" 을 **공격 문장을 세는 말**로
+        // 읽어서였다. 원래 뜻은 **"태그 뒤의 멀쩡한 문장 하나"** 다. 다시 볼 때는
+        // 그 뜻에서 출발해야 한다.
         drop = true
         if (carry > 0) carry--
       } else if (s && carry > 0) { drop = true; carry-- }
