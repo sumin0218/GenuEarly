@@ -233,6 +233,16 @@ export interface ExplainRequestMessage {
 export interface TabState {
   level: DisplayLevel
   verdict?: ArticleVerdict
+  /**
+   * **이 판정이 어느 주소의 것인가.** 콘텐츠 스크립트가 자기 `location.href` 를 적는다.
+   *
+   * 팝업이 직접 `tab.url` 을 읽을 수는 없다 — `tabs` 권한이 필요하고, 그 권한은
+   * 금지 목록에 있다 (tests/manifest.test.ts). 그래서 **이미 그 주소에 붙어 있는 쪽이
+   * 말해 준다.** 새 권한이 늘지 않는다.
+   *
+   * 리포트는 하나만 두므로, 들고 있는 리포트가 지금 기사의 것인지 가리는 데 쓴다.
+   */
+  url?: string
 }
 
 /**

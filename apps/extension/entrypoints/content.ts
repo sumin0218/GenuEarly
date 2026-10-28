@@ -116,7 +116,10 @@ export default defineContentScript({
     browser.runtime.onMessage.addListener(
       (raw: TabStateMessage | ExplainRequestMessage | MakeReportMessage, sender) => {
       if (sender.id !== browser.runtime.id) return
-      if (raw?.kind === 'get-tab-state') return Promise.resolve(badge.state())
+      // 주소를 함께 보낸다 — 팝업은 자기 힘으로 지금 기사가 무엇인지 알 수 없다.
+      if (raw?.kind === 'get-tab-state') {
+        return Promise.resolve({ ...badge.state(), url: location.href } satisfies TabState)
+      }
 
       // **리포트도 본문이 여기서만 나간다.** 팝업은 판정만 넘기고 부탁한다.
       // 만드는 일은 background 가 하고, 진행은 storage.session 으로 전해진다 —

@@ -18,6 +18,7 @@ import {
   type SelectionOutcome,
   type SelectionRecord,
 } from '../../lib/selection'
+import { normalizeUrl } from '../../lib/cache'
 import { REPORT_KEY, type Report } from '../../lib/report'
 import type {
   DisplayLevel,
@@ -516,7 +517,7 @@ function render(state: TabState, root: Document = document, kind: 'page' | 'sele
 
   items.replaceChildren()
   const rows = toRows(state.verdict)
-  drawReport(rows, kind, root)
+  drawReport(rows, kind, root, state.url)
   if (rows.length === 0) {
     // 판단한 적이 없으면 머리말이 이미 할 말을 했다. 밑에 또 붙이면 말이 겹친다.
     if (notJudged) return
@@ -639,6 +640,25 @@ function isLowConfidence(state: TabState): boolean {
 
 const R = content.report
 
+/**
+ * 들고 있는 리포트가 **지금 보고 있는 기사의 것인가.**
+ *
+ * 리포트는 하나만 둔다 (lib/report.ts — 쌓이면 그것이 곧 열람 기록이다). 그래서
+ * **주소를 견주지 않으면 남의 리포트를 열어 준다.** 실제로 그랬다: A 기사에서 만든
+ * 리포트가 남은 채 B 기사에서 누르면 버튼이 "열기" 로 떠 있고, 눌렀더니 A 가 열렸다.
+ *
+ * `normalizeUrl` 로 견준다 — 같은 기사가 `/article/` 과 `/mnews/article/` 두 길로
+ * 열리고 뒤에 `?iid=` 가 붙는다. 글자 그대로 대면 같은 기사도 남이 된다.
+ */
+function sameArticle(r: Report | null, here: string | undefined): boolean {
+  if (!r || !here) return false
+  try {
+    return normalizeUrl(r.url) === normalizeUrl(here)
+  } catch {
+    return false
+  }
+}
+
 /** 지금 상태에 맞는 버튼 글과 눌러도 되는지. */
 function reportFace(r: Report | null): { label: string; busy: boolean; note?: string } {
   if (!r) return { label: R.button, busy: false }
@@ -659,7 +679,12 @@ function reportFace(r: Report | null): { label: string; busy: boolean; note?: st
 }
 
 /** 리포트 자리를 그린다. **걸린 항목이 있을 때만 보인다.** */
-function drawReport(rows: readonly ReportRow[], kind: 'page' | 'selection', root: Document): void {
+function drawReport(
+  rows: readonly ReportRow[],
+  kind: 'page' | 'selection',
+  root: Document,
+  here?: string,
+): void {
   const box = root.getElementById('report-box')
   const btn = root.getElementById('report-run') as HTMLButtonElement | null
   const note = root.getElementById('report-note')
@@ -673,8 +698,11 @@ function drawReport(rows: readonly ReportRow[], kind: 'page' | 'selection', root
   box.hidden = kind !== 'page' || rows.length === 0
   if (box.hidden) return
 
+  // **다른 기사의 리포트는 없는 것으로 본다.** 그래야 버튼이 "만들기" 로 돌아간다.
+  const mine = (r: Report | null) => (sameArticle(r, here) ? r : null)
+
   const paint = (r: Report | null) => {
-    const face = reportFace(r)
+    const face = reportFace(mine(r))
     btn.textContent = face.label
     btn.disabled = face.busy
     note.hidden = !face.note
@@ -697,10 +725,10 @@ function drawReport(rows: readonly ReportRow[], kind: 'page' | 'selection', root
 
   btn.onclick = () => {
     void (async () => {
-      // 다 된 리포트가 있으면 연다.
+      // **이 기사의** 리포트가 다 돼 있으면 연다. 남의 것이면 새로 만든다.
       try {
         const got = (await browser.storage.session.get(REPORT_KEY)) as Record<string, Report | undefined>
-        if (got[REPORT_KEY]?.stage === 'done') {
+        if (mine(got[REPORT_KEY] ?? null)?.stage === 'done') {
           await browser.tabs.create({ url: browser.runtime.getURL('/report.html') })
           return
         }
@@ -734,7 +762,7 @@ function drawReport(rows: readonly ReportRow[], kind: 'page' | 'selection', root
   }
 }
 
-export { render, renderTooLong, readTabState, drawSelection, run, readFacts, reportFace }
+export { render, renderTooLong, readTabState, drawSelection, run, readFacts, reportFace, sameArticle }
 
 // 테스트에서 이 파일을 불러도 팝업이 멋대로 열리지 않게 한다.
 // 팝업 문서에서만 실제로 그린다.

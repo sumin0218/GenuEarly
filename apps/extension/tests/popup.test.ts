@@ -8,7 +8,7 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import content from '../../../packages/content/ui.ko.json'
 import schema from '@genuearly/shared/judgment-items.json'
-import { drawChrome, explainLines, render, renderTooLong } from '../entrypoints/popup/main'
+import { drawChrome, explainLines, render, renderTooLong, sameArticle } from '../entrypoints/popup/main'
 import type { TabState } from '../lib/protocol'
 
 /** 팝업 문서의 뼈대. entrypoints/popup/index.html 과 id 가 같아야 한다. */
@@ -432,6 +432,68 @@ describe('주변 기록 버튼은 기사라면 늘 보인다', () => {
   it('선택한 글에는 보이지 않는다 — 기사 주소도 날짜도 없다', () => {
     render(verdict([item('unverifiable_claim', 0.9)], 'CAUTION'), document, 'selection')
     expect(box().hidden).toBe(true)
+  })
+})
+describe('리포트는 그 기사의 것이어야 한다', () => {
+  // 리포트는 하나만 둔다 (lib/report.ts). 쌓으면 그것이 곧 열람 기록이기 때문이다.
+  // 그래서 **주소를 견주지 않으면 남의 리포트를 열어 준다** — 실제로 그랬다.
+  const A = 'https://n.news.naver.com/article/422/0000920529?cds=news_media_pc'
+  const B = 'https://n.news.naver.com/mnews/article/437/0000518013?iid=829'
+
+  const done = (url: string) =>
+    ({ url, headline: '머리글', date: '2026-10-28', at: 0, stage: 'done', rows: [], claims: [] }) as never
+
+  function mount(stored: unknown): void {
+    vi.stubGlobal('browser', {
+      storage: {
+        session: { get: () => Promise.resolve(stored ? { report: stored } : {}) },
+        onChanged: { addListener: () => {} },
+      },
+      tabs: { query: () => Promise.resolve([{ id: 1 }]), sendMessage: () => Promise.resolve(null), create: () => Promise.resolve() },
+      runtime: { getURL: (x: string) => x },
+    })
+    const box = document.createElement('div'); box.id = 'report-box'; box.hidden = true
+    const btn = document.createElement('button'); btn.id = 'report-run'
+    const note = document.createElement('p'); note.id = 'report-note'
+    box.append(btn, note); document.body.append(box)
+  }
+  const label = () => document.getElementById('report-run')?.textContent ?? ''
+  const settle = () => new Promise((r) => setTimeout(r, 0))
+
+  const green = (url: string): TabState => ({
+    ...verdict([item('source_citation', 0)], 'SAFE'),
+    url,
+  })
+
+  it('같은 기사면 연다 — 경로 모양과 꼬리표가 달라도 같은 기사다', async () => {
+    mount(done(A))
+    render(green('https://n.news.naver.com/mnews/article/422/0000920529'))
+    await settle()
+    expect(label()).toBe(content.report.open)
+  })
+
+  it('다른 기사면 새로 만든다 — 남의 리포트를 열어 주지 않는다', async () => {
+    mount(done(A))
+    render(green(B))
+    await settle()
+    expect(label(), '앞 기사의 리포트가 남아 있다고 "열기" 를 띄우면 안 된다')
+      .toBe(content.report.button)
+  })
+
+  it('주소를 모르면 없는 것으로 본다', async () => {
+    mount(done(A))
+    render(verdict([item('source_citation', 0)], 'SAFE'))
+    await settle()
+    expect(label()).toBe(content.report.button)
+  })
+
+  it('주소를 견주는 것은 normalizeUrl 이다', () => {
+    const r = done(A) as unknown as Parameters<typeof sameArticle>[0]
+    expect(sameArticle(r, A)).toBe(true)
+    expect(sameArticle(r, B)).toBe(false)
+    expect(sameArticle(r, undefined)).toBe(false)
+    expect(sameArticle(null, A)).toBe(false)
+    expect(sameArticle(r, '주소가 아니다'), '깨진 주소에 터지지 않는다').toBe(false)
   })
 })
 describe('덜 본 것을 말한다', () => {
