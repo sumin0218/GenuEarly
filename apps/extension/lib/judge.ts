@@ -40,12 +40,21 @@ import {
  *
  * 문장마다 요청 하나라 상한이 없으면 긴 기사가 서버 전체 한도를 넘긴다 —
  * 실제로 **133문장짜리 기사(요청 135건)** 를 봤고, 그 1분 동안 **다른 모든 사용자의 요청까지** 막힌다.
- * 중계 서버의 IP 당 한도가 분당 60 이라 `2 + 40 = 42` 가 그 안에 든다.
  *
- * GE-11 에서 "정확도를 지키려고 문장 수를 줄이지 않는다" 고 정했지만 **그때 본 표본은 9~39문장**이었다.
- * 100문장이 넘는 기사는 그 결정이 다루지 않은 영역이다 (docs/requirements.md 8-1절).
+ * **40 도 너무 컸다.** 기사 하나가 `2 + 40 = 42` 건이라 **기사를 둘만 빠르게 열면**
+ * IP 당 분당 한도를 넘긴다. 시연 중에 실제로 터져서 판단이 전부 ⚪ 로 떨어졌고
+ * (2026-10-28, 로그에 burst 26건), 한도를 60 → 100 으로 올려 급한 불만 껐다.
+ * 한도를 올리는 것은 미루는 일이고, **줄여야 할 것은 요청 수다.**
+ *
+ * 15 면 기사 하나가 17건이라 분당 다섯 기사를 열 수 있다. 크레딧도 기사당 1/3 이 된다.
+ *
+ * **대가는 뒤쪽 문장을 못 보는 것이다.** 그래서 `capped` 를 판정에 실어
+ * 화면이 "긴 글이라 앞부분만 살펴봤습니다" 라고 말하게 한다 — 조용히 덜 보지 않는다.
+ *
+ * GE-11 에서 "정확도를 지키려고 문장 수를 줄이지 않는다" 고 정했지만 **그때 본 표본은 9~39문장**이었고,
+ * 폭주 차단기가 실제로 걸리는 것도 보기 전이었다 (docs/requirements.md 8-1절).
  */
-const MAX_SENTENCES = 40
+const MAX_SENTENCES = 15
 
 /**
  * **모델이 내린 판단만 캐시한다.**
@@ -149,6 +158,9 @@ export function setIconBadge(tabId: number | undefined, level: DisplayLevel) {
 
 export async function judgeArticle(msg: Extract<Message, { kind: 'judge-article' }>, tabId?: number): Promise<ArticleVerdict> {
   const { groups, sentenceItem } = plan('page')
+  // **줄였다는 사실을 판정에 싣는다.** 캐시에서 읽은 경우에도 같아야 하므로
+  // 요청을 보냈는지와 무관하게 원래 문장 수로 정한다.
+  const capped = msg.sentences.length > MAX_SENTENCES
 
   // --- 캐시 -----------------------------------------------------------------
   // **항목 단위다.** ② 포털 목록은 제목 항목만 채우므로, 기사 단위로 "있다/없다" 를
@@ -165,7 +177,7 @@ export async function judgeArticle(msg: Extract<Message, { kind: 'judge-article'
     // 다 있다. **PENDING 을 거치지 않고 바로 보여 준다.**
     const verdict = decideBadge(toResults(cached))
     setIconBadge(tabId, verdict.level)
-    return verdict
+    return { ...verdict, ...(capped ? { capped } : {}) }
   }
 
   setIconBadge(tabId, 'PENDING')
@@ -228,7 +240,7 @@ export async function judgeArticle(msg: Extract<Message, { kind: 'judge-article'
 
   const verdict = decideBadge([...toResults(cached), ...fresh])
   setIconBadge(tabId, verdict.level)
-  return verdict
+  return { ...verdict, ...(capped ? { capped } : {}) }
 }
 
 /** 캐시에서 읽은 것을 `decideBadge` 가 받는 모양으로 되돌린다. */

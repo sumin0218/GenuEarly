@@ -588,9 +588,6 @@ function render(state: TabState, root: Document = document, kind: 'page' | 'sele
 /**
  * 판정 아래의 **제품 정보와 판단 근거**를 그린다.
  *
- * > TODO: `capped`(앞부분만 살펴봄)를 아직 넘기지 못한다. 글자 상한에 걸려 뒤쪽
- * > 문장이 빠졌다는 사실은 `lib/judge.ts` 가 자르는 자리에서만 알 수 있고 판정에
- * > 실려 오지 않는다. 문구는 4차에서 같이 받아 두고 배선은 뒤에 한다 (GE-45).
  */
 function drawFrame(state: TabState, root: Document, kind: 'page' | 'selection'): void {
   drawChrome(
@@ -601,6 +598,9 @@ function drawFrame(state: TabState, root: Document, kind: 'page' | 'selection'):
       // "제목과 본문을 살펴본 결과입니다" 가 뜨면 **하지 않은 일을 했다고 말하는 것**이다.
       basis: state.verdict ? kind : undefined,
       sentences: sentencesOf(state.verdict),
+      // **덜 본 것을 말한다.** 문장 상한에 걸려 뒤쪽이 빠졌으면 그렇게 적는다 —
+      // 조용히 덜 보면 화면은 다 본 것처럼 보인다 (lib/judge.ts 의 MAX_SENTENCES).
+      capped: state.verdict?.capped === true,
       lowConfidence: isLowConfidence(state),
     },
     root,

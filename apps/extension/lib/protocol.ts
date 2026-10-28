@@ -244,4 +244,14 @@ export interface TabState {
 export type DisplayLevel = BadgeLevel | 'PENDING'
 
 /** 판단 결과. `@genuearly/shared` 의 `Verdict` 를 그대로 쓴다. */
-export type ArticleVerdict = Verdict
+/**
+ * 기사 하나의 판정.
+ *
+ * `capped` 는 **문장을 상한까지만 봤다**는 뜻이다. `@genuearly/shared` 의 `Verdict` 에는
+ * 없다 — 상한은 점수 규칙이 아니라 **확장 프로그램이 요청 수를 아끼려고 둔 것**이라
+ * 여기서 더한다 (lib/judge.ts 의 MAX_SENTENCES).
+ *
+ * 이것을 안 보내면 **조용히 덜 보는 것**이 된다. 긴 기사의 뒤쪽에 있는 단정은
+ * 판단에서 빠졌는데 화면은 다 본 것처럼 보인다.
+ */
+export type ArticleVerdict = Verdict & { capped?: boolean }

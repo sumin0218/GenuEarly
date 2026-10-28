@@ -389,6 +389,38 @@ describe('왜 이 판정인가 — 확신이 모자란 🟡', () => {
   })
 })
 
+describe('덜 본 것을 말한다', () => {
+  // 문장 상한에 걸려 뒤쪽이 빠졌으면 그렇게 적는다. **조용히 덜 보지 않는다** —
+  // 상한을 40 에서 15 로 줄였기 때문에 이 줄이 더 중요해졌다 (lib/judge.ts).
+  // render() 는 drawChrome 을 거쳐 근거 줄을 채운다. mountDocument 는 판정 자리만
+  // 만들어 두므로 여기서 `details` 를 더해 준다.
+  beforeEach(() => {
+    // drawChrome 은 이 넷이 다 있어야 끝까지 간다 (하나라도 없으면 일찍 돌아간다).
+    for (const [tag, id] of [
+      ['ul', 'details'],
+      ['footer', 'foot'],
+      ['button', 'details-toggle'],
+      ['a', 'homepage'],
+    ] as const) {
+      const el = document.createElement(tag)
+      el.id = id
+      document.body.append(el)
+    }
+  })
+
+  const details = () => [...document.querySelectorAll('.ge-popup__detail')].map((x) => x.textContent)
+
+  it('capped 면 앞부분만 봤다고 적는다', () => {
+    const base = verdict([item('emotional_language', 0.5)], 'CHECK')
+    render({ ...base, verdict: { ...base.verdict!, capped: true } as never })
+    expect(details()).toContain(content.app.coverage.capped)
+  })
+
+  it('capped 가 아니면 적지 않는다 — 다 본 기사에 겁을 주지 않는다', () => {
+    render(verdict([item('emotional_language', 0.5)], 'CHECK'))
+    expect(details()).not.toContain(content.app.coverage.capped)
+  })
+})
 describe('4차 문구가 실제로 쓰인다', () => {
   // 문구를 받아 놓고 배선을 안 하면 ui.ko.json 에만 남는다.
   it('app 의 문구가 전부 어딘가에서 쓰인다', () => {
