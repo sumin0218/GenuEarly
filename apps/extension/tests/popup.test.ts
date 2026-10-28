@@ -5,7 +5,7 @@
 // 문구 자체는 tests/content.test.ts 가 검사한다 (금지어·단정 표현).
 // 여기서 보는 것은 **그 문구가 화면에 제대로 놓이는가**와,
 // 화면에 **있으면 안 되는 것이 새어 나오지 않는가**다.
-import { beforeEach, describe, expect, it } from 'vitest'
+import { beforeEach, describe, expect, it, vi } from 'vitest'
 import content from '../../../packages/content/ui.ko.json'
 import schema from '@genuearly/shared/judgment-items.json'
 import { drawChrome, explainLines, render, renderTooLong } from '../entrypoints/popup/main'
@@ -389,6 +389,46 @@ describe('왜 이 판정인가 — 확신이 모자란 🟡', () => {
   })
 })
 
+describe('공개 기록 리포트 버튼은 할 수 있을 때만 보인다', () => {
+  // 아무 항목이나 걸리면 보이게 했더니, 감정적 표현 하나만 🔴 인 기사에서 버튼이 뜨고
+  // 눌러도 "고를 문장이 없다" 로 끝났다. **못 할 일을 권하지 않는다.**
+  beforeEach(() => {
+    // 팝업은 저장소를 읽어 진행을 그린다. 여기서는 비어 있는 저장소를 세운다.
+    vi.stubGlobal('browser', {
+      storage: {
+        session: { get: () => Promise.resolve({}) },
+        onChanged: { addListener: () => {} },
+      },
+      tabs: { query: () => Promise.resolve([{ id: 1 }]), sendMessage: () => Promise.resolve(null), create: () => Promise.resolve() },
+      runtime: { getURL: (x: string) => x },
+    })
+    const box = document.createElement('div'); box.id = 'report-box'; box.hidden = true
+    const btn = document.createElement('button'); btn.id = 'report-run'
+    const note = document.createElement('p'); note.id = 'report-note'
+    box.append(btn, note); document.body.append(box)
+  })
+  const box = () => document.getElementById('report-box') as HTMLElement
+
+  it('감정적 표현만 걸리면 보이지 않는다 — 기록으로 대조할 것이 없다', () => {
+    render(verdict([item('emotional_language', 0.9), item('source_citation', 0)], 'CAUTION'))
+    expect(box().hidden).toBe(true)
+  })
+
+  it('확인하기 어려운 주장이 걸리면 보인다', () => {
+    render(verdict([item('unverifiable_claim', 0.9)], 'CAUTION'))
+    expect(box().hidden).toBe(false)
+  })
+
+  it('출처 표시가 걸리면 보인다', () => {
+    render(verdict([item('source_citation', 0.5)], 'CHECK'))
+    expect(box().hidden).toBe(false)
+  })
+
+  it('선택한 글에는 보이지 않는다 — 기사 주소도 날짜도 없다', () => {
+    render(verdict([item('unverifiable_claim', 0.9)], 'CAUTION'), document, 'selection')
+    expect(box().hidden).toBe(true)
+  })
+})
 describe('덜 본 것을 말한다', () => {
   // 문장 상한에 걸려 뒤쪽이 빠졌으면 그렇게 적는다. **조용히 덜 보지 않는다** —
   // 상한을 40 에서 15 로 줄였기 때문에 이 줄이 더 중요해졌다 (lib/judge.ts).

@@ -75,8 +75,15 @@ export interface Report {
   reason?: string
 }
 
-/** **리포트를 만들 수 있는 항목.** 본문에서 문장을 집어 오는 둘뿐이다. */
-const CLAIM_ITEMS = ['unverifiable_claim', 'source_citation'] as const
+/**
+ * **리포트를 만들 수 있는 항목.** 본문에서 문장을 집어 오는 둘뿐이다.
+ *
+ * 나머지 다섯은 **공개 기록으로 대조할 것이 없다.** "분노를 자극하는 표현" 이나
+ * "제목이 내용을 감춘다" 는 글의 성질이지 사실 주장이 아니라, 검색해 맞춰 볼 기록이
+ * 없다. 그래서 그 항목만 걸린 기사에는 **버튼을 아예 보이지 않는다** —
+ * 팝업이 이 목록을 함께 본다 (entrypoints/popup/main.ts).
+ */
+export const CLAIM_ITEMS = ['unverifiable_claim', 'source_citation'] as const
 /** 한 리포트에서 조사할 주장 수. 하나에 네다섯 초라 넷이면 너무 길다. */
 const MAX_CLAIMS = 3
 

@@ -18,7 +18,7 @@ import {
   type SelectionOutcome,
   type SelectionRecord,
 } from '../../lib/selection'
-import { REPORT_KEY, type Report } from '../../lib/report'
+import { CLAIM_ITEMS, REPORT_KEY, type Report } from '../../lib/report'
 import type {
   DisplayLevel,
   ExplainLevel,
@@ -666,8 +666,14 @@ function drawReport(rows: readonly ReportRow[], kind: 'page' | 'selection', root
   if (!box || !btn || !note) return
 
   // ③ 선택 글에는 기사 주소도 날짜도 없다. 리포트를 만들 수 없다.
-  const loud = rows.some((r) => r.level === 'CAUTION' || r.level === 'CHECK')
-  box.hidden = kind !== 'page' || !loud
+  //
+  // **조사할 수 있는 항목이 걸렸을 때만 보인다.** 아무 항목이나 걸리면 보이게 했더니,
+  // 감정적 표현 하나만 🔴 인 기사에서 버튼이 뜨고 눌러도 "고를 문장이 없다" 로 끝났다.
+  // 감정 표현은 공개 기록으로 대조할 것이 없다 — 못 할 일을 권하지 않는다.
+  const 조사가능 = rows.some(
+    (r) => (CLAIM_ITEMS as readonly string[]).includes(r.id) && (r.level === 'CAUTION' || r.level === 'CHECK'),
+  )
+  box.hidden = kind !== 'page' || !조사가능
   if (box.hidden) return
 
   const paint = (r: Report | null) => {
