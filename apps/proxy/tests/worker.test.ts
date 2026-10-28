@@ -948,6 +948,74 @@ describe('리포트 — 글 엮기 (실행 중에 생성되는 유일한 한국�
   })
 })
 
+describe('리포트 — 나란히 볼 문장 고르기 (판정과 무관하다)', () => {
+  // /v1/explain 은 "걸린 항목이 왜 걸렸나" 라 신호가 없는 기사에는 못 쓴다.
+  // 여기는 판정을 받지 않는다 — 초록 기사에서도 돈다 (src/claims.ts).
+  const BODY = '통계청은 26일 물가가 2.1% 올랐다고 밝혔다. 정부는 다음 달 대책을 내놓는다.'
+
+  const claims = (body: unknown, origin: string | null = EXT_ORIGIN) =>
+    call('/v1/claims', {
+      method: 'POST',
+      headers: origin ? { Origin: origin, 'Content-Type': 'application/json' } : {},
+      body: JSON.stringify(body),
+    })
+  const got = async (res: Response) => (await res.json() as { claims?: any[] }).claims
+  const said = (text: string) => ok({ choices: [{ message: { content: text } }] })
+
+  it('판정 없이도 문장을 돌려준다', async () => {
+    mockFetch(() => said(JSON.stringify([
+      { quote: '통계청은 26일 물가가 2.1% 올랐다고 밝혔다.', why: 'kc_number' },
+    ])))
+    const r = await claims({ body: BODY })
+    expect(r.status).toBe(200)
+    expect(await got(r)).toEqual([{ text: '통계청은 26일 물가가 2.1% 올랐다고 밝혔다.', why: 'kc_number' }])
+  })
+
+  it('지어낸 문장은 버린다', async () => {
+    mockFetch(() => said(JSON.stringify([
+      { quote: '한국은행이 금리를 올렸다.', why: 'kc_event' },
+    ])))
+    expect(await got(await claims({ body: BODY }))).toEqual([])
+  })
+
+  it('모르는 이유는 버린다 — 화면에 띄울 문구가 없다', async () => {
+    mockFetch(() => said(JSON.stringify([
+      { quote: '통계청은 26일 물가가 2.1% 올랐다고 밝혔다.', why: '이 문장은 수상하다' },
+    ])))
+    expect(await got(await claims({ body: BODY }))).toEqual([])
+  })
+
+  it('셋까지만 돌려준다', async () => {
+    const body = '가나다. 라마바. 사아자. 차카타.'
+    mockFetch(() => said(JSON.stringify(
+      ['가나다', '라마바', '사아자', '차카타'].map((q) => ({ quote: q, why: 'kc_event' })),
+    )))
+    expect(await got(await claims({ body }))).toHaveLength(3)
+  })
+
+  it('줄바꿈이 섞여 있어도 원문 그대로 돌려준다', async () => {
+    const body = '통계청은 26일\n물가가  올랐다고 밝혔다.'
+    mockFetch(() => said(JSON.stringify([{ quote: '통계청은 26일 물가가 올랐다고 밝혔다.', why: 'kc_number' }])))
+    const [c] = (await got(await claims({ body }))) as { text: string }[]
+    expect(c.text).toBe(body)
+  })
+
+  it('**판정을 받지 않는다** — 프롬프트에 수상한지 묻지 않는다고 적는다', async () => {
+    mockFetch(() => said('[]'))
+    await claims({ body: BODY })
+    const q = JSON.parse(calls[0].init.body as string).messages[0].content as string
+    expect(q).toContain('수상한지 아닌지는 **묻지 않습니다.**')
+    expect(q).toContain('멀쩡한 기사에서도 고릅니다')
+    expect(q).toContain('kc_number')
+  })
+
+  it('빈 본문과 다른 출처는 거절한다', async () => {
+    mockFetch(() => said('[]'))
+    expect((await claims({ body: '  ' })).status).toBe(400)
+    expect((await claims({ body: BODY }, 'https://evil.example')).status).toBe(403)
+    expect(calls).toHaveLength(0)
+  })
+})
 describe('리포트 — 기록을 찾아 오고 Jev 가 맞춰 본다', () => {
   // **모델을 셋 쓰지만 판정하는 것은 Jev 하나다.** 검색은 찾기만 하고,
   // 코드가 자기 인용·지어낸 주소·날짜 어긋남을 거른다 (src/records.ts 머리말).

@@ -138,13 +138,30 @@ function drawRecord(rec: ReportRecord): HTMLElement {
   return li
 }
 
+/** 걸린 항목을 보충한 대목의 문구. packages/content 의 explain.*.reasons 에 있다. */
+function 설명문구(why: string): string | undefined {
+  const explain = (content as { explain?: Record<string, { reasons?: Record<string, string>; parts?: Record<string, { present?: string }> }> }).explain ?? {}
+  for (const copy of Object.values(explain)) {
+    const hit = copy?.reasons?.[why] ?? copy?.parts?.[why]?.present
+    if (hit) return hit
+  }
+  return undefined
+}
+
 function drawClaim(claim: ReportClaim, index: number): HTMLElement {
   const art = el('article', 'ge-claim')
   const head = el('div', 'ge-claim__head')
   head.append(el('span', 'ge-claim__no', `${index + 1}`))
   head.append(el('q', 'ge-claim__quote', claim.text))
   art.append(head)
-  art.append(el('p', 'ge-claim__why', claim.why))
+  // **왜 이 문장을 골랐나.** 두 곳에서 온다 —
+  // 나란히 볼 문장(report.picked)과, 걸린 항목을 보충한 대목(explain.*.reasons).
+  // 모델이 쓴 말이 아니라 **둘 다 ChatKHU 가 미리 쓴 문구**다.
+  const 고른이유 =
+    (C.picked as Record<string, string>)[claim.why] ??
+    설명문구(claim.why) ??
+    claim.why
+  art.append(el('p', 'ge-claim__why', 고른이유))
 
   if (claim.pending) {
     art.append(el('p', 'ge-claim__note', C.progress.records))

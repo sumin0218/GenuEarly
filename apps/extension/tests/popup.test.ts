@@ -389,9 +389,9 @@ describe('왜 이 판정인가 — 확신이 모자란 🟡', () => {
   })
 })
 
-describe('공개 기록 리포트 버튼은 할 수 있을 때만 보인다', () => {
-  // 아무 항목이나 걸리면 보이게 했더니, 감정적 표현 하나만 🔴 인 기사에서 버튼이 뜨고
-  // 눌러도 "고를 문장이 없다" 로 끝났다. **못 할 일을 권하지 않는다.**
+describe('주변 기록 버튼은 기사라면 늘 보인다', () => {
+  // **리포트의 주된 일은 흠을 보충하는 것이 아니다.** 한 기사가 전하지 못하는 것을
+  // 옆에 놓는 것이라, 신호가 없어도 할 일이 있다.
   beforeEach(() => {
     // 팝업은 저장소를 읽어 진행을 그린다. 여기서는 비어 있는 저장소를 세운다.
     vi.stubGlobal('browser', {
@@ -409,8 +409,13 @@ describe('공개 기록 리포트 버튼은 할 수 있을 때만 보인다', ()
   })
   const box = () => document.getElementById('report-box') as HTMLElement
 
-  it('감정적 표현만 걸리면 보이지 않는다 — 기록으로 대조할 것이 없다', () => {
-    render(verdict([item('emotional_language', 0.9), item('source_citation', 0)], 'CAUTION'))
+  it('신호가 하나도 없어도 보인다 — 초록 기사에도 주변 기록은 있다', () => {
+    render(verdict([item('source_citation', 0), item('emotional_language', 0)], 'SAFE'))
+    expect(box().hidden).toBe(false)
+  })
+
+  it('기사가 아닌 곳에는 보이지 않는다 — 판단한 적이 없다', () => {
+    render({ level: 'UNDETERMINED' })
     expect(box().hidden).toBe(true)
   })
 

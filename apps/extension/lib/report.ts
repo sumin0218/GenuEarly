@@ -76,12 +76,13 @@ export interface Report {
 }
 
 /**
- * **리포트를 만들 수 있는 항목.** 본문에서 문장을 집어 오는 둘뿐이다.
+ * **걸렸을 때 그 자리를 보충할 수 있는 항목.** 둘뿐이다.
  *
- * 나머지 다섯은 **공개 기록으로 대조할 것이 없다.** "분노를 자극하는 표현" 이나
- * "제목이 내용을 감춘다" 는 글의 성질이지 사실 주장이 아니라, 검색해 맞춰 볼 기록이
- * 없다. 그래서 그 항목만 걸린 기사에는 **버튼을 아예 보이지 않는다** —
- * 팝업이 이 목록을 함께 본다 (entrypoints/popup/main.ts).
+ * 나머지 다섯은 공개 기록으로 대조할 것이 없다 — "분노를 자극하는 표현" 이나
+ * "제목이 내용을 감춘다" 는 글의 성질이지 사실 주장이 아니다.
+ *
+ * **이것이 리포트의 조건은 아니다.** 리포트는 신호가 없어도 만든다 —
+ * 주된 일은 주변 기록을 모으는 것이고, 보충은 곁다리다 (buildReport 머리말).
  */
 export const CLAIM_ITEMS = ['unverifiable_claim', 'source_citation'] as const
 /** 한 리포트에서 조사할 주장 수. 하나에 네다섯 초라 넷이면 너무 길다. */
@@ -132,12 +133,31 @@ async function post<T>(path: string, body: unknown): Promise<T | null> {
   }
 }
 
-/** 본문에서 조사할 문장을 집어 온다. 심층 분석과 **같은 경로**를 쓴다. */
+/**
+ * 조사할 문장을 고른다. **두 곳에서 온다.**
+ *
+ *   ① 나란히 볼 문장 — **판정과 무관하게 늘** 고른다 (/v1/claims).
+ *      이것이 리포트의 주된 일이다. 초록 기사에도 주변 기록은 있다
+ *   ② 걸린 항목의 대목 — 🔴·🟡 이 있을 때만 더한다 (/v1/explain).
+ *      **곁다리다.** 부족한 자리를 보충한다
+ *
+ * ②를 **뒤에** 놓는다. 앞자리는 기사의 핵심이 차지해야 한다 —
+ * 신호를 앞세우면 리포트가 다시 "흠잡기" 로 읽힌다.
+ */
 async function gatherClaims(body: string, rows: readonly ReportRow[]): Promise<ReportClaim[]> {
   const out: ReportClaim[] = []
+
+  // ① 늘 한다
+  const picked = await post<{ claims?: { text: string; why: string }[] }>('/v1/claims', { body })
+  for (const c of picked?.claims ?? []) {
+    if (out.some((x) => x.text === c.text)) continue
+    out.push({ text: c.text, why: c.why, records: [], pending: true })
+    if (out.length >= MAX_CLAIMS) return out
+  }
+
+  // ② 걸린 자리를 보충한다
   for (const itemId of CLAIM_ITEMS) {
     const level = rows.find((r) => r.id === itemId)?.level
-    // **걸린 항목만 조사한다.** 🟢·⚪ 에 기록을 붙일 이유가 없고, 크레딧을 쓸 이유도 없다.
     if (level !== 'CAUTION' && level !== 'CHECK') continue
     const got = await post<{ picks?: { text: string; why: string }[] }>('/v1/explain', {
       itemId,
@@ -155,6 +175,10 @@ async function gatherClaims(body: string, rows: readonly ReportRow[]): Promise<R
 
 /**
  * 리포트를 만든다. **단계마다 저장소에 적는다** — 팝업이 그것을 보고 진행을 그린다.
+ *
+ * **주된 일은 주변 기록을 모으는 것이다.** 한 기사가 전하지 못하는 것이 있다 —
+ * 같은 사안을 다른 매체가 어떻게 적었는지, 숫자가 보도마다 어떻게 다른지.
+ * 그래서 **신호가 없어도 만든다.** 걸린 항목을 보충하는 것은 곁다리다.
  *
  * `rows` 는 일곱 항목의 판정 줄이다. 팝업이 이미 그리고 있는 값을 그대로 넘긴다 —
  * **여기서 다시 판단하지 않는다.** 리포트와 배지가 다른 말을 하면 사용자는

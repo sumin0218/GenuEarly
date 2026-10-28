@@ -10,6 +10,7 @@ import { buildRequest, isRejection, screenState, SCHEMA_MODEL, SCHEMA_VERSION } 
 import { canPinpoint, isPinpointLevel, pinpoint } from './pinpoint'
 import { investigate } from './records'
 import { weave, type BriefClaim } from './brief'
+import { pickClaims } from './claims'
 import { callJev } from './jev'
 import { budgetAllows, creditGuardOn, isPaused } from './credits'
 import { RETRY_AFTER_S, withinLimits } from './ratelimit'
@@ -395,6 +396,32 @@ export default {
       return reply(origin, { brief: out.brief }, 200)
     }
 
+    // --- 리포트: 나란히 볼 문장 고르기 ---------------------------------------
+    //
+    // **판정과 무관하다.** 기사가 초록이어도 돈다 — 고르는 기준은 "이 문장이 수상한가"
+    // 가 아니라 "이 문장을 다른 기록과 나란히 놓을 수 있는가" 다 (src/claims.ts).
+    // /v1/explain 은 걸린 항목이 왜 걸렸는지를 집으므로 신호가 없는 기사에는 못 쓴다.
+    if (url.pathname === '/v1/claims') {
+      const passed = await gate(env, request, origin)
+      if (!passed.ok) return passed.response
+
+      let parsed: unknown
+      try {
+        parsed = JSON.parse(passed.raw)
+      } catch {
+        return reply(origin, { error: 'invalid_json' }, 400)
+      }
+      const req = parsed as { body?: unknown }
+      if (typeof req.body !== 'string' || req.body.trim().length === 0) {
+        return reply(origin, { error: 'empty_body' }, 400)
+      }
+      if (!(await budgetAllows(env))) {
+        return reply(origin, { claims: [], reason: 'budget_exhausted' }, 200)
+      }
+      const out = await pickClaims(env, req.body)
+      if (!out.ok) return reply(origin, { claims: [], reason: out.reason }, 200)
+      return reply(origin, { claims: out.claims }, 200)
+    }
     return json({ error: 'not_found' }, 404)
   },
 } satisfies ExportedHandler<Env>
