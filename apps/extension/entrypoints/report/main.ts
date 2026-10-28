@@ -293,7 +293,7 @@ function paintChrome(): void {
 let 보는중: string | null = null
 
 /** 목록 한 줄. 제목을 누르면 열리고, 옆 단추로 지운다. */
-function archiveRow(r: Report, redraw: () => void): HTMLElement {
+function archiveRow(r: Report, redraw: () => Promise<void>): HTMLElement {
   const li = el('li', 'ge-archive__row')
 
   const openBtn = el('button', 'ge-archive__open')
@@ -306,7 +306,9 @@ function archiveRow(r: Report, redraw: () => void): HTMLElement {
   openBtn.onclick = () => {
     보는중 = r.url
     render(r, true)
-    redraw()
+    void redraw()
+    // **열었으면 서랍을 닫는다.** 고르자마자 가린 것을 치워 줘야 읽을 수 있다.
+    closeArchive()
     window.scrollTo({ top: 0 })
   }
   li.append(openBtn)
@@ -318,24 +320,35 @@ function archiveRow(r: Report, redraw: () => void): HTMLElement {
       // 지운 것을 보고 있었다면 더는 "현재 열림" 이 아니다. 화면은 그대로 둔다 —
       // 읽던 글이 눈앞에서 사라지는 편이 더 당황스럽다.
       if (보는중 === r.url) 보는중 = null
-      redraw()
+      void redraw()
     })
   }
   li.append(del)
   return li
 }
 
-function drawArchive(): void {
+/** 목록을 그린다. **다 그린 뒤에 할 일이 있어서** 약속을 돌려준다 (포커스). */
+function drawArchive(): Promise<void> {
   const host = document.getElementById('archive')
-  if (!host) return
-  void listArchive().then((items) => {
-    host.hidden = false
+  if (!host) return Promise.resolve()
+  return listArchive().then((items) => {
+    // **여는 것은 `openArchive` 뿐이다.** 여기서 `hidden` 을 건드리면 목록이
+    // 바뀔 때마다 (지우기 등) 닫아 둔 서랍이 저절로 열린다.
     host.replaceChildren()
 
     const head = el('div', 'ge-archive__head')
-    head.append(el('h2', 'ge-card__title', A.title))
+    const title = el('h2', 'ge-card__title', A.title)
+    title.id = 'archive-title' // index.html 의 aria-labelledby 가 이것을 가리킨다
+    head.append(title)
     const spacer = el('span', 'ge-archive__spacer')
     head.append(spacer)
+
+    // 닫기. 서랍은 막을 눌러도 Esc 로도 닫히지만, **보이는 길이 하나는 있어야 한다.**
+    const close = el('button', 'ge-archive__close', '✕')
+    close.type = 'button'
+    close.setAttribute('aria-label', A.close)
+    close.onclick = () => closeArchive()
+    head.append(close)
 
     if (items.length > 0) {
       // **두 번 묻는다.** 한 번에 지워지면 되돌릴 길이 없다.
@@ -370,9 +383,65 @@ function drawArchive(): void {
   })
 }
 
+// ── 서랍 여닫기 ──────────────────────────────────────────
+//
+// 막(scrim)과 Esc 와 ✕ 셋 다로 닫힌다. **포커스를 되돌려 준다** — 키보드로 연
+// 사람이 닫은 뒤 문서 맨 위로 튕기면 읽던 자리를 잃는다.
+
+const 서랍 = () => document.getElementById('archive')
+const 막 = () => document.getElementById('archive-scrim')
+const 여는단추 = () => document.getElementById('archive-toggle')
+
+function archiveOpen(): boolean {
+  return 서랍()?.hidden === false
+}
+
+function openArchive(): void {
+  const box = 서랍()
+  if (!box) return
+  box.hidden = false
+  const scrim = 막()
+  if (scrim) scrim.hidden = false
+  여는단추()?.setAttribute('aria-expanded', 'true')
+  // **다 그린 뒤에** 포커스를 옮긴다. 그리기는 저장소를 읽으므로 한 박자 늦다 —
+  // 먼저 옮기면 아직 없는 단추를 찾다가 빈 서랍에 포커스를 두고 만다.
+  void drawArchive().then(() => {
+    if (box.hidden) return // 그리는 사이에 닫혔다
+    const first = box.querySelector<HTMLElement>('button')
+    if (first) first.focus()
+    else {
+      box.tabIndex = -1
+      box.focus()
+    }
+  })
+}
+
+function closeArchive(): void {
+  const box = 서랍()
+  if (!box || box.hidden) return
+  box.hidden = true
+  const scrim = 막()
+  if (scrim) scrim.hidden = true
+  여는단추()?.setAttribute('aria-expanded', 'false')
+  여는단추()?.focus()
+}
+
+function wireArchive(): void {
+  const btn = 여는단추()
+  if (btn) {
+    btn.setAttribute('aria-label', A.title)
+    btn.onclick = () => (archiveOpen() ? closeArchive() : openArchive())
+  }
+  const scrim = 막()
+  if (scrim) scrim.onclick = () => closeArchive()
+  document.addEventListener('keydown', (e) => {
+    if (e.key === 'Escape') closeArchive()
+  })
+}
+
 paintChrome()
+wireArchive()
 void peekReport().then((r) => render(r))
-drawArchive()
 
 // 만드는 쪽이 단계마다 적는다. 그때마다 다시 그린다.
 browser.storage.onChanged.addListener((changes, area) => {
@@ -381,6 +450,7 @@ browser.storage.onChanged.addListener((changes, area) => {
   if (보는중 !== null) return
   const next = (changes[REPORT_KEY].newValue as Report | undefined) ?? null
   render(next)
-  // 다 됐으면 보관함에 한 줄이 늘었다.
-  if (next?.stage === 'done') drawArchive()
+  // 다 됐으면 보관함에 한 줄이 늘었다. **열려 있을 때만 다시 그린다** —
+  // 닫혀 있으면 다음에 열 때 어차피 새로 그린다.
+  if (next?.stage === 'done' && archiveOpen()) void drawArchive()
 })
