@@ -133,27 +133,65 @@ GE-31 에서 질문 세트 전체가 `400` 으로 돌아온 것이 모의만 보
 
 ## 배포
 
+**배포돼 있다** — `https://genuearly-proxy.genuearly-proxy.workers.dev` (2026-10-27).
+확장 프로그램은 이 주소를 **빌드 때 구워 넣는다.** 런타임 설정이 아니다:
+
+```bash
+WXT_PROXY_URL=https://genuearly-proxy.genuearly-proxy.workers.dev \
+  npm run build -w @genuearly/extension
+```
+
+주지 않으면 `http://localhost:8787` 이 들어간다. `tests/manifest.test.ts` 가
+**빌드 결과에 localhost 가 남았는지** 검사하므로 제출본에서는 거기서 걸린다.
+
 > ⚠️ **Origin 검사는 인증이 아니다.** `curl -H 'Origin: chrome-extension://x'` 로 통과한다.
 > 두 장치가 그 위를 덮는다 — **차단기**가 분당 상한을, **잔액 감시**가 월 상한을 지킨다 (위).
 >
 > 남는 위험: 차단기 한도 안에서 꾸준히 쓰면(분당 110) 예비분까지는 태울 수 있다.
 > 그 경우에도 심사·시연용 500 크레딧(약 6,000건)은 남는다.
 
-**배포 직후 `/health` 로 두 장치가 켜졌는지 확인한다.** 바인딩이나 설정값이 빠지면
+### 다시 배포할 때
+
+**키는 `wrangler secret put` 으로 넣을 수 없다** — 그 명령은 Worker 가 이미 있어야 한다.
+`wrangler.jsonc` 의 `secrets.required` 가 키 없는 배포를 막으므로 파일로 넘긴다.
+**키를 셸 히스토리나 화면에 남기지 않는 방법으로** 넘긴다:
+
+```bash
+npx wrangler login                                        # 브라우저 OAuth. 한 번만
+grep '^JEV_API_KEY=' apps/proxy/.dev.vars > /tmp/s.env    # 값이 찍히지 않는다
+npm run deploy -w @genuearly/proxy -- --secrets-file /tmp/s.env
+rm -f /tmp/s.env                                          # 바로 지운다
+```
+
+Cloudflare 계정의 **이메일 인증이 끝나 있어야 한다.** 아니면 업로드 직전에
+`code: 10034` 로 떨어진다 — 바인딩 표까지 다 찍고 나서 실패하므로 성공처럼 보인다.
+
+### 배포 직후 확인
+
+**`/health` 로 두 장치가 켜졌는지 본다.** 바인딩이나 설정값이 빠지면
 **조용히 꺼진 채** 돌아간다 — 그것이 가장 위험한 실패 모드다.
 
 ```bash
-curl -s https://<배포주소>/health
+curl -s https://genuearly-proxy.genuearly-proxy.workers.dev/health
 # {"ok":true,"model":"jev-1.13.0","paused":false,"guards":{"ratelimit":true,"credits":true}}
 ```
 
 `guards` 가 하나라도 `false` 면 **그대로 두지 않는다.**
 
+`/health` 는 서버가 살아 있다는 것까지만 말한다. **키가 유효한지는 말해 주지 않는다** —
+키는 Jev 를 실제로 부를 때 처음 쓰인다. 한 건 보내 확인한다 (크레딧 약 0.08):
+
 ```bash
-npx wrangler login                               # 브라우저 OAuth. 한 번만
-npx wrangler secret put JEV_API_KEY -c apps/proxy/wrangler.jsonc
-npm run deploy -w @genuearly/proxy
+curl -s -X POST https://genuearly-proxy.genuearly-proxy.workers.dev/v1/judge \
+  -H 'Content-Type: application/json' \
+  -H 'Origin: chrome-extension://abcdefghijklmnopabcdefghijklmnop' \
+  -d '{"feature":"portal_list","group":"headline_only","items":["clickbait_headline"],
+       "state":{"headline":"충격... 그가 남긴 마지막 한마디에 모두가 눈물을 흘렸다"}}'
+# {"model":"jev-1.13.0","answers":{"clickbait_headline":{"type":"choice","choice":"strong",...}}}
 ```
 
-> **TODO(GE-20)**: 배포 후 확장 프로그램 ID 를 받아 `isAllowedOrigin` 을 정확한 origin 으로 좁힌다.
-> 지금은 `chrome-extension://` 스킴만 본다.
+`undetermined` 가 돌아오면 키나 게이트웨이 쪽이다. **`answers` 가 와야 통과다.**
+
+> **TODO(GE-20)**: 확장 프로그램 ID 를 받아 `isAllowedOrigin` 을 정확한 origin 으로 좁힌다.
+> 지금은 `chrome-extension://` 스킴만 본다. 심사용 로컬 설치는 설치할 때마다 ID 가 바뀌어
+> **고정할 수 없다** — 스토어에 올리기 전까지는 이 상태로 둔다.
