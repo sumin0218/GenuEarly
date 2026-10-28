@@ -1,6 +1,6 @@
 {
   "$comment": "Jev 판단 항목의 원본. 규칙과 필드 설명은 README.md의 '판단 항목 정의' 절에 있다. 각 항목의 question 객체가 Jev API의 questions 값이 된다. 보낼 때 instructions 뒤에 최상위 common_instructions 를 줄바꿈으로 덧붙이는 것 하나만 코드가 하고, 그 밖에는 손대지 않는다. question 바깥의 필드는 우리 코드가 쓰는 메타데이터이므로 보내지 않는다. criteria의 키 순서가 곧 Jev에 보내는 보기 순서다. 순서를 바꾸면 답이 달라질 수 있으므로 eval 없이 바꾸지 않는다. 점수 합산과 eval은 순서가 아니라 signals 값을 읽는다.",
-  "version": "1.5.0",
+  "version": "1.6.0",
   "model": "jev-1.13.0",
   "language": "ko",
   "state_fields": {
@@ -271,6 +271,25 @@
         }
       }
       ]
+    }
+  ],
+  "$report_comment": "심층 분석 리포트 전용 질문. **items 도 explain_items 도 아니다** — 기사 글이 아니라 **밖에서 찾아온 기록과 기사 문장을 맞춰 보는** 질문이라 성격이 다르다. 점수에 들어가지 않고 배지를 바꾸지 않는다. 사용자가 리포트를 만들라고 눌렀을 때만 나간다. **Jev 는 여기서도 아무것도 찾아보지 않는다** — 기록은 sonar 가 찾아 `record` 필드에 넣어 주고, Jev 는 두 필드의 글자만 비교한다. **날짜는 Jev 가 모른다**: 다른 날 기록에도 뒷받침이라고 답한다(실측 48건 중 21%). 날짜 비교는 코드가 하고 화면 표시를 덮는다 (apps/proxy/src/records.ts).",
+  "report_items": [
+    {
+      "id": "record_entailment",
+      "$comment": "한 질문에 한 판단만 담는다. '기록이 이 문장을 뒷받침하는가' 하나다. 기록이 여럿이면 요청도 여럿이다 — 한 요청에 기록을 모아 넣으면 '여러 판단 숨기기' 가 된다 (docs/jev.md 3절).",
+      "type": "choice",
+      "unit": "record",
+      "state_fields": ["claim", "record"],
+      "question": {
+        "type": "choice",
+        "instructions": "`record` 필드의 기록이 `claim` 필드의 문장을 뒷받침하는지 고르라. 판단 근거는 두 필드에 적힌 글자로 한정한다. 바깥 지식을 쓰지 않는다. 기록이 그 문장과 다른 사안을 다루면 무관이다.",
+        "criteria": {
+          "supports": "기록이 그 문장의 내용을 뒷받침한다",
+          "contradicts": "기록이 그 문장과 어긋나는 내용을 담고 있다",
+          "unrelated": "기록이 그 문장과 다른 사안이거나, 뒷받침도 반박도 하지 않는다"
+        }
+      }
     }
   ]
 }

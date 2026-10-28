@@ -24,6 +24,8 @@ const env: Env = {
   JEV_TIMEOUT_MS: '8000',
   EXPLAIN_MODEL: 'gpt-5.6-luna',
   EXPLAIN_TIMEOUT_MS: '15000',
+  SEARCH_MODEL: 'sonar-pro',
+  SEARCH_TIMEOUT_MS: '25000',
   MAX_REQUEST_BYTES: '65536',
   // 실제 잔액으로 감시까지 함께 돌린다.
   CREDITS_RESERVE: '500',
