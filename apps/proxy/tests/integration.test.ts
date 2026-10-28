@@ -26,6 +26,8 @@ const env: Env = {
   EXPLAIN_TIMEOUT_MS: '15000',
   SEARCH_MODEL: 'sonar-pro',
   SEARCH_TIMEOUT_MS: '25000',
+  BRIEF_MODEL: 'claude-opus-5-5',
+  BRIEF_TIMEOUT_MS: '30000',
   MAX_REQUEST_BYTES: '65536',
   // 실제 잔액으로 감시까지 함께 돌린다.
   CREDITS_RESERVE: '500',

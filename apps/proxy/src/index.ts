@@ -9,6 +9,7 @@
 import { buildRequest, isRejection, screenState, SCHEMA_MODEL, SCHEMA_VERSION } from './schema'
 import { canPinpoint, isPinpointLevel, pinpoint } from './pinpoint'
 import { investigate } from './records'
+import { weave, type BriefClaim } from './brief'
 import { callJev } from './jev'
 import { budgetAllows, creditGuardOn, isPaused } from './credits'
 import { RETRY_AFTER_S, withinLimits } from './ratelimit'
@@ -33,6 +34,13 @@ export interface Env {
   SEARCH_MODEL: string
   /** 검색은 생성보다도 느리다. 실측 3~5초지만 넉넉히 둔다. */
   SEARCH_TIMEOUT_MS: string
+  /**
+   * 리포트의 **글을 엮는** 모델. 판정하지 않는다 — 찾아 온 기록을 읽을 수 있게 할 뿐이다.
+   * 여기서 나온 글만은 실행 중에 생성되므로 **코드가 그 자리에서 거른다** (src/brief.ts).
+   */
+  BRIEF_MODEL: string
+  /** 긴 글을 쓴다. 실측 11초. */
+  BRIEF_TIMEOUT_MS: string
   MAX_REQUEST_BYTES: string
   /** 이만큼은 남겨 둔다. 아래로 내려가면 판단을 멈춘다. 0 이면 감시를 끈다 */
   CREDITS_RESERVE: string
@@ -334,6 +342,57 @@ export default {
         return reply(origin, { records: [], reason: out.reason }, 200)
       }
       return reply(origin, { records: out.records, searched: out.searched }, 200)
+    }
+
+    // --- 리포트: 글 엮기 -------------------------------------------------------
+    //
+    // **리포트에서 실행 중에 생성되는 유일한 한국어다.** 나머지 글자는 전부 ChatKHU 가
+    // 미리 써 둔 것이라 검수가 끝나 있다. 여기만 아니어서 **코드가 그 자리에서 거른다** —
+    // 지어낸 주장, 단정하는 말, 마크업. 걸리면 고치지 않고 **통째로 버린다** (src/brief.ts).
+    if (url.pathname === '/v1/brief') {
+      const passed = await gate(env, request, origin)
+      if (!passed.ok) return passed.response
+
+      let parsed: unknown
+      try {
+        parsed = JSON.parse(passed.raw)
+      } catch {
+        return reply(origin, { error: 'invalid_json' }, 400)
+      }
+
+      const req = parsed as { headline?: unknown; articleDate?: unknown; claims?: unknown }
+      if (typeof req.headline !== 'string' || req.headline.trim().length === 0) {
+        return reply(origin, { error: 'empty_headline' }, 400)
+      }
+      if (typeof req.articleDate !== 'string' || !/^\d{4}-\d{2}-\d{2}$/.test(req.articleDate)) {
+        return reply(origin, { error: 'bad_date' }, 400)
+      }
+      if (!Array.isArray(req.claims) || req.claims.length === 0) {
+        return reply(origin, { error: 'empty_claims' }, 400)
+      }
+      // 모양이 아닌 것은 여기서 떨어뜨린다. 모델에 넘기기 전이다.
+      const claims: BriefClaim[] = []
+      for (const c of req.claims) {
+        const row = c as { text?: unknown; why?: unknown; records?: unknown }
+        if (typeof row.text !== 'string' || typeof row.why !== 'string') continue
+        claims.push({
+          text: row.text,
+          why: row.why,
+          records: (Array.isArray(row.records) ? row.records : []) as BriefClaim['records'],
+        })
+      }
+      if (claims.length === 0) return reply(origin, { error: 'empty_claims' }, 400)
+
+      if (!(await budgetAllows(env))) {
+        return reply(origin, { brief: null, reason: 'budget_exhausted' }, 200)
+      }
+
+      const out = await weave(env, req.headline, req.articleDate, claims)
+      if (!out.ok) {
+        // 글이 없어도 리포트는 그려진다 — 기록과 인용은 이미 있다.
+        return reply(origin, { brief: null, reason: out.reason }, 200)
+      }
+      return reply(origin, { brief: out.brief }, 200)
     }
 
     return json({ error: 'not_found' }, 404)

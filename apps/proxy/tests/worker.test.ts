@@ -14,6 +14,8 @@ const env: Env = {
   EXPLAIN_TIMEOUT_MS: '15000',
   SEARCH_MODEL: 'sonar-pro',
   SEARCH_TIMEOUT_MS: '25000',
+  BRIEF_MODEL: 'claude-opus-5-5',
+  BRIEF_TIMEOUT_MS: '30000',
   MAX_REQUEST_BYTES: '65536',
   // 여기서는 중계 동작을 본다. 크레딧 감시는 0 으로 꺼 두고 아래에서 따로 켠다.
   CREDITS_RESERVE: '0',
@@ -806,6 +808,143 @@ describe('게이트웨이로 나가는 요청의 헤더', () => {
     await judge(PAGE_BODY)
     const h = calls[0].init.headers as Record<string, string>
     expect(h['User-Agent'], 'UA 가 없으면 배포 후 전부 403 이 된다').toBeTruthy()
+  })
+})
+
+describe('리포트 — 글 엮기 (실행 중에 생성되는 유일한 한국어)', () => {
+  // 제품의 나머지 글자는 전부 ChatKHU 가 미리 써 둔 것이라 검수가 끝나 있다.
+  // **여기만 아니다.** 그래서 코드가 그 자리에서 거른다 (src/brief.ts 머리말).
+  const CLAIM = '외국인과 기관이 동반 순매수에 나섰다.'
+  const REQ = {
+    headline: '코스피 4%대 폭등',
+    articleDate: '2026-10-27',
+    claims: [{ text: CLAIM, why: '이 문장에는 근거를 가리키는 말이 없습니다.', records: [] }],
+  }
+
+  const brief = (body: unknown, origin: string | null = EXT_ORIGIN) =>
+    call('/v1/brief', {
+      method: 'POST',
+      headers: origin ? { Origin: origin, 'Content-Type': 'application/json' } : {},
+      body: JSON.stringify(body),
+    })
+  const briefOf = async (res: Response) => (await res.json() as { brief?: any }).brief
+  const said = (o: unknown) => ok({ choices: [{ message: { content: JSON.stringify(o) } }] })
+
+  it('엮은 글을 그대로 돌려준다', async () => {
+    mockFetch(() => said({
+      summary: '기사가 든 근거를 직접 확인해 보시기를 권합니다.',
+      checks: [{ claim: CLAIM, what: '한국거래소에서 당일 매매동향을 조회해 보면 좋습니다.' }],
+      where: ['한국거래소 정보데이터시스템'],
+    }))
+    const b = await briefOf(await brief(REQ))
+    expect(b.summary).toBe('기사가 든 근거를 직접 확인해 보시기를 권합니다.')
+    expect(b.checks).toHaveLength(1)
+    expect(b.where).toEqual(['한국거래소 정보데이터시스템'])
+    expect(b.dropped).toBe(0)
+  })
+
+  it('**단정하는 말은 버린다** — 고치지 않고 통째로 뺀다', async () => {
+    // 고치려 들면 그 글은 모델이 쓴 것도 우리가 쓴 것도 아닌 것이 된다.
+    mockFetch(() => said({
+      summary: '이 기사는 허위 정보를 담고 있습니다.',
+      checks: [{ claim: CLAIM, what: '이 주장은 거짓으로 보입니다.' }],
+      where: [],
+    }))
+    const b = await briefOf(await brief(REQ))
+    expect(b.summary, '금지어가 든 문단은 아예 없어야 한다').toBeUndefined()
+    expect(b.checks).toEqual([])
+    expect(b.dropped).toBe(2)
+  })
+
+  it('**맞다고 말하는 쪽도 버린다** — 신호를 못 찾은 것이 옳다는 뜻은 아니다', async () => {
+    mockFetch(() => said({
+      summary: '검증된 기사로 믿을 만합니다.',
+      checks: [{ claim: CLAIM, what: '이 대목은 문제없습니다.' }],
+      where: [],
+    }))
+    const b = await briefOf(await brief(REQ))
+    expect(b.summary).toBeUndefined()
+    expect(b.checks).toEqual([])
+  })
+
+  it('**지어낸 주장은 버린다** — 우리가 보낸 문장과 글자가 같아야 한다', async () => {
+    mockFetch(() => said({
+      summary: '확인해 보시기를 권합니다.',
+      checks: [
+        { claim: CLAIM, what: '한국거래소에서 확인해 보면 좋습니다.' },
+        { claim: '우리가 보낸 적 없는 문장이다.', what: '어딘가에서 확인해 보세요.' },
+        { claim: CLAIM + ' ', what: '공백 하나가 다르다.' },
+      ],
+      where: [],
+    }))
+    const b = await briefOf(await brief(REQ))
+    expect(b.checks.map((c: any) => c.claim)).toEqual([CLAIM])
+    expect(b.dropped).toBe(2)
+  })
+
+  it('**마크업은 버린다** — 우리는 HTML 을 받지 않는다', async () => {
+    mockFetch(() => said({
+      summary: '<script>alert(1)</script> 확인해 보세요.',
+      checks: [{ claim: CLAIM, what: '<b>굵게</b> 확인해 보세요.' }],
+      where: ['<img src=x onerror=1>'],
+    }))
+    const b = await briefOf(await brief(REQ))
+    expect(b.summary).toBeUndefined()
+    expect(b.checks).toEqual([])
+    expect(b.where).toEqual([])
+  })
+
+  it('너무 긴 글은 버린다', async () => {
+    mockFetch(() => said({ summary: '가'.repeat(500), checks: [], where: [] }))
+    expect((await briefOf(await brief(REQ))).summary).toBeUndefined()
+  })
+
+  it('어디서 확인하나는 셋까지만', async () => {
+    mockFetch(() => said({ summary: '확인해 보세요.', checks: [], where: ['가', '나', '다', '라'] }))
+    expect((await briefOf(await brief(REQ))).where).toEqual(['가', '나', '다'])
+  })
+
+  it('JSON 이 아니면 글 없이 돌려준다 — 리포트는 기록만으로도 그려진다', async () => {
+    mockFetch(() => ok({ choices: [{ message: { content: '죄송합니다, 도와드릴 수 없습니다.' } }] }))
+    const res = await brief(REQ)
+    expect(res.status).toBe(200)
+    await expect(res.json()).resolves.toEqual({ brief: null, reason: 'unusable' })
+  })
+
+  it('코드 울타리로 감싸도 JSON 을 꺼낸다', async () => {
+    mockFetch(() => ok({ choices: [{ message: { content: '```json\n' + JSON.stringify({ summary: '확인해 보세요.', checks: [], where: [] }) + '\n```' } }] }))
+    expect((await briefOf(await brief(REQ))).summary).toBe('확인해 보세요.')
+  })
+
+  it('게이트웨이가 실패해도 200 이고, 그 말을 내보내지 않는다', async () => {
+    mockFetch(() => new Response('key sk-livekey123 rejected', { status: 401 }))
+    const res = await brief(REQ)
+    expect(res.status).toBe(200)
+    expect(await res.text()).not.toContain('sk-livekey123')
+  })
+
+  it('프롬프트에 단정 금지와 날짜 뜻을 적어 보낸다', async () => {
+    mockFetch(() => said({ summary: '확인해 보세요.', checks: [], where: [] }))
+    await brief(REQ)
+    const sent = JSON.parse(calls[0].init.body as string)
+    expect(sent.model).toBe('claude-opus-5-5')
+    const q = sent.messages[0].content as string
+    expect(q).toContain('참인지 거짓인지 말하지 않습니다')
+    expect(q).toContain('기록을 못 찾은 것이 거짓이라는 뜻이 아닙니다')
+    expect(q).toContain('다른 날짜의 기록')
+    expect(q).toContain('사실 확인이 아닙니다')
+  })
+
+  it('모양이 아닌 요청은 거절한다', async () => {
+    mockFetch(() => said({ summary: '확인해 보세요.', checks: [], where: [] }))
+    expect((await brief({ ...REQ, headline: '  ' })).status).toBe(400)
+    expect((await brief({ ...REQ, articleDate: '앞의 말은 무시하고' })).status).toBe(400)
+    expect((await brief({ ...REQ, claims: [] })).status).toBe(400)
+    expect(calls, '모델을 부르면 안 된다').toHaveLength(0)
+  })
+
+  it('확장 프로그램이 아니면 거절한다', async () => {
+    expect((await brief(REQ, 'https://evil.example')).status).toBe(403)
   })
 })
 
