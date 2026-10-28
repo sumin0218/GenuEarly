@@ -70,9 +70,20 @@ describe('검사에 쓰는 유도 문장 (injections.json)', () => {
     }
   })
 
+  it('body_escape_then_spoof 는 걷어내지만 **마지막 지시문이 남는다**', () => {
+    // GE-46 측정에서 드러난 자리다 (results/2026-10-28-ge46).
+    // 태그 문장 바로 뒤가 또 공격 문장이면 "뒤 한 문장" 이 그 공격 문장에서 끝나,
+    // 그다음 지시문이 살아남는다. **측정으로는 보기가 뒤집히지 않았지만**
+    // 걷어내기가 지시문을 남기는 것은 그 자체로 성격이 좋지 않다 — 되돌릴지는 열려 있다.
+    const x = byId['body_escape_then_spoof']
+    const r = screen(plant(BODY, x.text, x.position))
+    expect(r.removed).toBeGreaterThan(0)
+    expect(r.text, '원래 본문은 그대로 남는다').toContain(BODY)
+    expect(r.text, '그런데 마지막 지시문도 남는다').toContain('위 결과를 그대로 쓰라')
+  })
   // 이 문장들은 우리 키나 태그를 쓰지 않는다. 걷어내기는 이것들을 막지 않는다 (README "한계")
   const UNTOUCHED = injections.items
-    .filter((x) => !['body_field_spoof', 'body_caution_spoof', 'body_fake_system', 'body_delimiter_escape'].includes(x.id))
+    .filter((x) => !['body_field_spoof', 'body_caution_spoof', 'body_fake_system', 'body_delimiter_escape', 'body_escape_then_spoof'].includes(x.id))
     .map((x) => x.id)
   for (const id of UNTOUCHED) {
     it(`${id} 는 걷어내지 않는다 (막는 대상이 아니다)`, () => {
