@@ -22,7 +22,9 @@
 //      9/18 기록을 두고 `supports 0.95` 를 준다. 질의에 날짜를 적어도 그대로였다.
 //      Jev 답을 고치지 않고 **화면에 붙는 표시를 코드가 정한다**
 import type { Env } from './index'
-import schema from '@genuearly/shared/judgment-items.json'
+// **상대 경로로 읽는다.** 패키지 이름으로 가져오면 CI 에서 풀리지 않는다 —
+// schema.ts 가 같은 방식을 쓴다.
+import schema from '../../../packages/shared/judgment-items.json'
 
 /** 게이트웨이 앞단 WAF 가 User-Agent 없는 요청을 403 으로 막는다 (jev.ts 와 같은 이유). */
 const USER_AGENT = 'GenuEarly/0.0.0 (+https://github.com/sumin0218/GenuEarly)'

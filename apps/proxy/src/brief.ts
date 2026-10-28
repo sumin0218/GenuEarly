@@ -16,7 +16,7 @@
 // 4번이 중요하다. 어설프게 고치면 그 글은 모델이 쓴 것도 우리가 쓴 것도 아닌 것이 되고,
 // 어디까지 고쳤는지 아무도 모르게 된다.
 import type { Env } from './index'
-import { safeToShow } from '@genuearly/shared'
+import { safeToShow } from '../../../packages/shared/src/wording'
 import type { Entry } from './records'
 
 /** 게이트웨이 앞단 WAF 가 User-Agent 없는 요청을 403 으로 막는다. */
