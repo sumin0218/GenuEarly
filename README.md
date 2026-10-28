@@ -27,15 +27,15 @@
 | --- | --- | --- |
 | [`apps/extension/`](apps/extension/) | 크롬 확장 프로그램 (Manifest V3) | WXT + TypeScript |
 | [`apps/proxy/`](apps/proxy/) | Jev 중계 서버. API 키를 들고 있는 유일한 곳 | Cloudflare Workers + TypeScript |
-| [`packages/shared/`](packages/shared/) | 판단 스키마, 점수 합산, 배지 단계 결정 | 설계 중 |
-| [`packages/content/`](packages/content/) | 사용자에게 보이는 문구 | 설계 중 |
-| [`eval/`](eval/) | 판단 품질 평가 세트와 측정 결과 | 설계 중 |
-| [`tools/`](tools/) | 개발할 때만 쓰는 도구. **제품에 배포되지 않는다** | `content-gen` 준비 중 |
+| [`packages/shared/`](packages/shared/) | 판단 스키마, 점수 합산, 배지 단계 결정 | TypeScript |
+| [`packages/content/`](packages/content/) | 사용자에게 보이는 문구. **ChatKHU 생성물** | JSON |
+| [`eval/`](eval/) | 판단 품질 평가 세트와 측정 결과 | 세트 완료, **측정 전** |
+| [`tools/`](tools/) | 개발할 때만 쓰는 도구. **제품에 배포되지 않는다** | `content-gen` (Node) |
 | [`docs/`](docs/) | 제품 정의, Jev 정리, 컨벤션, 보안, AI 활용 기록, 제출 서류 | |
 | [`.github/`](.github/) | PR·이슈 양식, 규칙 검사 워크플로 | |
 
-> **중계 서버의 기술 스택은 아직 정하지 않았다** (언어, 프레임워크, 배포 대상).
-> 정해지면 이 표와 [AGENT.md](AGENT.md)를 같은 PR에서 갱신한다.
+> 중계 서버는 **Cloudflare Workers + TypeScript** 로 정해졌고 배포돼 있다 (2026-10-27).
+> 주소와 재배포 절차는 [apps/proxy/README.md](apps/proxy/README.md) 배포 절에 있다.
 >
 > 확장 프로그램은 **WXT + TypeScript + npm**이다. 루트 `package.json`은 커밋 메시지 검사 도구와
 > npm 워크스페이스 연결만 맡고, 앱 의존성은 각 `apps/*`, `packages/*` 안에 둔다.

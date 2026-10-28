@@ -45,12 +45,24 @@ describe('머리말', () => {
   })
 
   it('기호가 단계마다 다르다 — 색각 이상에서 색만으로 구분되지 않는다', () => {
-    const marks = new Set<string>()
+    // 전에는 색 동그라미 이모지(🟢🟡🔴⚪)였다. 넷이 **같은 동그라미**라 적록색각 이상에서는
+    // 🟢 과 🔴 이 같아 보였다. 지금은 모양이 서로 다른 아이콘이다 (lib/item-view.ts).
+    const shapes = new Set<string>()
     for (const level of ['SAFE', 'CHECK', 'CAUTION', 'UNDETERMINED'] as const) {
       render({ level })
-      marks.add(document.getElementById('mark')?.textContent ?? '')
+      const svg = document.querySelector('#mark svg')
+      shapes.add([...(svg?.querySelectorAll('path') ?? [])].map((p) => p.getAttribute('d')).join('|'))
     }
-    expect(marks.size).toBe(4)
+    expect(shapes.size, '모양이 겹치면 색으로만 구분된다').toBe(4)
+  })
+
+  it('이모지를 쓰지 않는다 — 플랫폼마다 다른 그림이 나온다', () => {
+    // 같은 🟡 이 윈도우에서는 노랑, 안드로이드에서는 주황에 가깝다.
+    // 단계별로 정한 색이 지켜지지 않고, 글꼴이 없으면 네모가 뜬다.
+    for (const level of ['SAFE', 'CHECK', 'CAUTION', 'UNDETERMINED', 'PENDING'] as const) {
+      render({ level })
+      expect(document.getElementById('mark')?.textContent ?? '').toBe('')
+    }
   })
 })
 

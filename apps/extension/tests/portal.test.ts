@@ -181,9 +181,15 @@ describe('근거가 다르면 다르게 그린다', () => {
   })
 
   it('단계를 색이 아니라 모양이 가른다 — 색각 이상에서도 구분된다', () => {
-    const glyphs = (['SAFE', 'CHECK', 'CAUTION', 'UNDETERMINED'] as const)
-      .map((l) => markLook(l, 'headline').glyph)
-    expect(new Set(glyphs).size, '모양이 겹치면 색으로만 구분된다').toBe(4)
+    const icons = (['SAFE', 'CHECK', 'CAUTION', 'UNDETERMINED'] as const)
+      .map((l) => markLook(l, 'headline').icon)
+    expect(new Set(icons).size, '모양이 겹치면 색으로만 구분된다').toBe(4)
+  })
+
+  it('신호 없음에 체크표를 쓰지 않는다 — "검증됨" 으로 읽힌다', () => {
+    // 우리는 참·거짓을 말하지 않는다 (docs/product.md 2절). 아이콘은 문구보다 먼저
+    // 읽히므로, 아이콘이 그 선을 넘으면 문구를 아무리 조심해 써도 소용없다.
+    expect(markLook('SAFE', 'full').icon).not.toMatch(/check|verif|tick|shield/i)
   })
 })
 
@@ -209,6 +215,13 @@ describe('동그라미를 페이지에 넣을 때', () => {
   it('판정 점수가 DOM 에 새지 않는다', () => {
     const mark = createMark(document)
     mark.render('CAUTION', 'full', '주의할 신호 있음')
-    expect(mark.host.outerHTML).not.toMatch(/0\.\d|\d+%|\d+점/)
+    // **마크업이 아니라 사람이 읽는 것을 본다.** 아이콘 `path` 의 좌표에는 소수점이
+    // 잔뜩 있지만 그것은 그림이지 점수가 아니다. 새면 안 되는 자리는 글자와 aria-label 이다.
+    const words = [
+      mark.host.textContent ?? '',
+      mark.host.getAttribute('aria-label') ?? '',
+      mark.host.title,
+    ].join(' ')
+    expect(words).not.toMatch(/0\.\d|\d+%|\d+점/)
   })
 })

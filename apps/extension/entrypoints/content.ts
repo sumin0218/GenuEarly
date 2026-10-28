@@ -8,10 +8,41 @@ import '../assets/content.css'
 import { ARTICLE_EXCLUDE_MATCHES, ARTICLE_MATCHES } from '../match-patterns'
 import content from '../../../packages/content/ui.ko.json'
 import { extractArticle } from '../lib/extract'
-import { MARK, toRows } from '../lib/item-view'
+import { createIcon } from '../lib/icon'
+import { LEVEL_ICON, LEVEL_INK, LEVEL_INK_DARK } from '../lib/item-view'
 import type { ArticleVerdict, DisplayLevel, Message, TabState, TabStateMessage } from '../lib/protocol'
 
-/** 배지 DOM 을 만든다. `innerHTML` 을 쓰지 않는다 (docs/security/secure-coding.md 4절). */
+/** 아이콘 크기(px). 글자(14px)와 같은 줄에 선다. */
+const MARK_SIZE = 16
+
+/**
+ * 단계 아이콘을 그린다. 팝업의 같은 이름 함수와 규칙이 같다
+ * (entrypoints/popup/main.ts) — **색표의 원본은 lib/item-view.ts 하나다.**
+ *
+ * 밝은 쪽·어두운 쪽 값을 둘 다 넣고 어느 쪽을 쓸지는 CSS 가 고른다.
+ */
+function paintMark(el: HTMLElement, level: DisplayLevel): void {
+  el.style.setProperty('--ge-level-light', LEVEL_INK[level])
+  el.style.setProperty('--ge-level-dark', LEVEL_INK_DARK[level])
+  el.replaceChildren(createIcon(document, LEVEL_ICON[level], { size: MARK_SIZE }))
+}
+
+/**
+ * 배지 DOM 을 만든다. `innerHTML` 을 쓰지 않는다 (docs/security/secure-coding.md 4절).
+ *
+ * **한 줄이다.** 아이콘과 단계 이름뿐이고 펼쳐지지 않는다.
+ *
+ * 전에는 눌러서 항목 일곱 줄을 펼칠 수 있었다. 두 가지가 잘못이었다.
+ *
+ *   1. **기사를 가린다.** 읽으려고 연 화면 위에 우리 상자가 일곱 줄을 덮는다.
+ *      사용자가 지금 하려는 일은 기사를 읽는 것이지 우리 설명을 읽는 것이 아니다
+ *   2. **팝업과 같은 것을 두 곳에서 보여 준다.** 항목 일곱 줄과 판단 근거는
+ *      팝업이 더 넓게, 기사를 가리지 않고 보여 준다 (GE-45)
+ *
+ * 그래서 배지는 **"무엇이 보이는가" 한 줄**만 맡는다. "왜 그런가" 는 팝업이 맡는다.
+ * 누를 것이 없으므로 `role="button"`·`tabindex` 도 두지 않는다 — 눌리지 않는 것을
+ * 눌리는 것처럼 보이게 하지 않는다.
+ */
 function createBadge() {
   const el = document.createElement('div')
   el.className = 'ge-badge'
@@ -20,46 +51,17 @@ function createBadge() {
   mark.className = 'ge-badge__mark'
   const label = document.createElement('span')
   label.className = 'ge-badge__label'
-  const detail = document.createElement('div')
-  detail.className = 'ge-badge__detail'
-  detail.hidden = true
-
-  el.append(mark, label, detail)
-  el.addEventListener('click', () => { detail.hidden = !detail.hidden })
+  el.append(mark, label)
 
   let state: TabState = { level: 'PENDING' }
 
   function render(level: DisplayLevel, verdict?: ArticleVerdict): void {
+    // **판정 전체는 그대로 들고 있는다.** 화면에 적지 않을 뿐이고,
+    // 팝업이 이 값을 물어 간다 (아래 onMessage).
     state = { level, verdict }
     el.dataset.level = level
-    mark.textContent = MARK[level]
+    paintMark(mark, level)
     label.textContent = content.badge[level].name
-    detail.replaceChildren()
-
-    // 일곱 항목을 전부 보여 준다. 규칙은 lib/item-view 가 원본이다 — 팝업도 같은 것을 쓴다.
-    const rows = toRows(verdict)
-
-    if (rows.length === 0) {
-      // 판단을 하나도 못 했다 — 기사 구조를 못 읽었거나 중계가 전부 실패했다.
-      const note = document.createElement('div')
-      note.className = 'ge-badge__note'
-      note.textContent = content.undetermined.description
-      detail.append(note)
-      return
-    }
-    for (const r of rows) {
-      const row = document.createElement('div')
-      row.className = 'ge-badge__row'
-      row.dataset.level = r.level
-      const head = document.createElement('span')
-      head.className = 'ge-badge__row-name'
-      head.textContent = `${r.mark} ${r.name}`
-      const body = document.createElement('span')
-      body.className = 'ge-badge__row-text'
-      body.textContent = r.text
-      row.append(head, body)
-      detail.append(row)
-    }
   }
 
   render('PENDING')

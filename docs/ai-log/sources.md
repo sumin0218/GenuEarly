@@ -31,6 +31,8 @@
 | **Vite / Vitest** | 각 프로젝트 | **MIT** (npm 레지스트리 확인) | 번들링, 테스트 |
 | **commitlint / husky** | 각 프로젝트 | **MIT** (npm 레지스트리 확인) | 커밋 메시지 검사 |
 | **happy-dom** 21.0.4 | happy-dom 기여자 | **MIT** (npm 레지스트리 확인, `npm audit` 0건) | 기사 추출 테스트의 DOM. 배포본에 들어가지 않는다 (devDependency) |
+| **Reicon** 아이콘 (<https://github.com/dqev/reicon>) | Dev Chauhan | **MIT** (저장소 `LICENSE` 확인, 2026-10-27) | 화면의 단계 표시 아이콘 다섯 개. **라이브러리를 의존성으로 넣지 않고** 쓰는 `path` 데이터만 [`apps/extension/lib/icon-data.ts`](../../apps/extension/lib/icon-data.ts) 에 넣었다. 저작권 표시를 그 파일 머리말에 적었다 |
+| **taste-skill** (<https://github.com/Leonxlnx/taste-skill>) | Leonxlnx | 공개 저장소. **코드를 가져오지 않았다** — 문서만 읽었다 | 화면 디자인 결정의 근거. `references/app-screens.md`·`tells.md` ([../design.md](../design.md)) |
 | 코딩 도구 (Claude Code / Claude Opus 5) | Anthropic | **TODO** — 확인 | 구현 보조, 문서 작성, 조사 |
 
 > **TODO: 의존성 라이선스 일괄 확인** — `npm ls --all` 또는 라이선스 수집 도구로 한 번에 뽑아 채운다.

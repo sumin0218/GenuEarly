@@ -4,8 +4,10 @@
 // 여기는 **화면에 닿지 않는 부분만** 둔다 — 어떤 링크가 기사인가, 동그라미를 어떻게 그릴 것인가.
 // 실제 DOM 조작과 스크롤 추적은 entrypoints/portal.ts 에 있다. 그래야 테스트에서 부를 수 있다.
 import { normalizeUrl } from './cache'
-import { GLYPH, LEVEL_COLOR } from './item-view'
+import { createIcon } from './icon'
+import { LEVEL_ICON, inkFor } from './item-view'
 import { isArticleUrl } from '../match-patterns'
+import type { IconName } from './icon-data'
 import type { DisplayLevel } from './protocol'
 
 /**
@@ -69,31 +71,40 @@ export function collectTitles(root: ParentNode): PortalTitle[] {
 export type MarkBasis = 'headline' | 'full'
 
 export interface MarkLook {
-  glyph: string
+  /** 어느 아이콘을 쓸 것인가 */
+  icon: IconName
   color: string
-  /** 진한 동그라미(채움)인가. 본문까지 본 판단일 때만 채운다 */
+  /** 진한 벌(Filled)로 그리는가. 본문까지 본 판단일 때만 채운다 */
   filled: boolean
 }
 
 /**
  * 단계와 근거를 생김새로.
  *
- * **색으로 가르지 않는다.** 단계는 기호 모양(`○ △ ! ?`)이 가르고 색은 거든다.
- * 근거의 세기는 **채움 여부**가 가른다 — 옅은(테두리만) = 제목만, 진한(채움) = 본문까지.
+ * **색으로 가르지 않는다.** 단계는 **아이콘 모양**이 가르고 색은 거든다 —
+ * 세모 느낌표(주의) · 눈(확인) · 가로줄(신호 없음) · 물음표(보류) · 점 셋(도는 중).
+ * 근거의 세기는 **굵기**가 가른다: 테두리 벌 = 제목만, 진한 벌 = 본문까지.
  * 둘 다 색각 이상에서도 구분된다.
+ *
+ * 전에는 1.5px 테두리를 두른 동그라미 안에 글자 기호를 넣었다. 테두리를 없앴다 —
+ * 목록 한 화면에 서른 개가 뜨는데 가는 선 서른 줄이 글자보다 먼저 보였다
+ * (taste-skill tells.md 4절: 가는 선은 구조가 아니다).
  *
  * > TODO: 근거의 차이를 **글자로도** 알려 줘야 한다. 지금은 생김새뿐이라 화면을 읽어 주는
  * > 도구에는 "제목만 보았다" 가 전달되지 않는다. "제목만" 에 해당하는 문구를
  * > ChatKHU 로 받아야 한다 (GE-16 의 4차).
  */
-export function markLook(level: DisplayLevel, basis: MarkBasis): MarkLook {
+export function markLook(level: DisplayLevel, basis: MarkBasis, dark = false): MarkLook {
   return {
-    glyph: GLYPH[level],
-    color: LEVEL_COLOR[level],
-    // 판단 중(…)은 아직 근거가 없다. 근거가 생기기 전에 진하게 그리지 않는다.
+    icon: LEVEL_ICON[level],
+    color: inkFor(level, dark),
+    // 판단 중(점 셋)은 아직 근거가 없다. 근거가 생기기 전에 진하게 그리지 않는다.
     filled: basis === 'full' && level !== 'PENDING',
   }
 }
+
+/** 목록 제목 옆 표시의 변 길이(px). 제목 글자(보통 15~17px)보다 작게 둔다. */
+const MARK_SIZE = 15
 
 /**
  * 동그라미 하나를 만든다.
@@ -104,6 +115,10 @@ export function markLook(level: DisplayLevel, basis: MarkBasis): MarkLook {
  * **`<style>` 요소를 넣지 않는다.** 포털 페이지의 CSP `style-src` 에 걸릴 수 있다.
  * 스타일은 전부 CSSOM(`el.style`)으로 준다 — CSP 가 막지 않는 길이다.
  * `innerHTML` 도 쓰지 않는다. 제목에 `<img onerror=…>` 가 들어 있을 수 있다.
+ *
+ * **어두운 화면을 `matchMedia` 로 본다.** 여기서는 CSS 미디어 쿼리를 쓸 수 없다 —
+ * 스타일이 전부 인라인이기 때문이다. 밝은 쪽 색을 그대로 쓰면 어두운 목록에서
+ * `#247b50` 이 2.4:1 로 가라앉는다 (lib/item-view.ts 의 `LEVEL_INK_DARK`).
  */
 export function createMark(doc: Document) {
   const host = doc.createElement('span')
@@ -114,33 +129,19 @@ export function createMark(doc: Document) {
   host.style.setProperty('margin-inline-end', '4px')
 
   const shadow = host.attachShadow({ mode: 'closed' })
-  const dot = doc.createElement('span')
-  for (const [k, v] of Object.entries({
-    display: 'inline-flex',
-    'align-items': 'center',
-    'justify-content': 'center',
-    width: '15px',
-    height: '15px',
-    'border-radius': '50%',
-    'border-width': '1.5px',
-    'border-style': 'solid',
-    'font-size': '10px',
-    'font-weight': '700',
-    'font-family': 'system-ui, sans-serif',
-    'line-height': '1',
-    // 목록 화면이 주인공이다. 표시가 제목보다 세면 안 된다 (requirements.md 4-2절).
-    opacity: '0.95',
-  })) {
-    dot.style.setProperty(k, v)
-  }
-  shadow.append(dot)
+  const dark = doc.defaultView?.matchMedia('(prefers-color-scheme: dark)').matches ?? false
 
   function render(level: DisplayLevel, basis: MarkBasis, label: string): void {
-    const look = markLook(level, basis)
-    dot.textContent = look.glyph
-    dot.style.setProperty('border-color', look.color)
-    dot.style.setProperty('background-color', look.filled ? look.color : 'transparent')
-    dot.style.setProperty('color', look.filled ? '#fff' : look.color)
+    const look = markLook(level, basis, dark)
+    const svg = createIcon(doc, look.icon, {
+      size: MARK_SIZE,
+      color: look.color,
+      filled: look.filled,
+    })
+    // 목록 화면이 주인공이다. 표시가 제목보다 세면 안 된다 (requirements.md 4-2절).
+    // **Shadow DOM 안에 둔다** — host 에 걸면 포털 스크립트가 우리 표시를 읽을 수 있다.
+    svg.style.setProperty('opacity', '0.95')
+    shadow.replaceChildren(svg)
     // 화면을 읽어 주는 도구와 마우스를 올렸을 때. **문구는 packages/content 가 원본이다.**
     host.setAttribute('role', 'img')
     host.setAttribute('aria-label', label)

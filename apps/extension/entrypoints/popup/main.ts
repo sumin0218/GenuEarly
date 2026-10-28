@@ -7,7 +7,8 @@
 // **점수 숫자를 쓰지 않는다.** 정밀해 보이는 숫자는 단정으로 읽힌다 (docs/product.md 6절).
 import './style.css'
 import content from '../../../../packages/content/ui.ko.json'
-import { MARK, toRows } from '../../lib/item-view'
+import { createIcon } from '../../lib/icon'
+import { LEVEL_ICON, LEVEL_INK, LEVEL_INK_DARK, toRows } from '../../lib/item-view'
 import {
   SELECTION_KEY,
   clearSelection,
@@ -15,7 +16,7 @@ import {
   type SelectionOutcome,
   type SelectionRecord,
 } from '../../lib/selection'
-import type { TabState, TabStateMessage } from '../../lib/protocol'
+import type { DisplayLevel, TabState, TabStateMessage } from '../../lib/protocol'
 
 /**
  * 지금 탭의 상태를 **그 탭의 콘텐츠 스크립트에** 묻는다.
@@ -90,6 +91,38 @@ async function run(): Promise<void> {
   render(await readTabState(), document, 'page')
 }
 
+/** 머리말 아이콘의 변 길이(px). 제목(18px)보다 조금 작다. */
+const HEAD_ICON = 20
+/** 항목 줄 아이콘의 변 길이(px). */
+const ROW_ICON = 14
+
+/**
+ * 단계 아이콘을 자리에 그린다.
+ *
+ * **색을 CSS 변수로 준다.** 요소에 색을 직접 칠하면 밝은 화면·어두운 화면 두 벌을
+ * 스크립트가 들고 있어야 한다. 팝업에는 미디어 쿼리가 있으니 값만 넘기고 고르는 일은
+ * CSS 에 맡긴다 — 다만 단계별 색표의 원본은 lib/item-view.ts 하나다.
+ *
+ * `tone: 'quiet'` 는 색을 주지 않는다. 걸리지 않은 항목 줄이 그렇다 —
+ * 일곱 줄을 전부 색칠하면 어느 줄을 보라는 것인지 알 수 없다.
+ */
+function paintMark(
+  el: HTMLElement,
+  level: DisplayLevel,
+  size: number,
+  tone: 'level' | 'quiet' = 'level',
+): void {
+  const root = el.ownerDocument
+  if (tone === 'level') {
+    el.style.setProperty('--ge-level-light', LEVEL_INK[level])
+    el.style.setProperty('--ge-level-dark', LEVEL_INK_DARK[level])
+  } else {
+    el.style.removeProperty('--ge-level-light')
+    el.style.removeProperty('--ge-level-dark')
+  }
+  el.replaceChildren(createIcon(root, LEVEL_ICON[level], { size }))
+}
+
 /** 고른 글이 너무 길어 묻지 않은 경우. **판정이 아니라 거절이다.** */
 function renderTooLong(limit: number, root: Document = document): void {
   const mark = root.getElementById('mark')
@@ -100,7 +133,7 @@ function renderTooLong(limit: number, root: Document = document): void {
 
   root.body.dataset.level = 'UNDETERMINED'
   root.body.dataset.kind = 'selection'
-  mark.textContent = MARK.UNDETERMINED
+  paintMark(mark, 'UNDETERMINED', HEAD_ICON)
   name.textContent = content.selection.tooLong.title
   desc.textContent = content.selection.tooLong.description.replace('{limit}', String(limit))
   items.replaceChildren()
@@ -131,7 +164,7 @@ function render(state: TabState, root: Document = document, kind: 'page' | 'sele
     scope.hidden = kind !== 'selection'
     scope.textContent = kind === 'selection' ? content.selection.title : ''
   }
-  mark.textContent = MARK[state.level]
+  paintMark(mark, state.level, HEAD_ICON)
   name.textContent = copy.name
   desc.textContent = copy.description
 
@@ -154,15 +187,22 @@ function render(state: TabState, root: Document = document, kind: 'page' | 'sele
     li.className = 'ge-popup__item'
     li.dataset.level = r.level
 
+    // **걸린 줄에만 색이 들어간다** (docs/design.md). 나머지는 흐린 회색이라
+    // 주의·확인 줄이 목록 안에서 먼저 보인다.
+    const loud = r.level === 'CAUTION' || r.level === 'CHECK'
+    const icon = root.createElement('span')
+    icon.className = 'ge-popup__item-mark'
+    paintMark(icon, r.level, ROW_ICON, loud ? 'level' : 'quiet')
+
     const head = root.createElement('span')
     head.className = 'ge-popup__item-name'
-    head.textContent = `${r.mark} ${r.name}`
+    head.textContent = r.name
 
     const body = root.createElement('span')
     body.className = 'ge-popup__item-text'
     body.textContent = r.text
 
-    li.append(head, body)
+    li.append(icon, head, body)
     items.append(li)
   }
 }
