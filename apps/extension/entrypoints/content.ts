@@ -5,7 +5,7 @@
 //
 // **판단 호출은 여기서 하지 않는다.** background 로 보낸다 (lib/protocol.ts 참고).
 import '../assets/content.css'
-import { ARTICLE_MATCHES } from '../match-patterns'
+import { ARTICLE_EXCLUDE_MATCHES, ARTICLE_MATCHES } from '../match-patterns'
 import content from '../../../packages/content/ui.ko.json'
 import { extractArticle } from '../lib/extract'
 import { createIcon } from '../lib/icon'
@@ -71,6 +71,12 @@ function createBadge() {
 export default defineContentScript({
   // 대상 페이지의 원본은 match-patterns.ts 다. host_permissions 와 같은 값을 쓴다.
   matches: [...ARTICLE_MATCHES],
+
+  // **댓글 화면에서는 아예 돌지 않는다.** `/mnews/article/*` 의 `*` 가 경로 나머지를
+  // 전부 덮어서 `/mnews/article/comment/…` 까지 잡힌다. 거기에는 본문이 없어
+  // 지금까지 ⚪ 배지가 떴다 — 판단해 보고 실패한 것처럼 보이지만 기사 페이지가 아니다.
+  // `isArticleUrl` 도 같은 목록을 보고 뺀다 (match-patterns.ts).
+  excludeMatches: [...ARTICLE_EXCLUDE_MATCHES],
 
   // 'ui' 로 두면 위에서 import 한 CSS 가 페이지가 아니라 Shadow DOM 안으로 들어간다.
   cssInjectionMode: 'ui',

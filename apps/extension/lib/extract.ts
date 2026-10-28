@@ -1,8 +1,12 @@
 // 기사 페이지에서 제목과 본문을 꺼낸다.
 //
-// **사이트별 선택자를 쓴다.** 일반적인 본문 추출기를 만들지 않는다 — 대상이 두 곳뿐이고,
+// **사이트별 선택자를 쓴다.** 일반적인 본문 추출기를 만들지 않는다 — 대상이 손에 꼽히고,
 // 범용 추출기는 무엇을 집어 올지 예측할 수 없다. 광고나 추천 기사가 섞여 들어가면
 // 판단이 통째로 틀어진다 (docs/requirements.md 3-2).
+//
+// 선택자는 **예고 없이 바뀐다.** 바뀌면 `extractArticle` 이 `null` 을 돌려주고
+// 배지는 ⚪ 가 된다 — 조용히 틀린 판단을 내는 것보다 낫지만, 그래도 사용자는
+// 아무것도 못 본다. 사이트를 늘릴 때마다 깨질 자리가 하나씩 는다.
 import { splitSentences } from './sentences'
 
 export interface Article {
@@ -14,6 +18,14 @@ export interface Article {
 interface SiteRule {
   host: RegExp
   headline: string[]
+  /**
+   * 제목 선택자가 통하지 않을 때 쓸 `<meta>` 의 property. **쓰는 곳만 둔다.**
+   *
+   * 네이버 스포츠·연예의 제목 클래스가 `ArticleHead_article_title__qh8GV` 처럼
+   * **빌드마다 바뀌는 해시**를 달고 있다. 앞부분으로 찾고 있지만 모듈 이름이 바뀌면
+   * 그것도 깨진다. 그때 제목 하나 때문에 기사 전체를 못 읽는 것은 아깝다.
+   */
+  headlineMeta?: string[]
   body: string[]
   /** 본문 안에서 걷어낼 것 — 사진 설명, 기자 정보, 관련 기사 */
   drop: string[]
@@ -31,6 +43,45 @@ const RULES: SiteRule[] = [
     headline: ['h3.tit_view', '.head_view .tit_view'],
     body: ['div.article_view[data-translation-body="true"]', 'div.article_view', '#harmonyContainer'],
     drop: ['figure', 'figcaption', '.link_figure', '.txt_caption', 'script', 'style', 'table'],
+  },
+  {
+    // 네이버 스포츠·연예. **두 사이트의 구조가 같다** — 같은 틀로 만든 화면이다.
+    // 걷어낼 것도 뉴스와 같은 클래스(`end_photo_org`, `img_desc`)를 쓴다.
+    //
+    // 스포츠 기사는 본문이 **사진 설명으로 시작하는 일이 잦다**
+    // ("…인천=송정헌 기자songs@…/2026.09.29/"). 걷어내지 않으면 그것이 첫 문장이 되고
+    // 출처 판단에도 섞인다.
+    host: /(^|\.)m\.(sports|entertain)\.naver\.com$/,
+    // 클래스에 빌드 해시가 붙어 있어 **앞부분으로** 찾는다. 그래도 깨질 수 있어
+    // `og:title` 을 뒤에 둔다.
+    headline: ['h2[class*="ArticleHead_article_title"]'],
+    headlineMeta: ['og:title'],
+    body: ['#comp_news_article ._article_content', '#comp_news_article'],
+    drop: ['.end_photo_org', '.img_desc', 'script', 'style', 'table'],
+  },
+  {
+    // 인사이트. 본문은 `<p>` 단락이고 사진 설명만 `<p class="image">` 로 따로 있다.
+    host: /(^|\.)insight\.co\.kr$/,
+    headline: ['h1.main-news-header-title'],
+    body: ['.main-news-article-body'],
+    // `p.image` 가 사진 설명이다 — "…2026.10.27/뉴스1" 처럼 날짜와 통신사가 붙어 있어
+    // 걷어내지 않으면 문장 하나를 차지하고 출처 판단에도 섞인다.
+    drop: ['p.image', 'figure', 'figcaption', 'script', 'style', 'table'],
+  },
+  {
+    // 위키트리. **`.article_body` 가 아니라 그 안의 `.wikitree_content` 를 집는다.**
+    // `.article_body` 에는 부제(`h2.lead`), 키워드 목록, 저작권 안내가 함께 들어 있다.
+    // 안쪽을 바로 집으면 걷어낼 것이 줄어든다.
+    //
+    // 부제를 버리는 것은 네이버와 같은 결정이다 (아래 "맨 앞의 부제를 버린다").
+    // 같은 글을 어디서 읽느냐에 따라 다르게 판단하면 안 된다.
+    host: /(^|\.)wikitree\.co\.kr$/,
+    headline: ['h1#article', '.article_head h1'],
+    body: ['.article_body .wikitree_content', '.article_body'],
+    drop: [
+      '.keyword_wrap', '.article_bottom', '.article_images_wrap', '.rel_articles',
+      'figure', 'figcaption', 'script', 'style', 'table',
+    ],
   },
 ]
 
@@ -85,11 +136,17 @@ export function extractArticle(): Article | null {
   const rule = RULES.find((r) => r.host.test(location.hostname))
   if (!rule) return null
 
-  const headlineEl = pick(rule.headline)
   const bodyEl = pick(rule.body)
-  if (!headlineEl || !bodyEl) return null
+  if (!bodyEl) return null
 
-  const headline = (headlineEl.textContent ?? '').replace(/\s+/g, ' ').trim()
+  const headlineEl = pick(rule.headline)
+  let headline = (headlineEl?.textContent ?? '').replace(/\s+/g, ' ').trim()
+  // 선택자가 통하지 않았다. 그 사이트가 `<meta>` 를 쓰기로 되어 있으면 거기서 읽는다.
+  for (const prop of headline ? [] : (rule.headlineMeta ?? [])) {
+    const el = document.querySelector(`meta[property="${prop}"]`)
+    headline = (el?.getAttribute('content') ?? '').replace(/\s+/g, ' ').trim()
+    if (headline) break
+  }
 
   // 원본 DOM 을 건드리지 않으려고 복제본에서 걷어낸다.
   const clone = bodyEl.cloneNode(true) as Element

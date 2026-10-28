@@ -69,6 +69,54 @@ describe('어떤 링크가 기사인가', () => {
     expect(isArticleUrl('#')).toBe(false)
     expect(isArticleUrl('')).toBe(false)
   })
+
+  // 섹션 한 페이지(news.naver.com/section/100)에서 실제로 센 값이다 (2026-10-27).
+  // 기사 링크 354개 중 랭킹이 170개, hotissue 가 16개였다 — **절반 가까이**를
+  // 받지 못하고 있었다 (GE-42).
+  describe('네이버가 같은 기사를 거는 네 경로', () => {
+    it.each([
+      ['https://n.news.naver.com/article/056/0012281659', '기본'],
+      ['https://n.news.naver.com/mnews/article/056/0012281659', '모바일'],
+      ['https://n.news.naver.com/mnews/ranking/article/056/0012281954', '랭킹'],
+      ['https://n.news.naver.com/mnews/hotissue/article/662/0000107048', 'hotissue'],
+    ])('%s (%s) 는 기사다', (url) => {
+      expect(isArticleUrl(url)).toBe(true)
+    })
+
+    it('랭킹 주소에 붙는 ntype 쿼리를 떼고 본다', () => {
+      expect(isArticleUrl('https://n.news.naver.com/mnews/ranking/article/056/0012281954?ntype=RANKING'))
+        .toBe(true)
+    })
+
+    it('언론사 자체 도메인도 기사다', () => {
+      // 포털을 거치지 않고 링크를 받아 바로 들어오는 길 (GE-41).
+      expect(isArticleUrl('https://www.insight.co.kr/news/579405')).toBe(true)
+      expect(isArticleUrl('https://www.wikitree.co.kr/articles/1169622')).toBe(true)
+      expect(isArticleUrl('https://m.wikitree.co.kr/articles/1169622')).toBe(true)
+    })
+
+    it('네이버 스포츠·연예도 기사다 — 분류가 경로 가운데 들어간다', () => {
+      expect(isArticleUrl('https://m.sports.naver.com/kbaseball/article/076/0004459867')).toBe(true)
+      expect(isArticleUrl('https://m.sports.naver.com/wfootball/article/076/0004459867')).toBe(true)
+      expect(isArticleUrl('https://m.entertain.naver.com/home/article/076/0004459769')).toBe(true)
+    })
+
+    it('그 사이트의 목록 페이지는 기사가 아니다', () => {
+      // 기사와 모양이 달라 구분된다 — 숫자가 없거나 경로가 다르다.
+      expect(isArticleUrl('https://www.insight.co.kr/economy/')).toBe(false)
+      expect(isArticleUrl('https://www.wikitree.co.kr/categories/1')).toBe(false)
+      expect(isArticleUrl('https://m.sports.naver.com/kbaseball/index')).toBe(false)
+      expect(isArticleUrl('https://m.entertain.naver.com/home')).toBe(false)
+    })
+
+    it('댓글 화면은 기사가 아니다 — 본문이 없다', () => {
+      // `/mnews/article/*` 의 `*` 가 경로 나머지를 전부 덮어서 여기까지 잡힌다.
+      // 지금까지 이 화면에 ⚪ 배지가 떴다. 판단해 보고 실패한 것처럼 보이지만
+      // 애초에 기사 페이지가 아니다.
+      expect(isArticleUrl('https://n.news.naver.com/mnews/article/comment/056/0012281659'))
+        .toBe(false)
+    })
+  })
 })
 
 describe('목록에서 제목을 고른다', () => {
