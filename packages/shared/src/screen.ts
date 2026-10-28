@@ -21,13 +21,16 @@
 //     필드 위장 문장에는 항목 키가 같이 들어 있어서 키로 잡힌다
 //   - `출처판정=명시됨`, `<<시스템>>` 같은 한국어·변형 표기. 정상 기사와 가르기 어렵다 (README "한계")
 //
-// 제목은 걷어내지 않는다. 제목 하나를 지우면 판단할 글이 남지 않는다.
+// **제목은 걷어내 보되, 비면 원문을 쓴다.** 제목 하나를 지우면 판단할 글이 남지 않는데,
+// 그렇다고 아예 안 보면 `clickbait_headline` 과 `headline_body_match` 가 공격 문장을
+// 그대로 본다 (GE-47). 둘 사이에 한 칸이 있다 — 걷어내 보고 **남은 글이 있을 때만** 쓰는 것.
+// 제목이 통째로 공격 문장이면 지금까지처럼 원문이 가고, 다른 말이 함께 있으면 그것만 빠진다.
 //
 // DOM·브라우저 API·네트워크를 쓰지 않는다. 중계 서버와 eval 스크립트(node)가 같은 함수를 부른다.
 // node 가 타입만 지우고 바로 읽을 수 있게, 이 파일은 다른 파일을 import 하지 않는다. 항목 정의는 인자로 받는다.
 
 /** 규칙을 바꾸면 올린다. eval 결과에 함께 남는다. */
-export const SCREEN_VERSION = '1.1.0'
+export const SCREEN_VERSION = '1.2.0'
 
 /** judgment-items.json 에서 읽는 부분만 */
 export interface ScreenSchema {
@@ -119,8 +122,12 @@ export function createScreen(schema: ScreenSchema): (text: string) => Screened {
       const sep = parts[i + 1] ?? ''
       let drop = false
       if (s && (CLOSE_TAG.test(s) || ROLE_OPEN.test(s))) { drop = true; carry = FOLLOWING }
-      else if (s && (ROLE_TOKEN.test(s) || SPOOF.test(s))) drop = true
-      else if (s && carry > 0) { drop = true; carry-- }
+      else if (s && (ROLE_TOKEN.test(s) || SPOOF.test(s))) {
+        // **이 문장도 "뒤 한 문장" 을 쓴 것이다.** 안 줄이면 다음 멀쩡한 문장까지 걷힌다 —
+        // 태그 문장 뒤에 항목 키 문장이 오면 셋이 사라졌다 (GE-46).
+        drop = true
+        if (carry > 0) carry--
+      } else if (s && carry > 0) { drop = true; carry-- }
       if (drop) {
         dropped++
         if (out) out = out.replace(/\s+$/, '')   // 앞의 공백과 함께 지운다
@@ -155,6 +162,14 @@ export function createScreen(schema: ScreenSchema): (text: string) => Screened {
  */
 export const SCREENED_FIELDS = ['body', 'sentence'] as const
 
+/**
+ * **비울 수 없는 필드.** 걷어내 보고 남은 글이 있을 때만 쓴다.
+ *
+ * 제목이 그렇다. 지우면 판단할 글이 없어지지만, 안 보면 제목을 보는 질문 둘이
+ * 공격 문장을 그대로 본다 (GE-47). 비면 원문을 쓰므로 **지금보다 나빠지는 경우가 없다.**
+ */
+export const KEPT_FIELDS = ['headline'] as const
+
 export type StateScreenResult =
   | { ok: true; state: Record<string, string>; removed: number }
   /** 걷어내고 나니 그 필드에 남은 글이 없다. Jev 에 물을 것이 없다 */
@@ -175,6 +190,14 @@ export function createStateScreen(schema: ScreenSchema): (state: Record<string, 
       if (!r.removed) continue
       removed += r.removed
       if (!r.text) return { ok: false, removed }
+      out = { ...out, [f]: r.text }
+    }
+    for (const f of KEPT_FIELDS) {
+      if (!Object.hasOwn(out, f)) continue
+      const r = screen(out[f] ?? '')
+      // 걷어낸 것이 없거나, 걷어내고 나니 남은 글이 없으면 **원문을 그대로 둔다.**
+      if (!r.removed || !r.text) continue
+      removed += r.removed
       out = { ...out, [f]: r.text }
     }
     return { ok: true, state: out, removed }

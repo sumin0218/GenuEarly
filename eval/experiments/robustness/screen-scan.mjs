@@ -22,7 +22,18 @@ for (const a of articles) {
   sentences += sents.length
   const body = screen(a.body).removed
   const sent = sents.filter((s) => screen(s).removed).length
-  if (body || sent) hits.push({ id: a.id, kind: a.kind ?? (a.url ? 'real' : null), body_removed: body, sentences_hit: sent })
+  // 제목도 본다 — 걷어내기가 제목을 보게 되었다 (GE-47). 정상 기사 제목에서
+  // 걷히는 것이 있으면 그것은 오탐이고, 여기서 0 이어야 한다.
+  const head = a.headline ? screen(a.headline).removed : 0
+  if (body || sent || head) {
+    hits.push({
+      id: a.id,
+      kind: a.kind ?? (a.url ? 'real' : null),
+      body_removed: body,
+      sentences_hit: sent,
+      headline_removed: head,
+    })
+  }
 }
 const summary = {
   date: new Date().toISOString().slice(0, 10),
@@ -34,7 +45,11 @@ const summary = {
   articles_hit: hits.length,
   hits,
 }
-console.log(`걷어내기 ${SCREEN_VERSION}: 기사 ${articles.length}건, 문장 ${sentences}개 중 걷어낸 기사 ${hits.length}건`)
+const heads = articles.filter((a) => a.headline).length
+console.log(
+  `걷어내기 ${SCREEN_VERSION}: 기사 ${articles.length}건(제목 ${heads}건), ` +
+    `문장 ${sentences}개 중 걷어낸 기사 ${hits.length}건`,
+)
 for (const h of hits) console.log(`  ${h.id}  본문 ${h.body_removed}, 문장 ${h.sentences_hit}`)
 if (outdir) {
   mkdirSync(resolve(outdir), { recursive: true })
