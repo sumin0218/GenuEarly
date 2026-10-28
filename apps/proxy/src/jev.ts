@@ -6,7 +6,7 @@ import type { Env } from './index'
 import { answersAreValid, type Question } from './schema'
 
 /** 사용자에게 보여 주지 않는다. 로그와 디버깅용이다 (docs/architecture.md 4절). */
-export type Reason = 'rate_limited' | 'timeout' | 'upstream_error' | 'invalid_answer' | 'budget_exhausted'
+export type Reason = 'rate_limited' | 'timeout' | 'upstream_error' | 'invalid_answer' | 'budget_exhausted' | 'screened_out'
 
 export type JevResult =
   | { ok: true; answers: Record<string, unknown>; upstreamModel: unknown }

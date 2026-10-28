@@ -6,7 +6,9 @@ const UV = SCHEMA.items.find((i) => i.id === 'unverifiable_claim')
 const COMMON = SCHEMA.common_instructions
 const BASE = process.env.CHATKHU_API_BASE_URL, KEY = process.env.CHATKHU_API_KEY
 
-const LIMIT = 95            // 분당 120건 중 여유를 둔다
+// 분당 120건 중 여유를 둔다. 전후를 같은 시간에 재려고 두 프로세스를 함께 돌릴 때는
+// JEV_RATE_PER_MIN 으로 나눠 준다 (예: 55 씩 둘, 합 110). 한도는 계정 하나에 걸린다
+const LIMIT = Number(process.env.JEV_RATE_PER_MIN) || 95
 const win = []
 async function slot() {
   for (;;) {
