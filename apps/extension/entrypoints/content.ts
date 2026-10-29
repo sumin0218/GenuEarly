@@ -10,6 +10,7 @@ import content from '../../../packages/content/ui.ko.json'
 import { findEvidence } from '@genuearly/shared'
 import { packPicks, readExplain, unpackPicks, writeExplain } from '../lib/cache'
 import { extractArticle } from '../lib/extract'
+import { TOAST_MS, createToast } from '../lib/toast'
 import { createIcon } from '../lib/icon'
 import { LEVEL_ICON, LEVEL_INK, LEVEL_INK_DARK } from '../lib/item-view'
 import type {
@@ -94,6 +95,7 @@ export default defineContentScript({
   async main(ctx) {
     const article = extractArticle()
     const badge = createBadge()
+    const toast = createToast()
     const ui = await createShadowRootUi(ctx, {
       name: 'genuearly-badge',
       position: 'inline',
@@ -104,7 +106,7 @@ export default defineContentScript({
       // docs/security/secure-coding.md 4절이 'closed' 를 기본으로 정하고 있다.
       mode: 'closed',
 
-      onMount: (container) => { container.append(badge.el) },
+      onMount: (container) => { container.append(badge.el, toast.el) },
     })
     ui.mount()
 
@@ -226,10 +228,14 @@ export default defineContentScript({
     try {
       const verdict = (await browser.runtime.sendMessage(msg)) as ArticleVerdict | undefined
       badge.render(verdict?.level ?? 'UNDETERMINED', verdict)
+      // **판단이 나왔을 때만 알린다.** ⚪ 는 결과이긴 하지만, "결과를 보려면 누르세요"
+      // 하고 불러 놓고 "판단하지 못했습니다" 를 보여 주는 것은 헛걸음을 시키는 일이다.
+      if (verdict && verdict.level !== 'UNDETERMINED') toast.show(TOAST_MS)
     } catch (e) {
       // service worker 가 죽었거나 확장이 다시 로드됐다. ⚪ 는 실패가 아니라 결과다.
       console.warn('[GenuEarly] 판단을 받지 못했다', e)
       badge.render('UNDETERMINED')
+      toast.hide()
     }
   },
 })
