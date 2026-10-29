@@ -22,16 +22,14 @@ for (const a of articles) {
   sentences += sents.length
   const body = screen(a.body).removed
   const sent = sents.filter((s) => screen(s).removed).length
-  // 제목도 본다 — 걷어내기가 제목을 보게 되었다 (GE-47). 정상 기사 제목에서
-  // 걷히는 것이 있으면 그것은 오탐이고, 여기서 0 이어야 한다.
-  const head = a.headline ? screen(a.headline).removed : 0
-  if (body || sent || head) {
+  // **제목은 보지 않는다.** 걷어내기가 제목을 건드리지 않으므로 여기서 세면
+  // 코드가 하지 않는 일을 재는 셈이 된다 (GE-47 되돌림).
+  if (body || sent) {
     hits.push({
       id: a.id,
       kind: a.kind ?? (a.url ? 'real' : null),
       body_removed: body,
       sentences_hit: sent,
-      headline_removed: head,
     })
   }
 }
@@ -45,10 +43,8 @@ const summary = {
   articles_hit: hits.length,
   hits,
 }
-const heads = articles.filter((a) => a.headline).length
 console.log(
-  `걷어내기 ${SCREEN_VERSION}: 기사 ${articles.length}건(제목 ${heads}건), ` +
-    `문장 ${sentences}개 중 걷어낸 기사 ${hits.length}건`,
+  `걷어내기 ${SCREEN_VERSION}: 기사 ${articles.length}건, 문장 ${sentences}개 중 걷어낸 기사 ${hits.length}건`,
 )
 for (const h of hits) console.log(`  ${h.id}  본문 ${h.body_removed}, 문장 ${h.sentences_hit}`)
 if (outdir) {

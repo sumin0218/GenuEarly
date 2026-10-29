@@ -4,6 +4,7 @@
 // 사람이 읽고 넘기는 것에 기대지 않는다. 문구는 앞으로 ChatKHU 로 다시 만들 수도 있고,
 // 그때 이 검사가 유일한 관문이다.
 import { describe, expect, it } from 'vitest'
+import { BANNED_WORDS } from '@genuearly/shared'
 import content from '../../../packages/content/ui.ko.json'
 import schema from '../../../packages/shared/judgment-items.json'
 import { evidenceRuleIds } from '@genuearly/shared'
@@ -30,13 +31,9 @@ const visible = strings(content).filter(
 
 describe('단정하지 않는다', () => {
   // docs/product.md 2절. 이 제품은 기사가 참인지 거짓인지 말하지 않는다.
-  const 금지 = [
-    '가짜', '허위', '거짓', '사실이 아', '사실무근', '조작',
-    '신뢰할 수 있', '믿을 만', '믿어도', '안전한 기사', '검증된',
-    // **신호가 없는 항목(safe)의 문구가 합격 판정으로 읽히면 안 된다.**
-    // 우리는 신호를 찾지 못한 것이지 그 점에서 옳다고 확인한 것이 아니다.
-    '문제없', '이상 없', '적절합', '타당합', '정확합', '충분합',
-  ]
+  // **목록은 packages/shared 가 들고 있다.** 미리 써 둔 문구를 검사하는 여기와,
+  // 실행 중에 생성된 리포트 글을 거르는 중계 서버가 **같은 목록**을 봐야 한다.
+  const 금지 = BANNED_WORDS
 
   it.each(금지)('"%s" 를 쓰지 않는다', (word) => {
     const hit = visible.filter(([, v]) => v.includes(word))
@@ -146,7 +143,16 @@ describe('길이', () => {
   })
 
   it('한 줄 설명이 50자를 넘지 않는다', () => {
-    const long = visible.filter(([p, v]) => !p.startsWith('feedback.notice') && len(v) > 50)
+    // **리포트는 빠진다.** 50자는 340px 팝업에서 한 줄에 들어가야 한다는 뜻이었다.
+    // 리포트는 전체 탭(760px)이라 그 이유가 없다 — 대신 아래에서 따로 재 둔다.
+    const 예외 = (p: string) => p.startsWith('feedback.notice') || p.startsWith('report.')
+    const long = visible.filter(([p, v]) => !예외(p) && len(v) > 50)
+    expect(long.map(([p, v]) => `${p} (${len(v)}자)`)).toEqual([])
+  })
+
+  it('리포트 문구가 120자를 넘지 않는다', () => {
+    // 전체 탭이라 50자보다 길어도 되지만, 상한이 없으면 문단이 된다.
+    const long = visible.filter(([p, v]) => p.startsWith('report.') && len(v) > 120)
     expect(long.map(([p, v]) => `${p} (${len(v)}자)`)).toEqual([])
   })
 })

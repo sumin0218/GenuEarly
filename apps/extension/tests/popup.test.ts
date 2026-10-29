@@ -5,10 +5,10 @@
 // 문구 자체는 tests/content.test.ts 가 검사한다 (금지어·단정 표현).
 // 여기서 보는 것은 **그 문구가 화면에 제대로 놓이는가**와,
 // 화면에 **있으면 안 되는 것이 새어 나오지 않는가**다.
-import { beforeEach, describe, expect, it } from 'vitest'
+import { beforeEach, describe, expect, it, vi } from 'vitest'
 import content from '../../../packages/content/ui.ko.json'
 import schema from '@genuearly/shared/judgment-items.json'
-import { drawChrome, explainLines, render, renderTooLong } from '../entrypoints/popup/main'
+import { drawChrome, explainLines, render, renderTooLong, sameArticle } from '../entrypoints/popup/main'
 import type { TabState } from '../lib/protocol'
 
 /** 팝업 문서의 뼈대. entrypoints/popup/index.html 과 id 가 같아야 한다. */
@@ -389,6 +389,191 @@ describe('왜 이 판정인가 — 확신이 모자란 🟡', () => {
   })
 })
 
+describe('주변 기록 버튼은 기사라면 늘 보인다', () => {
+  // **리포트의 주된 일은 흠을 보충하는 것이 아니다.** 한 기사가 전하지 못하는 것을
+  // 옆에 놓는 것이라, 신호가 없어도 할 일이 있다.
+  beforeEach(() => {
+    // 팝업은 저장소를 읽어 진행을 그린다. 여기서는 비어 있는 저장소를 세운다.
+    vi.stubGlobal('browser', {
+      storage: {
+        session: { get: () => Promise.resolve({}) },
+        onChanged: { addListener: () => {} },
+      },
+      tabs: { query: () => Promise.resolve([{ id: 1 }]), sendMessage: () => Promise.resolve(null), create: () => Promise.resolve() },
+      runtime: { getURL: (x: string) => x },
+    })
+    const box = document.createElement('div'); box.id = 'report-box'; box.hidden = true
+    const btn = document.createElement('button'); btn.id = 'report-run'
+    const note = document.createElement('p'); note.id = 'report-note'
+    box.append(btn, note); document.body.append(box)
+  })
+  const box = () => document.getElementById('report-box') as HTMLElement
+
+  it('신호가 하나도 없어도 보인다 — 초록 기사에도 주변 기록은 있다', () => {
+    render(verdict([item('source_citation', 0), item('emotional_language', 0)], 'SAFE'))
+    expect(box().hidden).toBe(false)
+  })
+
+  it('기사가 아닌 곳에는 보이지 않는다 — 판단한 적이 없다', () => {
+    render({ level: 'UNDETERMINED' })
+    expect(box().hidden).toBe(true)
+  })
+
+  it('확인하기 어려운 주장이 걸리면 보인다', () => {
+    render(verdict([item('unverifiable_claim', 0.9)], 'CAUTION'))
+    expect(box().hidden).toBe(false)
+  })
+
+  it('출처 표시가 걸리면 보인다', () => {
+    render(verdict([item('source_citation', 0.5)], 'CHECK'))
+    expect(box().hidden).toBe(false)
+  })
+
+  it('선택한 글에는 보이지 않는다 — 기사 주소도 날짜도 없다', () => {
+    render(verdict([item('unverifiable_claim', 0.9)], 'CAUTION'), document, 'selection')
+    expect(box().hidden).toBe(true)
+  })
+})
+describe('리포트는 그 기사의 것이어야 한다', () => {
+  // 리포트는 하나만 둔다 (lib/report.ts). 쌓으면 그것이 곧 열람 기록이기 때문이다.
+  // 그래서 **주소를 견주지 않으면 남의 리포트를 열어 준다** — 실제로 그랬다.
+  const A = 'https://n.news.naver.com/article/422/0000920529?cds=news_media_pc'
+  const B = 'https://n.news.naver.com/mnews/article/437/0000518013?iid=829'
+
+  const done = (url: string) =>
+    ({ url, headline: '머리글', date: '2026-10-28', at: 0, stage: 'done', rows: [], claims: [] }) as never
+
+  function mount(stored: unknown): void {
+    vi.stubGlobal('browser', {
+      storage: {
+        session: { get: () => Promise.resolve(stored ? { report: stored } : {}) },
+        onChanged: { addListener: () => {} },
+      },
+      tabs: { query: () => Promise.resolve([{ id: 1 }]), sendMessage: () => Promise.resolve(null), create: () => Promise.resolve() },
+      runtime: { getURL: (x: string) => x },
+    })
+    const box = document.createElement('div'); box.id = 'report-box'; box.hidden = true
+    const btn = document.createElement('button'); btn.id = 'report-run'
+    const note = document.createElement('p'); note.id = 'report-note'
+    box.append(btn, note); document.body.append(box)
+  }
+  const label = () => document.getElementById('report-run')?.textContent ?? ''
+  const settle = () => new Promise((r) => setTimeout(r, 0))
+
+  const green = (url: string): TabState => ({
+    ...verdict([item('source_citation', 0)], 'SAFE'),
+    url,
+  })
+
+  it('같은 기사면 연다 — 경로 모양과 꼬리표가 달라도 같은 기사다', async () => {
+    mount(done(A))
+    render(green('https://n.news.naver.com/mnews/article/422/0000920529'))
+    await settle()
+    expect(label()).toBe(content.report.open)
+  })
+
+  it('다른 기사면 새로 만든다 — 남의 리포트를 열어 주지 않는다', async () => {
+    mount(done(A))
+    render(green(B))
+    await settle()
+    expect(label(), '앞 기사의 리포트가 남아 있다고 "열기" 를 띄우면 안 된다')
+      .toBe(content.report.button)
+  })
+
+  it('주소를 모르면 없는 것으로 본다', async () => {
+    mount(done(A))
+    render(verdict([item('source_citation', 0)], 'SAFE'))
+    await settle()
+    expect(label()).toBe(content.report.button)
+  })
+
+  it('남의 조사가 돌고 있으면 또 시작하지 못한다', async () => {
+    // 리포트 칸은 하나뿐이다. A 를 조사하는 중에 B 에서 또 누르면 둘이 같은 칸에
+    // 번갈아 쓰면서 진행도 결과도 뒤섞인다. **남의 것을 없는 것으로 보는 처리가
+    // 열어 둔 길이다** — 그 전에는 reportFace 가 busy 를 돌려줘서 막혀 있었다.
+    mount({ ...(done(A) as object), stage: 'records', claims: [], at: Date.now() })
+    render(green(B))
+    await settle()
+
+    const btn = document.getElementById('report-run') as HTMLButtonElement
+    expect(btn.disabled, '칸이 하나라 둘을 동시에 만들 수 없다').toBe(true)
+    const note = document.getElementById('report-note') as HTMLElement
+    expect(note.hidden, '말없이 막힌 단추는 고장으로 읽힌다').toBe(false)
+    expect(note.textContent).toBe(content.report.waiting)
+  })
+
+  it('남의 것이 끝나 있으면 내 것을 만들 수 있다', async () => {
+    mount(done(A))
+    render(green(B))
+    await settle()
+    const btn = document.getElementById('report-run') as HTMLButtonElement
+    expect(btn.disabled).toBe(false)
+    expect(btn.textContent).toBe(content.report.button)
+  })
+
+  it('**멈춘 조사는 단추를 잠그지 않는다** — service worker 는 일하는 중에도 꺼진다', async () => {
+    // 꺼지면 storage.session 에 records 인 채로 남고 브라우저를 닫기 전까지 그대로다.
+    // 그것을 "도는 중" 으로 읽으면 어느 기사에서도 리포트를 못 만든다.
+    mount({ ...(done(A) as object), stage: 'records', claims: [], at: Date.now() - 10 * 60 * 1000 })
+    render(green(B))
+    await settle()
+
+    const btn = document.getElementById('report-run') as HTMLButtonElement
+    expect(btn.disabled, '멈춘 조사 하나가 기능 전체를 잠그면 안 된다').toBe(false)
+    expect(btn.textContent).toBe(content.report.button)
+  })
+
+  it('멈춘 내 조사도 다시 시작할 수 있다', async () => {
+    mount({ ...(done(A) as object), stage: 'brief', claims: [], at: Date.now() - 10 * 60 * 1000 })
+    render(green(A))
+    await settle()
+
+    const btn = document.getElementById('report-run') as HTMLButtonElement
+    expect(btn.disabled).toBe(false)
+    expect(btn.textContent).toBe(content.report.button)
+  })
+
+  it('주소를 견주는 것은 normalizeUrl 이다', () => {
+    const r = done(A) as unknown as Parameters<typeof sameArticle>[0]
+    expect(sameArticle(r, A)).toBe(true)
+    expect(sameArticle(r, B)).toBe(false)
+    expect(sameArticle(r, undefined)).toBe(false)
+    expect(sameArticle(null, A)).toBe(false)
+    expect(sameArticle(r, '주소가 아니다'), '깨진 주소에 터지지 않는다').toBe(false)
+  })
+})
+describe('덜 본 것을 말한다', () => {
+  // 문장 상한에 걸려 뒤쪽이 빠졌으면 그렇게 적는다. **조용히 덜 보지 않는다** —
+  // 상한을 40 에서 15 로 줄였기 때문에 이 줄이 더 중요해졌다 (lib/judge.ts).
+  // render() 는 drawChrome 을 거쳐 근거 줄을 채운다. mountDocument 는 판정 자리만
+  // 만들어 두므로 여기서 `details` 를 더해 준다.
+  beforeEach(() => {
+    // drawChrome 은 이 넷이 다 있어야 끝까지 간다 (하나라도 없으면 일찍 돌아간다).
+    for (const [tag, id] of [
+      ['ul', 'details'],
+      ['footer', 'foot'],
+      ['button', 'details-toggle'],
+      ['a', 'homepage'],
+    ] as const) {
+      const el = document.createElement(tag)
+      el.id = id
+      document.body.append(el)
+    }
+  })
+
+  const details = () => [...document.querySelectorAll('.ge-popup__detail')].map((x) => x.textContent)
+
+  it('capped 면 앞부분만 봤다고 적는다', () => {
+    const base = verdict([item('emotional_language', 0.5)], 'CHECK')
+    render({ ...base, verdict: { ...base.verdict!, capped: true } as never })
+    expect(details()).toContain(content.app.coverage.capped)
+  })
+
+  it('capped 가 아니면 적지 않는다 — 다 본 기사에 겁을 주지 않는다', () => {
+    render(verdict([item('emotional_language', 0.5)], 'CHECK'))
+    expect(details()).not.toContain(content.app.coverage.capped)
+  })
+})
 describe('4차 문구가 실제로 쓰인다', () => {
   // 문구를 받아 놓고 배선을 안 하면 ui.ko.json 에만 남는다.
   it('app 의 문구가 전부 어딘가에서 쓰인다', () => {

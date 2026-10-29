@@ -8,6 +8,9 @@
 // **점수로 바꾸거나 해석하지 않는다.** 그건 확장 프로그램의 몫이다 (docs/architecture.md 5절).
 import { buildRequest, isRejection, screenState, SCHEMA_MODEL, SCHEMA_VERSION } from './schema'
 import { canPinpoint, isPinpointLevel, pinpoint } from './pinpoint'
+import { investigate } from './records'
+import { weave, type BriefClaim } from './brief'
+import { pickClaims } from './claims'
 import { callJev } from './jev'
 import { budgetAllows, creditGuardOn, isPaused } from './credits'
 import { RETRY_AFTER_S, withinLimits } from './ratelimit'
@@ -25,6 +28,20 @@ export interface Env {
   EXPLAIN_MODEL: string
   /** 생성 모델은 분류기보다 느리다. 판단(8초)보다 넉넉히 준다. */
   EXPLAIN_TIMEOUT_MS: string
+  /**
+   * 리포트에서 **기록을 찾아 오는** 모델. 검색이 붙은 모델이어야 한다.
+   * 찾기만 하고 **판정하지 않는다** — 판정은 Jev 가 한다 (src/records.ts).
+   */
+  SEARCH_MODEL: string
+  /** 검색은 생성보다도 느리다. 실측 3~5초지만 넉넉히 둔다. */
+  SEARCH_TIMEOUT_MS: string
+  /**
+   * 리포트의 **글을 엮는** 모델. 판정하지 않는다 — 찾아 온 기록을 읽을 수 있게 할 뿐이다.
+   * 여기서 나온 글만은 실행 중에 생성되므로 **코드가 그 자리에서 거른다** (src/brief.ts).
+   */
+  BRIEF_MODEL: string
+  /** 긴 글을 쓴다. 실측 11초. */
+  BRIEF_TIMEOUT_MS: string
   MAX_REQUEST_BYTES: string
   /** 이만큼은 남겨 둔다. 아래로 내려가면 판단을 멈춘다. 0 이면 감시를 끈다 */
   CREDITS_RESERVE: string
@@ -285,6 +302,126 @@ export default {
       return reply(origin, { picks: found.picks }, 200)
     }
 
+    // --- 리포트: 기록 찾기 + 대조 ---------------------------------------------
+    //
+    // **주장 하나에 한 번 부른다.** 확장 프로그램이 받는 대로 한 줄씩 그린다 —
+    // 주장 넷을 한 요청으로 묶으면 스무 초 동안 빈 화면이 된다.
+    //
+    // 여기서도 **판정하는 것은 Jev 하나다.** 검색 모델은 찾기만 하고, 코드가 자기 인용과
+    // 지어낸 주소를 걸러 내며, 날짜 비교도 코드가 한다 (src/records.ts 머리말).
+    if (url.pathname === '/v1/records') {
+      const passed = await gate(env, request, origin)
+      if (!passed.ok) return passed.response
+
+      let parsed: unknown
+      try {
+        parsed = JSON.parse(passed.raw)
+      } catch {
+        return reply(origin, { error: 'invalid_json' }, 400)
+      }
+
+      const req = parsed as { claim?: unknown; articleDate?: unknown; articleUrl?: unknown }
+      if (typeof req.claim !== 'string' || req.claim.trim().length === 0) {
+        return reply(origin, { error: 'empty_claim' }, 400)
+      }
+      // **자유 텍스트 지시를 받지 않는다.** 날짜는 모양을 본다.
+      if (typeof req.articleDate !== 'string' || !/^\d{4}-\d{2}-\d{2}$/.test(req.articleDate)) {
+        return reply(origin, { error: 'bad_date' }, 400)
+      }
+      if (typeof req.articleUrl !== 'string' || !req.articleUrl.startsWith('https://')) {
+        return reply(origin, { error: 'bad_url' }, 400)
+      }
+
+      // 판단과 같은 지갑을 쓴다. 리포트는 **부수 기능**이라 먼저 포기한다.
+      if (!(await budgetAllows(env))) {
+        return reply(origin, { records: [], reason: 'budget_exhausted' }, 200)
+      }
+
+      const out = await investigate(env, req.claim, req.articleDate, req.articleUrl)
+      if (!out.ok) {
+        // 실패가 아니라 "못 찾음" 이다. 그래서 200 이다.
+        return reply(origin, { records: [], reason: out.reason }, 200)
+      }
+      return reply(origin, { records: out.records, searched: out.searched }, 200)
+    }
+
+    // --- 리포트: 글 엮기 -------------------------------------------------------
+    //
+    // **리포트에서 실행 중에 생성되는 유일한 한국어다.** 나머지 글자는 전부 ChatKHU 가
+    // 미리 써 둔 것이라 검수가 끝나 있다. 여기만 아니어서 **코드가 그 자리에서 거른다** —
+    // 지어낸 주장, 단정하는 말, 마크업. 걸리면 고치지 않고 **통째로 버린다** (src/brief.ts).
+    if (url.pathname === '/v1/brief') {
+      const passed = await gate(env, request, origin)
+      if (!passed.ok) return passed.response
+
+      let parsed: unknown
+      try {
+        parsed = JSON.parse(passed.raw)
+      } catch {
+        return reply(origin, { error: 'invalid_json' }, 400)
+      }
+
+      const req = parsed as { headline?: unknown; articleDate?: unknown; claims?: unknown }
+      if (typeof req.headline !== 'string' || req.headline.trim().length === 0) {
+        return reply(origin, { error: 'empty_headline' }, 400)
+      }
+      if (typeof req.articleDate !== 'string' || !/^\d{4}-\d{2}-\d{2}$/.test(req.articleDate)) {
+        return reply(origin, { error: 'bad_date' }, 400)
+      }
+      if (!Array.isArray(req.claims) || req.claims.length === 0) {
+        return reply(origin, { error: 'empty_claims' }, 400)
+      }
+      // 모양이 아닌 것은 여기서 떨어뜨린다. 모델에 넘기기 전이다.
+      const claims: BriefClaim[] = []
+      for (const c of req.claims) {
+        const row = c as { text?: unknown; why?: unknown; records?: unknown }
+        if (typeof row.text !== 'string' || typeof row.why !== 'string') continue
+        claims.push({
+          text: row.text,
+          why: row.why,
+          records: (Array.isArray(row.records) ? row.records : []) as BriefClaim['records'],
+        })
+      }
+      if (claims.length === 0) return reply(origin, { error: 'empty_claims' }, 400)
+
+      if (!(await budgetAllows(env))) {
+        return reply(origin, { brief: null, reason: 'budget_exhausted' }, 200)
+      }
+
+      const out = await weave(env, req.headline, req.articleDate, claims)
+      if (!out.ok) {
+        // 글이 없어도 리포트는 그려진다 — 기록과 인용은 이미 있다.
+        return reply(origin, { brief: null, reason: out.reason }, 200)
+      }
+      return reply(origin, { brief: out.brief }, 200)
+    }
+
+    // --- 리포트: 나란히 볼 문장 고르기 ---------------------------------------
+    //
+    // **판정과 무관하다.** 기사가 초록이어도 돈다 — 고르는 기준은 "이 문장이 수상한가"
+    // 가 아니라 "이 문장을 다른 기록과 나란히 놓을 수 있는가" 다 (src/claims.ts).
+    // /v1/explain 은 걸린 항목이 왜 걸렸는지를 집으므로 신호가 없는 기사에는 못 쓴다.
+    if (url.pathname === '/v1/claims') {
+      const passed = await gate(env, request, origin)
+      if (!passed.ok) return passed.response
+
+      let parsed: unknown
+      try {
+        parsed = JSON.parse(passed.raw)
+      } catch {
+        return reply(origin, { error: 'invalid_json' }, 400)
+      }
+      const req = parsed as { body?: unknown }
+      if (typeof req.body !== 'string' || req.body.trim().length === 0) {
+        return reply(origin, { error: 'empty_body' }, 400)
+      }
+      if (!(await budgetAllows(env))) {
+        return reply(origin, { claims: [], reason: 'budget_exhausted' }, 200)
+      }
+      const out = await pickClaims(env, req.body)
+      if (!out.ok) return reply(origin, { claims: [], reason: out.reason }, 200)
+      return reply(origin, { claims: out.claims }, 200)
+    }
     return json({ error: 'not_found' }, 404)
   },
 } satisfies ExportedHandler<Env>

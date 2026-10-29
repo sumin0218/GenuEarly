@@ -45,9 +45,21 @@
       -->
       <ul class="ge-popup__details" id="details" hidden></ul>
 
+      <!--
+        공개 기록 리포트. **누를 때만 바깥에 나간다** — 기사를 여는 것만으로는
+        검색이 한 건도 일어나지 않는다. 한 자리에서 세 모양으로 바뀐다:
+        만들기 → 만드는 중(진행) → 새 탭에서 열기.
+      -->
+      <div class="ge-popup__report" id="report-box" hidden>
+        <button class="ge-popup__report-btn" id="report-run" type="button"></button>
+        <p class="ge-popup__report-note" id="report-note" hidden></p>
+      </div>
+
       <footer class="ge-popup__foot" id="foot" hidden>
         <button class="ge-popup__link" id="details-toggle" type="button" aria-expanded="false" aria-controls="details"></button>
         <a class="ge-popup__link" id="homepage" href="" target="_blank" rel="noreferrer noopener"></a>
+        <!-- 아직 아무것도 보내지 않는다 (GE-26). 자리만 둔다 -->
+        <button class="ge-popup__link" id="report-wrong" type="button"></button>
       </footer>
     </main>
     <script type="module" src="./main.ts"></script>

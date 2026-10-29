@@ -33,6 +33,11 @@
      그래서 색은 아이콘에서 가져왔다. 의미색 넷(빨강·주황·초록·회색) 중
      어느 것과도 부딪히지 않는 유일한 자리다. */
   --ge-brand: #162636;
+  /* **누를 수 있는 것** 하나에만 쓰는 색. 아이콘의 초록이다.
+     판정 색(주의 #c4242a, 확인 #9a5b00)과 섞이지 않게 **초록만** 쓴다 —
+     🟢 은 애초에 색으로 그리지 않으므로 자리가 비어 있다 (docs/design.md 3절). */
+  --ge-action: #02b67f;
+  --ge-action-ink: #0d0d0d;
 
   /* --- 여백: 값 이름, 4px 배수 -----------------------------------------
      그때그때 고르면 10px·14px·6px 이 섞여 같은 성격의 여백이 자리마다 달라진다.
@@ -76,6 +81,9 @@
     /* 아이콘의 짙은 색은 어두운 바탕에서 보이지 않는다(1.23:1).
        같은 색 계열의 밝은 쪽으로 뒤집는다 — #111 위에서 16.01:1. */
     --ge-brand: #e7edf3;
+    /* 초록은 어두운 바탕에서도 그대로 쓴다 — #111 위에서 6.96:1 */
+    --ge-action: #02b67f;
+    --ge-action-ink: #0d0d0d;
     --ge-focus-ring: 0 0 0 3px rgba(231, 237, 243, 0.22);
   }
 }
@@ -380,3 +388,34 @@ body {
   overflow-wrap: anywhere;
   quotes: '\201C' '\201D';
 }
+
+/* 공개 기록 리포트 버튼. **누를 때만 바깥에 나간다.**
+   제품 색(아이콘의 초록)을 쓰는 유일한 단추다 — 이 화면에서 사용자가 할 수 있는
+   일이 이것 하나라서다. 판정 색과 섞이지 않는다 (docs/design.md 3절). */
+.ge-popup__report {
+  grid-column: 1 / -1;
+  margin-top: var(--ge-space-12);
+}
+.ge-popup__report[hidden] { display: none; }
+
+.ge-popup__report-btn {
+  width: 100%;
+  font: inherit;
+  font-weight: 500;
+  color: var(--ge-action-ink);
+  background: var(--ge-action);
+  border: 0;
+  border-radius: var(--ge-radius-8);
+  padding: var(--ge-space-8) var(--ge-space-12);
+  cursor: pointer;
+  transition: opacity var(--ge-ease);
+}
+.ge-popup__report-btn:hover { opacity: 0.88; }
+.ge-popup__report-btn:disabled { opacity: 0.55; cursor: default; }
+
+.ge-popup__report-note {
+  margin: var(--ge-space-4) 0 0;
+  color: var(--ge-muted);
+  font-size: var(--ge-fs-meta);
+}
+.ge-popup__report-note[hidden] { display: none; }

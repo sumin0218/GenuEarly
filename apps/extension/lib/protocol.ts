@@ -149,7 +149,57 @@ export interface ExplainPick {
   why: string
 }
 
-export type Message = JudgeArticleMessage | JudgeHeadlineMessage | ExplainMessage
+/**
+ * 리포트를 만들어 달라. **콘텐츠 스크립트가 background 에 보낸다.**
+ *
+ * 본문이 들어 있다. 팝업은 본문을 모르므로 이 메시지를 직접 보내지 못한다 —
+ * 팝업은 콘텐츠 스크립트에 `make-report` 로 부탁하고, 본문은 여기서만 실린다.
+ */
+export interface BuildReportMessage {
+  kind: 'build-report'
+  url: string
+  headline: string
+  /** `YYYY-MM-DD`. **없으면 리포트를 만들지 않는다** — 날짜 없이 기록을 맞추면 거짓 안심이 된다 */
+  date: string
+  body: string
+  /** 일곱 항목의 판정 줄. **팝업이 이미 그리고 있는 값을 그대로 넘긴다** — 다시 판단하지 않는다 */
+  rows: ReportRow[]
+}
+
+/**
+ * 리포트에 싣는 판정 줄 하나.
+ *
+ * 리포트의 "기사를 열었을 때의 신호" 가 이것을 그대로 그린다. **다시 판단하지 않는다** —
+ * 리포트와 배지가 다른 말을 하면 사용자는 둘 중 어느 쪽도 믿지 못한다.
+ */
+export interface ReportRow {
+  id: string
+  name: string
+  text: string
+  level: DisplayLevel
+}
+
+/**
+ * 보관함 고치기. **리포트 탭이 직접 쓰지 않고 여기로 보낸다.**
+ *
+ * 보관함은 한 칸에 배열로 들어 있어 고치려면 읽고-바꾸고-쓴다. 리포트 탭과
+ * background 가 각자 쓰면 겹칠 때 **지운 항목이 되살아난다.** 쓰는 자리를 한
+ * 곳으로 모아 두면 그 안에서 차례를 세울 수 있다 (lib/archive.ts 의 `줄세워`).
+ */
+export interface ArchiveWriteMessage {
+  kind: 'archive-write'
+  /** `remove` 는 한 건, `clear` 는 전부 */
+  what: 'remove' | 'clear'
+  /** `remove` 일 때의 기사 주소 */
+  url?: string
+}
+
+export type Message =
+  | JudgeArticleMessage
+  | JudgeHeadlineMessage
+  | ExplainMessage
+  | BuildReportMessage
+  | ArchiveWriteMessage
 
 // ── 팝업이 콘텐츠 스크립트에 보내는 것 ──────────────────────────────────────
 //
@@ -171,6 +221,23 @@ export interface TabStateMessage {
  * 콘텐츠 스크립트뿐이라, 팝업은 "이 항목을 설명해 달라" 고만 하고
  * 콘텐츠 스크립트가 background 를 거쳐 물어본 뒤 **답만** 돌려준다.
  */
+/**
+ * 리포트를 만들어 달라. **팝업이 콘텐츠 스크립트에 보낸다.**
+ *
+ * 본문을 들고 있는 것은 콘텐츠 스크립트뿐이라, 팝업은 판정만 넘기고 부탁한다
+ * (심층 분석의 `explain-item` 과 같은 이유다).
+ */
+export interface MakeReportMessage {
+  kind: 'make-report'
+  /** 일곱 항목의 판정 줄 */
+  rows: ReportRow[]
+}
+
+/** 리포트를 만들 수 있는가, 왜 못 만드는가. */
+export type MakeReportAnswer =
+  | { ok: true }
+  | { ok: false; reason: 'not_article' | 'no_date' }
+
 export interface ExplainRequestMessage {
   kind: 'explain-item'
   itemId: string
@@ -182,6 +249,16 @@ export interface ExplainRequestMessage {
 export interface TabState {
   level: DisplayLevel
   verdict?: ArticleVerdict
+  /**
+   * **이 판정이 어느 주소의 것인가.** 콘텐츠 스크립트가 자기 `location.href` 를 적는다.
+   *
+   * 팝업이 직접 `tab.url` 을 읽을 수는 없다 — `tabs` 권한이 필요하고, 그 권한은
+   * 금지 목록에 있다 (tests/manifest.test.ts). 그래서 **이미 그 주소에 붙어 있는 쪽이
+   * 말해 준다.** 새 권한이 늘지 않는다.
+   *
+   * 리포트는 하나만 두므로, 들고 있는 리포트가 지금 기사의 것인지 가리는 데 쓴다.
+   */
+  url?: string
 }
 
 /**
@@ -193,4 +270,14 @@ export interface TabState {
 export type DisplayLevel = BadgeLevel | 'PENDING'
 
 /** 판단 결과. `@genuearly/shared` 의 `Verdict` 를 그대로 쓴다. */
-export type ArticleVerdict = Verdict
+/**
+ * 기사 하나의 판정.
+ *
+ * `capped` 는 **문장을 상한까지만 봤다**는 뜻이다. `@genuearly/shared` 의 `Verdict` 에는
+ * 없다 — 상한은 점수 규칙이 아니라 **확장 프로그램이 요청 수를 아끼려고 둔 것**이라
+ * 여기서 더한다 (lib/judge.ts 의 MAX_SENTENCES).
+ *
+ * 이것을 안 보내면 **조용히 덜 보는 것**이 된다. 긴 기사의 뒤쪽에 있는 단정은
+ * 판단에서 빠졌는데 화면은 다 본 것처럼 보인다.
+ */
+export type ArticleVerdict = Verdict & { capped?: boolean }
