@@ -1,6 +1,29 @@
 // ② 포털 목록 동그라미. **제목만 보고 판단한 것을 제목 옆에 표시한다**
 // (docs/requirements.md 4절).
 //
+// ## 이 표시가 하는 일은 하나다 — 낚시성 제목을 본다
+//
+// ②가 묻는 항목은 둘뿐이고 둘 다 제목만 본다 (judgment-items.json 의
+// `request_group.portal_list`).
+//
+//   - `clickbait_headline` — 내용을 감추거나("그 이유는") 부풀리는지("충격")
+//   - `spread_inducement` — 퍼뜨리라고 재촉하는지("꼭 공유하세요")
+//
+// 둘 다 **제목이 클릭을 끌어내려고 쓰는 표현**이고, 그것이 이 기능의 전부다.
+// **기사 내용이 어떤지는 말하지 않는다** — 본문을 읽지 않았다.
+//
+// 판단 스키마도 이 말을 쓴다 (`clickbait_headline` 의 criteria 가 "낚시성 표현 일부",
+// "낚시성 표현 뚜렷함"). **사용자에게 보이는 문구만 다르다** — packages/content 는
+// "끌어당기는 표현" 이라고 적는다. "낚시" 는 기자가 미끼를 던졌다는 뜻이라 매체를
+// 탓하는 말로 읽히고, 그것은 제품이 하지 않기로 한 일이다 (docs/product.md 2절).
+// **한쪽에 맞춰 다른 쪽을 고치지 않는다.** 두 말은 읽는 사람이 다르다.
+//
+// 목록은 훑는 자리다. 거기서 할 수 있는 가장 정직한 일은 "이 제목이 당신을 끌려고
+// 하는가" 한 가지이고, 그 이상을 말하면 제목만 보고 기사를 평가하는 꼴이 된다.
+//
+// 그런데 **아이콘만으로는 그 뜻이 전해지지 않는다.** 그래서 화면 오른쪽 아래에
+// 범례를 띄운다 (`createLegend`). 한 번 닫으면 다시 뜨지 않는다.
+//
 // 여기는 **화면에 닿지 않는 부분만** 둔다 — 어떤 링크가 기사인가, 동그라미를 어떻게 그릴 것인가.
 // 실제 DOM 조작과 스크롤 추적은 entrypoints/portal.ts 에 있다. 그래야 테스트에서 부를 수 있다.
 import { normalizeUrl } from './cache'
@@ -149,4 +172,155 @@ export function createMark(doc: Document) {
   }
 
   return { host, render }
+}
+
+// ── 범례 ────────────────────────────────────────────────
+
+/** 범례 요소를 알아보는 이름. 표시와 마찬가지로 페이지와 겹치지 않는 이름을 쓴다. */
+export const LEGEND_CLASS = 'genuearly-portal-legend'
+
+/** 닫았다는 것을 적어 두는 칸. **`local` 이다** — 브라우저를 닫아도 다시 뜨지 않는다. */
+export const LEGEND_SEEN_KEY = 'portalLegendSeen'
+
+/** 범례에 줄을 세우는 차례. 걸린 것이 위다 — 사용자가 먼저 묻는 것이 그쪽이다. */
+export const LEGEND_LEVELS = ['CAUTION', 'CHECK', 'SAFE', 'UNDETERMINED', 'PENDING'] as const
+
+/**
+ * 범례를 한 번이라도 닫았는가.
+ *
+ * **못 읽으면 "닫았다" 로 친다.** 읽기에 실패했을 때 띄우는 쪽으로 기울면, 저장소가
+ * 막힌 사용자에게는 페이지마다 같은 상자가 계속 뜬다. 안 뜨는 쪽이 덜 해롭다.
+ */
+export async function legendDismissed(): Promise<boolean> {
+  try {
+    const got = (await browser.storage.local.get(LEGEND_SEEN_KEY)) as Record<string, unknown>
+    return got[LEGEND_SEEN_KEY] === true
+  } catch {
+    return true
+  }
+}
+
+/** 닫았다고 적어 둔다. 못 적어도 화면은 닫는다 — 이번 페이지에서는 사라진다. */
+export async function dismissLegend(): Promise<void> {
+  try {
+    await browser.storage.local.set({ [LEGEND_SEEN_KEY]: true })
+  } catch {
+    /* 다음에 또 뜬다. 성가실 뿐 해롭지 않다 */
+  }
+}
+
+/**
+ * 범례 상자를 만든다. **`createMark` 와 같은 모양이다** — 호스트 하나, 닫힌 Shadow,
+ * 글은 전부 `textContent`.
+ *
+ * 포털 페이지 위에 우리 상자를 얹는 일이라 **스타일이 새어 나가지도 들어오지도 않아야**
+ * 한다. 포털의 `* { box-sizing }` 하나에도 모양이 무너진다.
+ */
+export function createLegend(
+  doc: Document,
+  copy: {
+    title: string
+    lede: string
+    levels: Record<string, string>
+    solid: string
+    close: string
+  },
+  onClose: () => void,
+) {
+  const host = doc.createElement('div')
+  host.className = LEGEND_CLASS
+  const shadow = host.attachShadow({ mode: 'closed' })
+  const dark = doc.defaultView?.matchMedia('(prefers-color-scheme: dark)').matches ?? false
+
+  const style = doc.createElement('style')
+  style.textContent = `
+    :host { all: initial; }
+    .box {
+      position: fixed;
+      right: 16px;
+      bottom: 16px;
+      z-index: 2147483000;
+      width: 280px;
+      max-width: calc(100vw - 32px);
+      box-sizing: border-box;
+      padding: 14px 16px;
+      border-radius: 10px;
+      background: ${dark ? '#1a1a1c' : '#ffffff'};
+      color: ${dark ? '#ffffff' : '#1a1a1c'};
+      border: 1px solid ${dark ? '#333336' : '#e3e3e6'};
+      box-shadow: 0 6px 24px rgba(0, 0, 0, ${dark ? '0.5' : '0.14'});
+      font: 400 13px/1.5 -apple-system, BlinkMacSystemFont, "Segoe UI", "Malgun Gothic", sans-serif;
+    }
+    .head { display: flex; align-items: center; gap: 8px; }
+    .title { flex: 1; font-size: 13px; font-weight: 600; margin: 0; }
+    .x {
+      flex: none; width: 24px; height: 24px; padding: 0;
+      font: inherit; line-height: 1; cursor: pointer;
+      color: ${dark ? '#b4b4b4' : '#5f6368'};
+      background: none; border: 0; border-radius: 6px;
+    }
+    .x:hover { color: ${dark ? '#ffffff' : '#1a1a1c'}; }
+    .x:focus-visible { outline: 0; box-shadow: 0 0 0 3px rgba(2, 182, 127, 0.4); }
+    .lede, .solid { margin: 6px 0 0; font-size: 12px; color: ${dark ? '#b4b4b4' : '#5f6368'}; }
+    .rows { list-style: none; margin: 10px 0 0; padding: 0; display: grid; gap: 6px; }
+    .row { display: flex; align-items: center; gap: 8px; }
+    .what { font-size: 12px; }
+    .rule { margin: 10px 0 0; padding-top: 8px; border-top: 1px solid ${dark ? '#333336' : '#e3e3e6'}; }
+    @media (prefers-reduced-motion: no-preference) {
+      .box { animation: rise 0.18s ease-out; }
+    }
+    @keyframes rise { from { transform: translateY(8px); opacity: 0; } }
+  `
+
+  const box = doc.createElement('div')
+  box.className = 'box'
+  box.setAttribute('role', 'complementary')
+
+  const head = doc.createElement('div')
+  head.className = 'head'
+  const h = doc.createElement('p')
+  h.className = 'title'
+  h.textContent = copy.title
+  const x = doc.createElement('button')
+  x.className = 'x'
+  x.type = 'button'
+  x.textContent = '✕'
+  x.setAttribute('aria-label', copy.close)
+  x.addEventListener('click', onClose)
+  head.append(h, x)
+  box.append(head)
+
+  const lede = doc.createElement('p')
+  lede.className = 'lede'
+  lede.textContent = copy.lede
+  box.append(lede)
+
+  const rows = doc.createElement('ul')
+  rows.className = 'rows'
+  for (const level of LEGEND_LEVELS) {
+    const what = copy.levels[level]
+    if (!what) continue
+    const li = doc.createElement('li')
+    li.className = 'row'
+    // **표시와 똑같은 아이콘을 쓴다.** 범례가 화면과 다르면 범례가 아니다.
+    const look = markLook(level, 'headline', dark)
+    const svg = createIcon(doc, look.icon, { size: MARK_SIZE, color: look.color, filled: look.filled })
+    const text = doc.createElement('span')
+    text.className = 'what'
+    text.textContent = what
+    li.append(svg, text)
+    rows.append(li)
+  }
+  box.append(rows)
+
+  const solid = doc.createElement('p')
+  solid.className = 'solid rule'
+  solid.textContent = copy.solid
+  box.append(solid)
+
+  shadow.append(style, box)
+  // `box` 를 함께 돌려준다. Shadow 가 닫혀 있어 바깥에서는 안이 보이지 않는데,
+  // **이 상자는 글이 전부라 그리는 내용을 검사로 지켜야 한다** — `createMark` 는
+  // 아이콘 하나뿐이라 그럴 것이 없었다. 부르는 쪽은 `host` 와 `close` 만 쓴다.
+  return { host, box, close: () => host.remove() }
 }
