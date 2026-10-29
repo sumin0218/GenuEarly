@@ -72,3 +72,16 @@ ChatKHU 크레딧은 월 단위로 할당된다. 제출·시연 기간에 모자
 | 2026-10-16 | 4,000 | 45.75 | 3,954.25 | 2026-11-01 |
 
 `GET /v1/gateway/credits/` 로 확인한다. 전시(11/19~20)는 11월 할당분을 쓴다.
+
+
+## 수동 테스트 사실 기반 5건의 출처 (GE-51, 2026-10-29)
+
+확인한 핵심 사실을 Codex로 새로 요약했다. 과장 제목은 원출처의 제목이 아니며 원문 기사 전문을 복제하지 않았다.
+
+| 테스트 | 공식 출처 | 확인한 내용 |
+| --- | --- | --- |
+| c-006 | [Premier League](https://www.premierleague.com/en/news/2626553) | 손흥민·살라 2021/22 공동 득점왕과 23골 |
+| c-007 | [Nobel Prize](https://www.nobelprize.org/prizes/literature/2024/han/facts/) | 한강 2024 노벨문학상과 작가 이력 |
+| c-008 | [Academy Awards](https://www.oscars.org/oscars/ceremonies/2020/A--E) | 2020 기생충 작품상·봉준호 감독상 |
+| c-009 | [IOC](https://www.olympics.com/ioc/news/yuna-kim-blazes-an-icy-trail-for-the-republic-of-korea?esi=true) | 김연아 2010 금메달과 228.56점 |
+| c-010 | [BIGHIT MUSIC](https://bts.ibighit.com/eng/profile/) | BTS 2013년 6월 데뷔와 멤버 |
