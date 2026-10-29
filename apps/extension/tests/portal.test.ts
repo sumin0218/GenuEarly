@@ -4,8 +4,18 @@
 //
 // 여기서 보는 것은 **무엇을 기사 제목으로 보는가**와 **근거가 다른 것을 다르게 그리는가**다.
 // 실제 스크롤 추적과 DOM 삽입은 entrypoints/portal.content.ts 에 있다.
-import { describe, expect, it } from 'vitest'
-import { MIN_HEADLINE_CHARS, collectTitles, createMark, markLook } from '../lib/portal'
+import { beforeEach, describe, expect, it, vi } from 'vitest'
+import content from '../../../packages/content/ui.ko.json'
+import {
+  LEGEND_LEVELS,
+  MIN_HEADLINE_CHARS,
+  collectTitles,
+  createLegend,
+  createMark,
+  dismissLegend,
+  legendDismissed,
+  markLook,
+} from '../lib/portal'
 import {
   ARTICLE_MATCHES,
   PORTAL_LIST_EXCLUDE_MATCHES,
@@ -335,5 +345,80 @@ describe('②가 도는 목록 페이지', () => {
     expect(got, '기사가 아닌 링크에는 달지 않는다').not.toContain('고객센터')
     list.remove()
     setURL(되돌릴주소)
+  })
+})
+
+describe('범례 — 아이콘이 무슨 뜻인지 말한다', () => {
+  // 제목 옆 동그라미를 처음 본 사람은 그것이 무엇을 말하는지 알 길이 없다.
+  // **특히 이 표시가 "제목만" 본 것이라는 점은 짐작할 수 없다** — 그것을 말하는 것이
+  // 이 상자가 있는 이유다.
+  const COPY = content.portal.legend
+
+  const 만든다 = (onClose = () => {}) => createLegend(document, COPY, onClose)
+
+  beforeEach(() => {
+    const store = new Map<string, unknown>()
+    vi.stubGlobal('browser', {
+      storage: {
+        local: {
+          get: (k: string) => Promise.resolve({ [k]: store.get(k) }),
+          set: (o: Record<string, unknown>) => {
+            for (const [k, v] of Object.entries(o)) store.set(k, v)
+            return Promise.resolve()
+          },
+        },
+      },
+    })
+    ;(globalThis as { __store?: Map<string, unknown> }).__store = store
+  })
+
+  it('**제목만 봤다는 것을 말한다** — 이 상자가 있는 가장 큰 이유다', () => {
+    expect(만든다().box.textContent).toContain(COPY.lede)
+    expect(COPY.lede, '본문을 읽지 않았다는 말이 빠지면 안 된다').toContain('본문')
+  })
+
+  it('다섯 단계를 모두 적는다 — 화면에 뜨는 것 중 빠진 뜻이 없게', () => {
+    const 글 = 만든다().box.textContent ?? ''
+    for (const level of LEGEND_LEVELS) expect(글, `${level} 설명이 없다`).toContain(COPY.levels[level])
+  })
+
+  it('화면과 같은 아이콘을 쓴다 — 범례가 화면과 다르면 범례가 아니다', () => {
+    const svgs = 만든다().box.querySelectorAll('svg')
+    expect(svgs).toHaveLength(LEGEND_LEVELS.length)
+  })
+
+  it('진한 아이콘의 뜻도 적는다', () => {
+    expect(만든다().box.textContent).toContain(COPY.solid)
+  })
+
+  it('Shadow DOM 안에 둔다 — 포털이 읽지도 망가뜨리지도 못한다', () => {
+    expect(만든다().host.shadowRoot, "mode: 'closed' 라 바깥에서 보이지 않는다").toBeNull()
+  })
+
+  it('닫기 단추에 이름이 붙는다 — 글자가 ✕ 뿐이다', () => {
+    const x = 만든다().box.querySelector('button')
+    expect(x?.getAttribute('aria-label')).toBe(COPY.close)
+  })
+
+  it('X 를 누르면 알려 준다', () => {
+    let 닫힘 = 0
+    const l = 만든다(() => 닫힘++)
+    l.box.querySelector('button')?.click()
+    expect(닫힘).toBe(1)
+  })
+
+  it('판정 점수가 새지 않는다', () => {
+    expect(만든다().box.textContent ?? '').not.toMatch(/0\.\d|\d+%|\d+점/)
+  })
+
+  it('한 번 닫으면 다시 뜨지 않는다', async () => {
+    expect(await legendDismissed()).toBe(false)
+    await dismissLegend()
+    expect(await legendDismissed()).toBe(true)
+  })
+
+  it('**저장소를 못 읽으면 띄우지 않는다** — 페이지마다 같은 상자가 뜨는 편이 더 해롭다', async () => {
+    vi.stubGlobal('browser', { storage: { local: { get: () => Promise.reject(new Error('막힘')) } } })
+    expect(await legendDismissed()).toBe(true)
   })
 })

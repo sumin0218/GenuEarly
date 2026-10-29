@@ -487,7 +487,7 @@ function wireArchive(): void {
 
 paintChrome()
 wireArchive()
-void peekReport().then((r) => render(r))
+void peekReport().then((r) => render(r, r?.restored === true))
 
 // 만드는 쪽이 단계마다 적는다. 그때마다 다시 그린다.
 browser.storage.onChanged.addListener((changes, area) => {
@@ -501,5 +501,5 @@ browser.storage.onChanged.addListener((changes, area) => {
 
   // **보관본을 보고 있으면 본문에는 끼어들지 않는다.** 읽던 글이 눈앞에서 바뀌면 안 된다.
   if (보는중 !== null) return
-  render(next)
+  render(next, next?.restored === true)
 })
