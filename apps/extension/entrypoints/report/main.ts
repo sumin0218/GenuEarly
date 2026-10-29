@@ -11,7 +11,8 @@
 // 그 변화를 들으며 채운다 — 스무 초를 빈 화면으로 두지 않기 위해서다 (lib/report.ts).
 import './style.css'
 import content from '../../../../packages/content/ui.ko.json'
-import { clearArchive, listArchive, removeArchived } from '../../lib/archive'
+import { listArchive } from '../../lib/archive'
+import type { ArchiveWriteMessage } from '../../lib/protocol'
 import { createIcon } from '../../lib/icon'
 import { LEVEL_ICON, LEVEL_INK_DARK } from '../../lib/item-view'
 import { peekReport, REPORT_KEY, type Report, type ReportClaim, type ReportRecord } from '../../lib/report'
@@ -19,6 +20,22 @@ import type { DisplayLevel } from '../../lib/protocol'
 
 const C = content.report
 const A = C.archive
+
+/**
+ * 보관함을 고쳐 달라고 **background 에 부탁한다.**
+ *
+ * 여기서 직접 `storage.local` 을 고치지 않는다 — 리포트가 막 보관되는 순간과
+ * 겹치면 지운 항목이 되살아난다. 쓰는 자리는 한 곳이어야 차례를 세울 수 있다
+ * (lib/archive.ts 의 `줄세워`).
+ */
+async function 보관함고치기(msg: ArchiveWriteMessage): Promise<void> {
+  try {
+    await browser.runtime.sendMessage(msg)
+  } catch {
+    // 못 닿았으면 목록은 그대로다. 다시 그리면 지워지지 않은 것이 보인다 —
+    // **지운 척하지 않는다.**
+  }
+}
 
 /** 요소 하나 만들기. 글은 **언제나 `textContent`** 로 넣는다. */
 function el<K extends keyof HTMLElementTagNameMap>(
@@ -289,6 +306,14 @@ function paintChrome(): void {
 // 보관되는 것은 **사용자가 버튼을 눌러 만든 리포트뿐**이고, 여기서 전부 지울 수 있다
 // (lib/archive.ts 머리말의 세 조건 중 둘째가 이 화면이다).
 
+/**
+ * "전부 삭제" 가 확인으로 바뀐 뒤, 이만큼은 누름을 받지 않는다.
+ *
+ * 겹쳐 누르기(더블클릭)의 두 누름 사이는 보통 100~300ms 다. 400ms 면 그것을 덮고,
+ * 사람이 글을 읽고 다시 누르기에는 짧다.
+ */
+const CONFIRM_GRACE_MS = 400
+
 /** 지금 화면에 띄워 둔 보관본의 주소. 없으면 `null` — 그때는 session 을 따라간다. */
 let 보는중: string | null = null
 
@@ -316,7 +341,7 @@ function archiveRow(r: Report, redraw: () => Promise<void>): HTMLElement {
   const del = el('button', 'ge-archive__del', A.remove)
   del.type = 'button'
   del.onclick = () => {
-    void removeArchived(r.url).then(() => {
+    void 보관함고치기({ kind: 'archive-write', what: 'remove', url: r.url }).then(() => {
       // 지운 것을 보고 있었다면 더는 "현재 열림" 이 아니다. 화면은 그대로 둔다 —
       // 읽던 글이 눈앞에서 사라지는 편이 더 당황스럽다.
       if (보는중 === r.url) 보는중 = null
@@ -359,12 +384,18 @@ function drawArchive(): Promise<void> {
         all.classList.add('ge-archive__danger')
         const no = el('button', 'ge-report__ghost', A.cancel)
         no.type = 'button'
-        no.onclick = () => drawArchive()
+        no.onclick = () => void drawArchive()
         head.append(no)
+
+        // **같은 단추에 두 번째 뜻을 얹었다.** 겹쳐 누르면 두 번째 누름이 바뀐
+        // 손잡이에 그대로 닿아, 확인 화면을 **보지도 못한 채** 전부 지워진다.
+        // 그래서 바뀐 직후의 누름은 못 본 것으로 친다.
+        const 바뀐때 = Date.now()
         all.onclick = () => {
-          void clearArchive().then(() => {
+          if (Date.now() - 바뀐때 < CONFIRM_GRACE_MS) return
+          void 보관함고치기({ kind: 'archive-write', what: 'clear' }).then(() => {
             보는중 = null
-            drawArchive()
+            void drawArchive()
           })
         }
       }
@@ -396,9 +427,22 @@ function archiveOpen(): boolean {
   return 서랍()?.hidden === false
 }
 
+/**
+ * 서랍 뒤쪽을 **만질 수도 짚을 수도 없게** 한다.
+ *
+ * 서랍은 막을 깔고 Esc 로 닫히는 **모달**인데, 막은 눈과 마우스만 막는다. 탭으로는
+ * 마지막 줄을 지나 뒤쪽의 "잘못된 정보 제보" 와 기록 링크에 닿았다 — 막에 가려
+ * 보이지도 않는 것에 포커스가 간다. `inert` 가 그 둘을 한 번에 막는다.
+ */
+function 뒤쪽잠금(잠글까: boolean): void {
+  const back = document.querySelector('.ge-report')
+  if (back instanceof HTMLElement) back.inert = 잠글까
+}
+
 function openArchive(): void {
   const box = 서랍()
   if (!box) return
+  뒤쪽잠금(true)
   box.hidden = false
   const scrim = 막()
   if (scrim) scrim.hidden = false
@@ -419,6 +463,8 @@ function openArchive(): void {
 function closeArchive(): void {
   const box = 서랍()
   if (!box || box.hidden) return
+  // **포커스를 되돌리기 전에 푼다.** 잠긴 채로는 그 안의 단추가 포커스를 못 받는다.
+  뒤쪽잠금(false)
   box.hidden = true
   const scrim = 막()
   if (scrim) scrim.hidden = true
@@ -446,11 +492,14 @@ void peekReport().then((r) => render(r))
 // 만드는 쪽이 단계마다 적는다. 그때마다 다시 그린다.
 browser.storage.onChanged.addListener((changes, area) => {
   if (area !== 'session' || !changes[REPORT_KEY]) return
-  // **보관본을 보고 있으면 끼어들지 않는다.** 읽던 글이 눈앞에서 바뀌면 안 된다.
-  if (보는중 !== null) return
   const next = (changes[REPORT_KEY].newValue as Report | undefined) ?? null
-  render(next)
-  // 다 됐으면 보관함에 한 줄이 늘었다. **열려 있을 때만 다시 그린다** —
-  // 닫혀 있으면 다음에 열 때 어차피 새로 그린다.
+
+  // 다 됐으면 보관함에 한 줄이 늘었다. **이 줄이 먼저다** — 아래의 "끼어들지
+  // 않는다" 뒤에 두면, 보관본을 보고 있는 동안 끝난 리포트가 목록에 안 나타난다.
+  // 열려 있을 때만 그린다. 닫혀 있으면 다음에 열 때 어차피 새로 그린다.
   if (next?.stage === 'done' && archiveOpen()) void drawArchive()
+
+  // **보관본을 보고 있으면 본문에는 끼어들지 않는다.** 읽던 글이 눈앞에서 바뀌면 안 된다.
+  if (보는중 !== null) return
+  render(next)
 })

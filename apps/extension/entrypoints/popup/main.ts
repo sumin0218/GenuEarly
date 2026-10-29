@@ -659,6 +659,10 @@ function sameArticle(r: Report | null, here: string | undefined): boolean {
   }
 }
 
+/** 아직 만드는 중인가. 끝난 것(`done`)과 엎어진 것(`failed`)만 아니다. */
+const 도는중 = (r: Report | null): boolean =>
+  r?.stage === 'claims' || r?.stage === 'records' || r?.stage === 'brief'
+
 /** 지금 상태에 맞는 버튼 글과 눌러도 되는지. */
 function reportFace(r: Report | null): { label: string; busy: boolean; note?: string } {
   if (!r) return { label: R.button, busy: false }
@@ -703,10 +707,21 @@ function drawReport(
 
   const paint = (r: Report | null) => {
     const face = reportFace(mine(r))
+
+    // **남의 조사가 돌고 있으면 기다린다.**
+    //
+    // 리포트 칸은 하나뿐이다 (lib/report.ts — 쌓이면 그것이 곧 열람 기록이다).
+    // A 기사를 조사하는 중에 B 기사에서 또 누르면 둘이 같은 칸에 번갈아 쓰면서
+    // 진행도 결과도 뒤섞인다. **남의 것을 "없는 것으로 보는" 처리가 열어 둔 길**이다 —
+    // 그 전에는 `reportFace` 가 busy 를 돌려줘서 막혀 있었다.
+    const 남이도는중 = mine(r) === null && 도는중(r)
+
     btn.textContent = face.label
-    btn.disabled = face.busy
-    note.hidden = !face.note
-    note.textContent = face.note ?? ''
+    btn.disabled = face.busy || 남이도는중
+    // **왜 눌리지 않는지 말한다.** 말없이 막힌 단추는 고장으로 읽힌다.
+    const 한줄 = 남이도는중 ? R.waiting : face.note
+    note.hidden = !한줄
+    note.textContent = 한줄 ?? ''
   }
 
   void (async () => {
@@ -728,8 +743,15 @@ function drawReport(
       // **이 기사의** 리포트가 다 돼 있으면 연다. 남의 것이면 새로 만든다.
       try {
         const got = (await browser.storage.session.get(REPORT_KEY)) as Record<string, Report | undefined>
-        if (mine(got[REPORT_KEY] ?? null)?.stage === 'done') {
+        const have = got[REPORT_KEY] ?? null
+        if (mine(have)?.stage === 'done') {
           await browser.tabs.create({ url: browser.runtime.getURL('/report.html') })
+          return
+        }
+        // **돌고 있는 것이 있으면 시작하지 않는다.** 그리는 쪽에서 이미 막지만,
+        // 팝업을 연 뒤에 시작된 조사도 있다 — 누르는 순간 다시 본다.
+        if (도는중(have)) {
+          paint(have)
           return
         }
       } catch {

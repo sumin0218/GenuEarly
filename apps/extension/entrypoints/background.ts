@@ -7,7 +7,7 @@
 import content from '../../../packages/content/ui.ko.json'
 import { sweepExpired } from '../lib/cache'
 import { buildReport, clearReport } from '../lib/report'
-import { sweepArchive } from '../lib/archive'
+import { clearArchive, removeArchived, sweepArchive } from '../lib/archive'
 import { callProxy, judgeArticle, judgeExplain, judgeHeadline, setIconBadge } from '../lib/judge'
 import { judgeSelection, putSelectionPending, putSelectionResult } from '../lib/selection'
 import type { ArticleVerdict, HeadlineVerdict, Message } from '../lib/protocol'
@@ -136,6 +136,17 @@ export default defineBackground(() => {
         )
         .catch((e) => console.warn('[GenuEarly] 리포트 만들기 실패', e))
       sendResponse({ started: true })
+      return true
+    }
+
+    // 보관함 고치기. **쓰는 자리를 여기 하나로 모은다** — 리포트 탭이 직접 쓰면
+    // 리포트가 막 보관되는 순간과 겹쳐 지운 항목이 되살아난다 (lib/archive.ts).
+    if (msg?.kind === 'archive-write') {
+      const 일 = msg.what === 'clear' ? clearArchive() : removeArchived(msg.url ?? '')
+      일.then(() => sendResponse({ ok: true })).catch((e) => {
+        console.warn('[GenuEarly] 보관함 고치기 실패', e)
+        sendResponse({ ok: false })
+      })
       return true
     }
 

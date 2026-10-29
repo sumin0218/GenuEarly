@@ -179,11 +179,27 @@ export interface ReportRow {
   level: DisplayLevel
 }
 
+/**
+ * 보관함 고치기. **리포트 탭이 직접 쓰지 않고 여기로 보낸다.**
+ *
+ * 보관함은 한 칸에 배열로 들어 있어 고치려면 읽고-바꾸고-쓴다. 리포트 탭과
+ * background 가 각자 쓰면 겹칠 때 **지운 항목이 되살아난다.** 쓰는 자리를 한
+ * 곳으로 모아 두면 그 안에서 차례를 세울 수 있다 (lib/archive.ts 의 `줄세워`).
+ */
+export interface ArchiveWriteMessage {
+  kind: 'archive-write'
+  /** `remove` 는 한 건, `clear` 는 전부 */
+  what: 'remove' | 'clear'
+  /** `remove` 일 때의 기사 주소 */
+  url?: string
+}
+
 export type Message =
   | JudgeArticleMessage
   | JudgeHeadlineMessage
   | ExplainMessage
   | BuildReportMessage
+  | ArchiveWriteMessage
 
 // ── 팝업이 콘텐츠 스크립트에 보내는 것 ──────────────────────────────────────
 //

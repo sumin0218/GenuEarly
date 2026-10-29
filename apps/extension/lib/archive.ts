@@ -48,18 +48,46 @@ interface Stored {
   items: Report[]
 }
 
-const EMPTY: Stored = { v: 1, items: [] }
-
-async function read(): Promise<Stored> {
+/**
+ * 저장소를 읽는다. **"못 읽었다" 와 "비어 있다" 를 가른다.**
+ *
+ * 둘을 같은 값으로 돌려주면 — 처음에 그랬다 — 읽기가 실패했을 때 부르는 쪽이
+ * *빈 목록* 위에 새 항목을 얹어 쓴다. **보관해 둔 스무 건이 한 번에 날아간다.**
+ * 그래서 실패는 `null` 이고, 고치는 함수들은 `null` 을 보면 **쓰지 않고 물러난다.**
+ *
+ * 읽었는데 모양이 다른 것은 다르다. 그건 버려도 되는 쓰레기라 빈 목록으로 친다.
+ */
+async function read(): Promise<Stored | null> {
   try {
     const got = (await browser.storage.local.get(ARCHIVE_KEY)) as Record<string, unknown>
     const box = got[ARCHIVE_KEY] as Partial<Stored> | undefined
     // **모양이 다르면 통째로 버린다.** 반쯤 읽은 아카이브를 보여 주느니 비어 보이는 편이 낫다.
-    if (!box || box.v !== 1 || !Array.isArray(box.items)) return EMPTY
+    if (!box || box.v !== 1 || !Array.isArray(box.items)) return { v: 1, items: [] }
     return { v: 1, items: box.items }
   } catch {
-    return EMPTY
+    return null
   }
+}
+
+/**
+ * 고치는 일은 **한 줄로 세운다.**
+ *
+ * 보관함은 한 칸에 배열로 들어 있어서, 고치려면 읽고-바꾸고-쓴다. 둘이 겹치면
+ * 나중에 읽은 쪽이 먼저 쓴 것을 모르고 덮는다 — **지운 항목이 되살아난다.**
+ * 지우면 지워진다는 것은 이 파일이 디스크에 남아도 되는 세 조건 중 하나다.
+ *
+ * 쓰는 자리를 background 한 곳으로 모아 두고(entrypoints/background.ts 의
+ * `archive-write`), 그 안에서 이 줄로 차례를 지킨다.
+ */
+let 차례: Promise<unknown> = Promise.resolve()
+function 줄세워<T>(일: () => Promise<T>): Promise<T> {
+  const 다음 = 차례.then(일, 일)
+  // 앞사람이 넘어져도 뒤는 선다.
+  차례 = 다음.then(
+    () => undefined,
+    () => undefined,
+  )
+  return 다음
 }
 
 async function write(items: Report[]): Promise<void> {
@@ -89,8 +117,9 @@ const expired = (r: Report, now: number): boolean => now - r.at >= ARCHIVE_TTL_M
  */
 export async function listArchive(): Promise<Report[]> {
   const now = Date.now()
-  const { items } = await read()
-  return items.filter((r) => !expired(r, now)).sort((a, b) => b.at - a.at)
+  const box = await read()
+  if (!box) return []
+  return box.items.filter((r) => !expired(r, now)).sort((a, b) => b.at - a.at)
 }
 
 /**
@@ -102,17 +131,27 @@ export async function listArchive(): Promise<Report[]> {
  */
 export async function saveToArchive(report: Report): Promise<void> {
   if (report.stage !== 'done') return
-  const now = Date.now()
-  const { items } = await read()
-  const kept = items.filter((r) => !expired(r, now) && !sameUrl(r.url, report.url))
-  const next = [report, ...kept].sort((a, b) => b.at - a.at).slice(0, ARCHIVE_MAX)
-  await write(next)
+  return 줄세워(async () => {
+    const now = Date.now()
+    const box = await read()
+    // **못 읽었으면 쓰지 않는다.** 빈 목록 위에 얹으면 보관해 둔 것이 전부 날아간다.
+    if (!box) return
+    const kept = box.items.filter((r) => !expired(r, now) && !sameUrl(r.url, report.url))
+    const next = [report, ...kept].sort((a, b) => b.at - a.at).slice(0, ARCHIVE_MAX)
+    await write(next)
+  })
 }
 
 /** 한 건을 지운다. 주소로 찾는다 — 사용자에게 보이는 목록의 단위가 기사다. */
 export async function removeArchived(url: string): Promise<void> {
-  const { items } = await read()
-  await write(items.filter((r) => !sameUrl(r.url, url)))
+  return 줄세워(async () => {
+    const box = await read()
+    if (!box) return
+    const kept = box.items.filter((r) => !sameUrl(r.url, url))
+    // 마지막 한 건을 지웠으면 칸도 없앤다 — `clearArchive` 와 같은 이유다.
+    if (kept.length === 0) await clearArchive()
+    else await write(kept)
+  })
 }
 
 /**
@@ -137,14 +176,17 @@ export async function clearArchive(): Promise<void> {
  * 되지 않게 막는 둘째 장치다.
  */
 export async function sweepArchive(): Promise<number> {
-  const now = Date.now()
-  const { items } = await read()
-  const kept = items.filter((r) => !expired(r, now))
-  if (kept.length === items.length) return 0
-  if (kept.length === 0) {
-    await clearArchive()
-  } else {
-    await write(kept)
-  }
-  return items.length - kept.length
+  return 줄세워(async () => {
+    const now = Date.now()
+    const box = await read()
+    if (!box) return 0
+    const kept = box.items.filter((r) => !expired(r, now))
+    if (kept.length === box.items.length) return 0
+    if (kept.length === 0) {
+      await clearArchive()
+    } else {
+      await write(kept)
+    }
+    return box.items.length - kept.length
+  })
 }

@@ -43,17 +43,31 @@ function mount(): void {
 
   const body = document.createElement('main')
   body.id = 'body'
+
+  // 머리말과 본문은 `.ge-report` 안, **서랍과 막은 그 바깥.** index.html 과 같다 —
+  // 다르면 `뒤쪽잠금` 이 잠글 것을 못 찾고, 검사는 통과해도 아무것도 지키지 않는다.
+  const wrap = document.createElement('div')
+  wrap.className = 'ge-report'
+  wrap.append(bar, body)
+
   const scrim = document.createElement('div')
   scrim.id = 'archive-scrim'
   scrim.hidden = true
   const drawer = document.createElement('aside')
   drawer.id = 'archive'
   drawer.hidden = true
-  document.body.append(bar, body, scrim, drawer)
+  document.body.append(wrap, scrim, drawer)
 }
+
+/**
+ * 보관함 고치기는 **background 로 간다** (lib/archive.ts 의 줄 세우기).
+ * 리포트 탭은 부탁만 하므로, 검사는 **무엇을 부탁했는지**를 본다.
+ */
+const 보낸부탁: unknown[] = []
 
 /** 저장소를 메모리로 흉내 낸다. `local` 에 보관함, `session` 에 지금 리포트. */
 function stub(archived: Report[], current: Report | null): void {
+  보낸부탁.length = 0
   const local = new Map<string, unknown>()
   if (archived.length > 0) local.set('archive', { v: 1, items: archived })
   const area = (m: Map<string, unknown>) => ({
@@ -71,7 +85,13 @@ function stub(archived: Report[], current: Report | null): void {
   if (current) session.set('report', current)
   vi.stubGlobal('browser', {
     storage: { local: area(local), session: area(session), onChanged: { addListener: () => {} } },
-    runtime: { getURL: (x: string) => x },
+    runtime: {
+      getURL: (x: string) => x,
+      sendMessage: (m: unknown) => {
+        보낸부탁.push(m)
+        return Promise.resolve({ ok: true })
+      },
+    },
   })
 }
 
@@ -200,6 +220,20 @@ describe('보관함 서랍', () => {
     expect(document.getElementById('body')?.textContent).toContain(A.restored)
   })
 
+  it('서랍이 열리면 뒤쪽은 만질 수 없다 — 막에 가린 것에 탭이 닿으면 안 된다', async () => {
+    await load()
+    const back = document.querySelector('.ge-report') as HTMLElement
+    expect(back.inert).toBe(false)
+
+    toggle().click()
+    await settle()
+    expect(back.inert, '막은 눈과 마우스만 막는다. 탭은 그대로 지나간다').toBe(true)
+
+    document.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape' }))
+    expect(back.inert, '잠긴 채로는 여는 단추가 포커스를 못 받는다').toBe(false)
+    expect(document.activeElement).toBe(toggle())
+  })
+
   it('지우기는 두 번 묻는다 — 한 번에 지워지면 되돌릴 길이 없다', async () => {
     await load([리포트()])
     toggle().click()
@@ -210,5 +244,30 @@ describe('보관함 서랍', () => {
     all?.click()
     expect(all?.textContent, '누르자마자 지우지 않는다').toBe(A.confirmAll)
     expect(drawer().textContent).toContain(A.cancel)
+  })
+
+  it('**겹쳐 눌러도** 확인을 건너뛰지 않는다', async () => {
+    await load([리포트({ headline: '남아야 할 것' })])
+    toggle().click()
+    await settle()
+
+    const all = [...drawer().querySelectorAll('button')].find((b) => b.textContent === A.removeAll)
+    all?.click() // 확인으로 바뀐다
+    all?.click() // 겹쳐 누르기의 두 번째 — 바뀐 손잡이에 그대로 닿는다
+    await settle()
+
+    expect(보낸부탁, '확인 화면을 보지도 못하고 전부 지워지면 안 된다').toEqual([])
+  })
+
+  it('한 건 지우기는 background 에 부탁한다 — 탭이 직접 쓰지 않는다', async () => {
+    await load([리포트()])
+    toggle().click()
+    await settle()
+
+    drawer().querySelector<HTMLButtonElement>('.ge-archive__del')?.click()
+    await settle()
+    expect(보낸부탁).toEqual([
+      { kind: 'archive-write', what: 'remove', url: 'https://n.news.naver.com/article/001/0001' },
+    ])
   })
 })

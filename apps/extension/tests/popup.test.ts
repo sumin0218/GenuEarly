@@ -487,6 +487,30 @@ describe('리포트는 그 기사의 것이어야 한다', () => {
     expect(label()).toBe(content.report.button)
   })
 
+  it('남의 조사가 돌고 있으면 또 시작하지 못한다', async () => {
+    // 리포트 칸은 하나뿐이다. A 를 조사하는 중에 B 에서 또 누르면 둘이 같은 칸에
+    // 번갈아 쓰면서 진행도 결과도 뒤섞인다. **남의 것을 없는 것으로 보는 처리가
+    // 열어 둔 길이다** — 그 전에는 reportFace 가 busy 를 돌려줘서 막혀 있었다.
+    mount({ ...(done(A) as object), stage: 'records', claims: [] })
+    render(green(B))
+    await settle()
+
+    const btn = document.getElementById('report-run') as HTMLButtonElement
+    expect(btn.disabled, '칸이 하나라 둘을 동시에 만들 수 없다').toBe(true)
+    const note = document.getElementById('report-note') as HTMLElement
+    expect(note.hidden, '말없이 막힌 단추는 고장으로 읽힌다').toBe(false)
+    expect(note.textContent).toBe(content.report.waiting)
+  })
+
+  it('남의 것이 끝나 있으면 내 것을 만들 수 있다', async () => {
+    mount(done(A))
+    render(green(B))
+    await settle()
+    const btn = document.getElementById('report-run') as HTMLButtonElement
+    expect(btn.disabled).toBe(false)
+    expect(btn.textContent).toBe(content.report.button)
+  })
+
   it('주소를 견주는 것은 normalizeUrl 이다', () => {
     const r = done(A) as unknown as Parameters<typeof sameArticle>[0]
     expect(sameArticle(r, A)).toBe(true)

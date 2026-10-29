@@ -232,10 +232,13 @@ export async function buildReport(
 
   // **글이 없어도 리포트는 끝난 것이다.** 기록과 인용은 이미 있다.
   report = { ...report, stage: 'done', ...(woven?.brief ? { brief: woven.brief } : {}) }
-  await put(report)
 
   // **아카이브에 넣는 자리는 여기 하나뿐이다.** 다 된 것만, 사용자가 버튼을 눌러
   // 만든 것만 남는다 — 기사를 열기만 해서는 한 줄도 쌓이지 않는다 (lib/archive.ts).
+  //
+  // **`put` 보다 먼저 한다.** `put` 은 화면을 깨우는 신호다 — 리포트 탭이 그것을
+  // 듣고 보관함을 다시 그리는데, 보관이 나중이면 방금 끝난 것이 목록에 없다.
   await saveToArchive(report)
+  await put(report)
   return report
 }

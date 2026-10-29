@@ -176,6 +176,58 @@ describe('깨진 저장소에 버티기', () => {
     expect(await listArchive()).toEqual([])
   })
 
+  it('**못 읽었으면 쓰지 않는다** — 빈 목록 위에 얹으면 보관한 것이 다 날아간다', async () => {
+    심는다(리포트({ headline: '지켜야 할 것' }))
+    const 원래 = JSON.stringify([...store])
+
+    // 읽기만 막는다. 쓰기는 멀쩡하다 — 이 상태가 가장 위험하다.
+    const local = {
+      get: () => Promise.reject(new Error('막힘')),
+      set: (o: Record<string, unknown>) => {
+        for (const [k, v] of Object.entries(o)) store.set(k, v)
+        return Promise.resolve()
+      },
+      remove: (keys: string | string[]) => {
+        for (const k of [keys].flat()) store.delete(k)
+        return Promise.resolve()
+      },
+    }
+    vi.stubGlobal('browser', { storage: { local } })
+
+    await saveToArchive(리포트({ url: 'https://n.news.naver.com/article/001/0002' }))
+    expect(JSON.stringify([...store]), '읽지 못했으면 손대지 않는다').toBe(원래)
+
+    await removeArchived('https://n.news.naver.com/article/001/0001')
+    expect(JSON.stringify([...store])).toBe(원래)
+
+    expect(await sweepArchive()).toBe(0)
+    expect(JSON.stringify([...store])).toBe(원래)
+  })
+
+  it('동시에 고쳐도 지운 것이 되살아나지 않는다', async () => {
+    심는다(
+      리포트({ url: 'https://n.news.naver.com/article/001/0001', headline: '지울 것' }),
+      리포트({ url: 'https://n.news.naver.com/article/001/0002', headline: '남을 것' }),
+    )
+    // 읽고-바꾸고-쓰기가 겹치는 자리. 줄을 세우지 않으면 나중에 읽은 쪽이
+    // 먼저 쓴 것을 모르고 덮어 "지울 것" 이 돌아온다.
+    await Promise.all([
+      removeArchived('https://n.news.naver.com/article/001/0001'),
+      saveToArchive(리포트({ url: 'https://n.news.naver.com/article/001/0003', headline: '새것' })),
+    ])
+
+    const 남은것 = (await listArchive()).map((r) => r.headline)
+    expect(남은것, '지운 것이 되살아나면 안 된다').not.toContain('지울 것')
+    expect(남은것, '새로 보관한 것이 사라져도 안 된다').toContain('새것')
+    expect(남은것).toContain('남을 것')
+  })
+
+  it('마지막 한 건을 지우면 칸도 없앤다', async () => {
+    await saveToArchive(리포트())
+    await removeArchived('https://n.news.naver.com/article/001/0001')
+    expect(store.has(ARCHIVE_KEY)).toBe(false)
+  })
+
   it('저장소가 막혀도 터지지 않는다', async () => {
     vi.stubGlobal('browser', {
       storage: {
