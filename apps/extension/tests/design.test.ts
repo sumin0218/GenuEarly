@@ -134,8 +134,13 @@ const strip = (css: string) => css.replace(/\/\*[\s\S]*?\*\//g, '')
 
 /** 토큰을 정의하는 블록. 여기 안에서는 생값이 당연하다. */
 function outsideTokenBlocks(css: string): string {
-  // `:root {` 와 `.ge-badge {` 의 첫 블록이 토큰 자리다.
-  return strip(css).replace(/(:root|\.ge-badge)\s*\{[\s\S]*?\n\}/g, '')
+  // `:root {` 가 토큰 자리다. 콘텐츠 스크립트의 CSS 는 Shadow DOM 안이라 바깥 문서의
+  // `:root` 가 닿지 않아, **그 안의 각 요소가 자기 토큰을 자기 블록에 둔다** —
+  // `.ge-badge`(기사 배지)와 `.ge-toast`(다 봤다는 말풍선)가 그렇다.
+  // 어두운 모드 블록도 토큰을 다시 적는 자리다.
+  return strip(css)
+    .replace(/@media \(prefers-color-scheme: dark\)\s*\{[\s\S]*?\n\}\n\}/g, '')
+    .replace(/(:root|\.ge-badge|\.ge-toast)\s*\{[\s\S]*?\n\}/g, '')
 }
 
 describe('값을 토큰에서 고른다', () => {
@@ -218,6 +223,8 @@ describe('기사 위 배지는 한 줄이다', () => {
   // 읽으려고 연 기사 위에 우리 상자가 일곱 줄을 덮으면 안 된다.
   // 항목과 판단 근거는 **팝업**이 더 넓게, 기사를 가리지 않고 보여 준다.
   const badgeCss = strip(readFileSync(resolve(__dirname, '../assets/content.css'), 'utf8'))
+  /** 배지에 대한 규칙은 **배지 부분만** 본다. 같은 파일·같은 Shadow DOM 에 말풍선도 산다. */
+  const onlyBadge = (css: string) => css.slice(0, css.indexOf('.ge-toast'))
   /** 주석을 뗀다 — "role 을 두지 않는다" 고 적은 주석까지 걸리면 설명을 못 쓴다. */
   const badgeTs = strip(readFileSync(resolve(__dirname, '../entrypoints/content.ts'), 'utf8'))
     .split('\n')
@@ -237,9 +244,17 @@ describe('기사 위 배지는 한 줄이다', () => {
 
   it('누를 수 있는 것처럼 보이지 않는다', () => {
     // 누를 것이 없는데 손가락 커서를 두거나 초점을 받으면 사용자가 눌러 보고 아무 일도 없다.
-    expect(badgeCss).not.toContain('cursor: pointer')
-    expect(badgeTs).not.toContain('role')
+    //
+    // **배지만 본다.** 같은 Shadow DOM 안에 말풍선도 사는데 그쪽에는 닫기 단추가
+    // 있어서 `cursor: pointer` 와 `role` 이 **있어야 맞다** (lib/toast.ts).
+    // 파일 전체를 보면 그 단추 때문에 이 규칙이 깨진 것처럼 읽힌다.
+    // **범위를 좁힌 검사는 범위가 비면 헛돈다.** 잘라 낸 것이 남아 있는지 먼저 본다.
+    expect(onlyBadge(badgeCss).length, '배지 부분을 못 잘라 냈다').toBeGreaterThan(100)
+    expect(onlyBadge(badgeCss)).not.toContain('cursor: pointer')
     expect(badgeTs).not.toContain('tabIndex')
+    const 배지함수 = /function createBadge\(\)[\s\S]*?\n\}/.exec(badgeTs)?.[0] ?? ''
+    expect(배지함수.length, 'createBadge 를 못 찾았다 — 못 찾으면 이 검사는 늘 통과한다').toBeGreaterThan(100)
+    expect(배지함수, '배지는 누를 것이 없다').not.toContain('role')
   })
 
   it('판정 전체는 그대로 들고 있는다', () => {
