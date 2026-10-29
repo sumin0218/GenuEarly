@@ -80,13 +80,46 @@ export const ARTICLE_EXCLUDE_MATCHES = [
 ] as const
 
 /**
- * 포털 목록·섹션 페이지. 제목 옆 동그라미(기능 ②)가 뜨는 곳이다.
+ * 목록·섹션 페이지. 제목 옆 표시(기능 ②)가 뜨는 곳이다.
  *
- * **네이버만 받는다.** 다음·인사이트·위키트리 목록은 제목 링크 모양을 확인하지 못했고,
- * 확인하지 못한 사이트의 권한을 미리 받아 두지 않는다 (requirements.md 4-5절 TODO).
+ * ## 왜 인사이트·위키트리는 통째로 받는가
+ *
+ * ②는 **기사 본문을 읽는 기능이 아니다.** 목록에서 `a[href]` 를 훑어 그 주소가
+ * `isArticleUrl` 에 걸리는지만 본다 (`collectTitles`). **선택자를 쓰지 않으므로**
+ * 목록 페이지의 모양이 어떻게 생겼는지 미리 알 필요가 없다 — 기사 링크가 `<a>` 로
+ * 걸려 있기만 하면 된다. 두 사이트 다 그렇다 (2026-10-29 확인).
+ *
+ * 그래서 **분류 페이지를 하나씩 적지 않는다.** 인사이트는 `/politics/`, `/economy/`
+ * 등 열 개가 넘고 위키트리는 `/districts/…` 가 따로 있는데, 하나씩 적으면
+ * 사이트가 분류를 늘릴 때 **조용히 빠진다** — 네이버 기사 경로에서 겪은 것과 같은 일이다
+ * (`ARTICLE_MATCHES` 머리말의 GE-42).
+ *
+ * 대신 기사 본문 페이지는 뺀다 (`PORTAL_LIST_EXCLUDE_MATCHES`). 거기서는 ①이 배지를
+ * 띄우고 있고, ②까지 돌면 관련 기사 링크에 표시가 붙어 **읽는 중에 끼어든다.**
+ *
+ * 설치 경고는 넓어지지 않는다. 경고는 경로가 아니라 도메인으로 뜨고, 두 도메인은
+ * `ARTICLE_MATCHES` 때문에 이미 들어가 있다 (docs/security/secure-coding.md 2절).
+ *
+ * **다음은 아직 받지 않는다.** `v.daum.net` 은 기사 주소만 알고 목록 쪽을 확인하지
+ * 못했다 (requirements.md 4-5절).
  */
 export const PORTAL_LIST_MATCHES = [
   'https://news.naver.com/section/*',
+  'https://www.insight.co.kr/*',
+  'https://www.wikitree.co.kr/*',
+  'https://m.wikitree.co.kr/*',
+] as const
+
+/**
+ * 위 목록이 잡지만 **기사 본문 페이지**라서 ②가 들어가면 안 되는 곳.
+ *
+ * 기사에서는 ①이 배지를 띄운다. ②까지 돌면 본문 아래 관련 기사 링크마다 표시가
+ * 붙어 **읽는 중에 끼어든다.** 목록은 훑는 자리고 기사는 읽는 자리다.
+ */
+export const PORTAL_LIST_EXCLUDE_MATCHES = [
+  'https://www.insight.co.kr/news/*',
+  'https://www.wikitree.co.kr/articles/*',
+  'https://m.wikitree.co.kr/articles/*',
 ] as const
 
 /** manifest 의 host_permissions 에 들어가는 값. */

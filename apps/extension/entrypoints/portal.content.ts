@@ -4,7 +4,7 @@
 // 보내면 중계 서버의 IP 당 한도(분당 60)를 한 사람이 혼자 쓴다.
 //
 // **판단 호출은 여기서 하지 않는다.** background 로 보낸다 (lib/protocol.ts).
-import { PORTAL_LIST_MATCHES } from '../match-patterns'
+import { PORTAL_LIST_EXCLUDE_MATCHES, PORTAL_LIST_MATCHES } from '../match-patterns'
 import content from '../../../packages/content/ui.ko.json'
 import {
   LEGEND_CLASS,
@@ -59,6 +59,9 @@ function runner(limit: number) {
 
 export default defineContentScript({
   matches: [...PORTAL_LIST_MATCHES],
+  // 기사 본문 페이지에서는 ①이 배지를 띄운다. ②까지 돌면 관련 기사 링크마다
+  // 표시가 붙어 읽는 중에 끼어든다 (match-patterns.ts).
+  excludeMatches: [...PORTAL_LIST_EXCLUDE_MATCHES],
 
   main(ctx) {
     const enqueue = runner(MAX_CONCURRENT)

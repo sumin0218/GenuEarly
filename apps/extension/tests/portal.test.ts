@@ -16,7 +16,13 @@ import {
   legendDismissed,
   markLook,
 } from '../lib/portal'
-import { ARTICLE_MATCHES, isArticleUrl, matchPatternToRegExp } from '../match-patterns'
+import {
+  ARTICLE_MATCHES,
+  PORTAL_LIST_EXCLUDE_MATCHES,
+  PORTAL_LIST_MATCHES,
+  isArticleUrl,
+  matchPatternToRegExp,
+} from '../match-patterns'
 
 /** 목록 한 조각. 포털의 클래스 이름을 흉내 내지 않는다 — 우리는 주소로 찾는다. */
 function listWith(links: { href: string; text: string }[]): HTMLElement {
@@ -273,6 +279,72 @@ describe('동그라미를 페이지에 넣을 때', () => {
       mark.host.title,
     ].join(' ')
     expect(words).not.toMatch(/0\.\d|\d+%|\d+점/)
+  })
+})
+
+/** 문서 주소를 바꾼다. 상대 경로(`/articles/123`)가 실제 페이지처럼 풀리게 한다. */
+const setURL = (url: string): void => {
+  ;(window as unknown as { happyDOM: { setURL: (u: string) => void } }).happyDOM.setURL(url)
+}
+
+describe('②가 도는 목록 페이지', () => {
+  // ②는 **선택자를 쓰지 않는다.** 목록에서 a[href] 를 훑어 그 주소가 기사인지만 본다.
+  // 그래서 목록 페이지의 모양을 미리 알 필요가 없고, 분류 페이지를 하나씩 적을 이유도
+  // 없다 — 적으면 사이트가 분류를 늘릴 때 조용히 빠진다 (match-patterns.ts).
+  const 목록에뜨나 = (url: string): boolean => {
+    const bare = `${new URL(url).origin}${new URL(url).pathname}`
+    if (PORTAL_LIST_EXCLUDE_MATCHES.map(matchPatternToRegExp).some((re) => re.test(bare))) return false
+    return PORTAL_LIST_MATCHES.map(matchPatternToRegExp).some((re) => re.test(bare))
+  }
+
+  it.each([
+    ['https://news.naver.com/section/100', '네이버 섹션'],
+    ['https://www.insight.co.kr/', '인사이트 첫 화면'],
+    ['https://www.insight.co.kr/politics/', '인사이트 분류'],
+    ['https://www.insight.co.kr/economy/', '인사이트 분류 — 적어 두지 않은 것도 걸린다'],
+    ['https://www.wikitree.co.kr/', '위키트리 첫 화면'],
+    ['https://www.wikitree.co.kr/districts/busan', '위키트리 지역'],
+    ['https://m.wikitree.co.kr/', '위키트리 모바일'],
+  ])('%s — %s', (url) => {
+    expect(목록에뜨나(url)).toBe(true)
+  })
+
+  it.each([
+    ['https://www.insight.co.kr/news/579686', '인사이트 기사'],
+    ['https://www.wikitree.co.kr/articles/1170180', '위키트리 기사'],
+    ['https://m.wikitree.co.kr/articles/1170180', '위키트리 모바일 기사'],
+  ])('%s 에는 뜨지 않는다 — %s 는 읽는 자리다', (url) => {
+    expect(목록에뜨나(url), '기사에서는 ①이 배지를 띄운다. ②까지 돌면 읽는 중에 끼어든다').toBe(false)
+  })
+
+  it('목록에 걸린 기사 링크를 그대로 찾아낸다 — 선택자를 쓰지 않기 때문에', () => {
+    // 두 사이트가 실제로 거는 모양이다 (2026-10-29 확인). **위키트리는 상대 경로다** —
+    // `a.href` 가 그 페이지 주소를 바탕으로 풀리므로 문서 주소를 위키트리로 둬야
+    // 실제와 같아진다. `<base>` 로는 안 된다: happy-dom 은 `baseURI` 만 바꾸고
+    // `a.href` 해석에는 쓰지 않는다 (확인함). 그러면 상대 경로가 엉뚱한 호스트로
+    // 풀려 **기능이 멀쩡해도 검사가 깨진다.**
+    const 되돌릴주소 = location.href
+    setURL('https://www.wikitree.co.kr/')
+
+    const list = document.createElement('div')
+    for (const [href, text] of [
+      ['https://www.insight.co.kr/news/579686', '인사이트 기사 제목입니다'],
+      ['/articles/1170180', '위키트리 기사 제목입니다'],
+      ['/cs', '고객센터'],
+    ] as const) {
+      const a = document.createElement('a')
+      a.href = href
+      a.textContent = text
+      list.append(a)
+    }
+    document.body.append(list)
+
+    const got = collectTitles(list).map((t) => t.headline)
+    expect(got).toContain('인사이트 기사 제목입니다')
+    expect(got).toContain('위키트리 기사 제목입니다')
+    expect(got, '기사가 아닌 링크에는 달지 않는다').not.toContain('고객센터')
+    list.remove()
+    setURL(되돌릴주소)
   })
 })
 
