@@ -491,7 +491,7 @@ describe('리포트는 그 기사의 것이어야 한다', () => {
     // 리포트 칸은 하나뿐이다. A 를 조사하는 중에 B 에서 또 누르면 둘이 같은 칸에
     // 번갈아 쓰면서 진행도 결과도 뒤섞인다. **남의 것을 없는 것으로 보는 처리가
     // 열어 둔 길이다** — 그 전에는 reportFace 가 busy 를 돌려줘서 막혀 있었다.
-    mount({ ...(done(A) as object), stage: 'records', claims: [] })
+    mount({ ...(done(A) as object), stage: 'records', claims: [], at: Date.now() })
     render(green(B))
     await settle()
 
@@ -506,6 +506,28 @@ describe('리포트는 그 기사의 것이어야 한다', () => {
     mount(done(A))
     render(green(B))
     await settle()
+    const btn = document.getElementById('report-run') as HTMLButtonElement
+    expect(btn.disabled).toBe(false)
+    expect(btn.textContent).toBe(content.report.button)
+  })
+
+  it('**멈춘 조사는 단추를 잠그지 않는다** — service worker 는 일하는 중에도 꺼진다', async () => {
+    // 꺼지면 storage.session 에 records 인 채로 남고 브라우저를 닫기 전까지 그대로다.
+    // 그것을 "도는 중" 으로 읽으면 어느 기사에서도 리포트를 못 만든다.
+    mount({ ...(done(A) as object), stage: 'records', claims: [], at: Date.now() - 10 * 60 * 1000 })
+    render(green(B))
+    await settle()
+
+    const btn = document.getElementById('report-run') as HTMLButtonElement
+    expect(btn.disabled, '멈춘 조사 하나가 기능 전체를 잠그면 안 된다').toBe(false)
+    expect(btn.textContent).toBe(content.report.button)
+  })
+
+  it('멈춘 내 조사도 다시 시작할 수 있다', async () => {
+    mount({ ...(done(A) as object), stage: 'brief', claims: [], at: Date.now() - 10 * 60 * 1000 })
+    render(green(A))
+    await settle()
+
     const btn = document.getElementById('report-run') as HTMLButtonElement
     expect(btn.disabled).toBe(false)
     expect(btn.textContent).toBe(content.report.button)

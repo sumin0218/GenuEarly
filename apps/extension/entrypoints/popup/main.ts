@@ -660,8 +660,28 @@ function sameArticle(r: Report | null, here: string | undefined): boolean {
 }
 
 /** 아직 만드는 중인가. 끝난 것(`done`)과 엎어진 것(`failed`)만 아니다. */
-const 도는중 = (r: Report | null): boolean =>
+const 만드는중 = (r: Report | null): boolean =>
   r?.stage === 'claims' || r?.stage === 'records' || r?.stage === 'brief'
+
+/**
+ * 조사가 **멈춘 것으로 치는** 시간.
+ *
+ * 리포트 한 건은 스무 초쯤 걸린다. 그런데 MV3 의 service worker 는 **일하는 중에도
+ * 꺼진다** — 그러면 `storage.session` 에 `records` 인 채로 남고, 브라우저를 닫기
+ * 전까지 그대로다. 그 상태를 "도는 중" 으로 읽으면 **단추가 영영 잠긴다.**
+ *
+ * 3분은 가장 느린 경우(주장 셋 × 검색 5초 + 글 30초)의 몇 배다.
+ */
+const STALE_AFTER_MS = 3 * 60 * 1000
+
+/** 지금도 돌고 있다고 믿어도 되는가. */
+const 도는중 = (r: Report | null): boolean => 만드는중(r) && Date.now() - (r?.at ?? 0) < STALE_AFTER_MS
+
+/**
+ * 쓸 수 있는 리포트만 남긴다. **멈춘 것은 없는 것으로 본다** —
+ * 그래야 단추가 "만들기" 로 돌아가 다시 시작할 수 있다.
+ */
+const 살아있는 = (r: Report | null): Report | null => (만드는중(r) && !도는중(r) ? null : r)
 
 /** 지금 상태에 맞는 버튼 글과 눌러도 되는지. */
 function reportFace(r: Report | null): { label: string; busy: boolean; note?: string } {
@@ -705,7 +725,8 @@ function drawReport(
   // **다른 기사의 리포트는 없는 것으로 본다.** 그래야 버튼이 "만들기" 로 돌아간다.
   const mine = (r: Report | null) => (sameArticle(r, here) ? r : null)
 
-  const paint = (r: Report | null) => {
+  const paint = (raw: Report | null) => {
+    const r = 살아있는(raw)
     const face = reportFace(mine(r))
 
     // **남의 조사가 돌고 있으면 기다린다.**
@@ -743,7 +764,7 @@ function drawReport(
       // **이 기사의** 리포트가 다 돼 있으면 연다. 남의 것이면 새로 만든다.
       try {
         const got = (await browser.storage.session.get(REPORT_KEY)) as Record<string, Report | undefined>
-        const have = got[REPORT_KEY] ?? null
+        const have = 살아있는(got[REPORT_KEY] ?? null)
         if (mine(have)?.stage === 'done') {
           await browser.tabs.create({ url: browser.runtime.getURL('/report.html') })
           return

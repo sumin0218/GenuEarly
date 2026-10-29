@@ -95,8 +95,27 @@ export default defineBackground(() => {
 
   browser.runtime.onMessage.addListener((raw, sender, sendResponse) => {
     const msg = raw as Message
-    // **보낸 곳을 확인한다.** 우리 콘텐츠 스크립트가 아니면 받지 않는다.
-    if (!sender.tab || sender.id !== browser.runtime.id) return false
+    // **보낸 곳을 확인한다.** 우리 확장에서 온 것이 아니면 받지 않는다.
+    // `externally_connectable` 을 쓰지 않으므로 이 id 는 우리 것뿐이다.
+    if (sender.id !== browser.runtime.id) return false
+
+    // 보관함 고치기. **쓰는 자리를 여기 하나로 모은다** — 리포트 탭이 직접 쓰면
+    // 리포트가 막 보관되는 순간과 겹쳐 지운 항목이 되살아난다 (lib/archive.ts).
+    //
+    // **이것만 `sender.tab` 이 없다.** 리포트 탭은 콘텐츠 스크립트가 아니라 우리
+    // 확장 페이지라 `tab` 이 붙지 않는다. 아래의 `!sender.tab` 보다 앞에 둬야 한다 —
+    // 뒤에 뒀다가 삭제가 **조용히 아무 일도 하지 않았다.**
+    if (msg?.kind === 'archive-write') {
+      const 일 = msg.what === 'clear' ? clearArchive() : removeArchived(msg.url ?? '')
+      일.then(() => sendResponse({ ok: true })).catch((e) => {
+        console.warn('[GenuEarly] 보관함 고치기 실패', e)
+        sendResponse({ ok: false })
+      })
+      return true
+    }
+
+    // 나머지는 전부 콘텐츠 스크립트에서 온다. 탭이 없으면 우리가 아는 길이 아니다.
+    if (!sender.tab) return false
 
     // ② 목록의 제목 하나. **아이콘 배지를 건드리지 않는다** — 목록 페이지에는 기사가
     // 서른 개 있고, 그중 하나의 판정을 탭 전체의 상태로 올리면 그 페이지가 주의 대상처럼
@@ -136,17 +155,6 @@ export default defineBackground(() => {
         )
         .catch((e) => console.warn('[GenuEarly] 리포트 만들기 실패', e))
       sendResponse({ started: true })
-      return true
-    }
-
-    // 보관함 고치기. **쓰는 자리를 여기 하나로 모은다** — 리포트 탭이 직접 쓰면
-    // 리포트가 막 보관되는 순간과 겹쳐 지운 항목이 되살아난다 (lib/archive.ts).
-    if (msg?.kind === 'archive-write') {
-      const 일 = msg.what === 'clear' ? clearArchive() : removeArchived(msg.url ?? '')
-      일.then(() => sendResponse({ ok: true })).catch((e) => {
-        console.warn('[GenuEarly] 보관함 고치기 실패', e)
-        sendResponse({ ok: false })
-      })
       return true
     }
 
