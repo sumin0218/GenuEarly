@@ -192,7 +192,13 @@ export async function buildReport(
   article: { url: string; headline: string; date: string; body: string },
   rows: ReportRow[],
 ): Promise<Report> {
-  const base = { ...article, at: Date.now(), rows }
+  // **본문을 리포트에 넣지 않는다.** `{ ...article }` 로 펼치면 `body` 가 따라
+  // 들어간다 — `Report` 타입에 없어도 런타임에는 지워지지 않는다. 그 리포트는
+  // `storage.session` 을 거쳐 **보관함(`storage.local`)까지 간다.** 기사 전문이
+  // 디스크에 남는 것은 우리가 문서에 적어 둔 것(제목·주소·인용)보다 훨씬 많다.
+  //
+  // 본문은 `gatherClaims` 의 입력으로만 쓰고 여기서 끊는다. (승원 리뷰 #34)
+  const base = { url: article.url, headline: article.headline, date: article.date, at: Date.now(), rows }
 
   let report: Report = { ...base, stage: 'claims', claims: [] }
   await put(report)

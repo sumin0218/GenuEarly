@@ -170,6 +170,26 @@ describe('③ 영원히 두지 않는다', () => {
   })
 })
 
+describe('보관함에 들어가서는 안 되는 것', () => {
+  // **승원 리뷰 #34.** buildReport 가 `{ ...article }` 로 펼치면서 `body` 가
+  // 따라 들어갔다. Report 타입에 없어도 런타임에는 지워지지 않는다 — 그 리포트가
+  // session 을 거쳐 **보관함(local)까지** 가면 기사 전문이 디스크에 남는다.
+  it('기사 본문은 보관되지 않는다', async () => {
+    const 본문 = '이것은 기사 본문 전체다. 절대 디스크에 남으면 안 된다.'
+    await saveToArchive({ ...리포트(), body: 본문 } as Report & { body: string })
+
+    expect(JSON.stringify([...store]), '제목·주소·인용만 남긴다고 적어 두었다').not.toContain(본문)
+  })
+
+  it('보관하는 것은 화면이 쓰는 것뿐이다', async () => {
+    await saveToArchive(리포트())
+    const 들어간것 = (await listArchive())[0] as unknown as Record<string, unknown>
+    expect(Object.keys(들어간것).sort()).toEqual(
+      ['at', 'claims', 'date', 'headline', 'rows', 'stage', 'url'],
+    )
+  })
+})
+
 describe('깨진 저장소에 버티기', () => {
   it('모양이 다르면 통째로 버린다 — 반쯤 읽은 목록을 보여 주지 않는다', async () => {
     store.set(ARCHIVE_KEY, { v: 99, items: 'ㅇㅇ' })

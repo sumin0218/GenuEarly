@@ -1066,6 +1066,23 @@ describe('리포트 — 기록을 찾아 오고 Jev 가 맞춰 본다', () => {
     ])
   })
 
+  // 아래 둘은 **승원 리뷰 #34 의 재현**이다. 출처 목록이 비면 검증이 꺼졌다 —
+  // 검증을 가장 못 하는 상황에서 끄는 셈이라, 지어낸 주소가 화면 링크까지 갔다.
+  it('**출처 목록이 비면 아무것도 쓰지 않는다** — 지어낸 주소가 그대로 나가던 자리', async () => {
+    흐름(
+      searched(['그럴듯한신문 | 2026-10-27 | 지어낸 기록 | https://zzz.invalid/a'], []),
+      entailed('supports', 0.95),
+    )
+    const r = await records(REQ)
+    expect(r.status).toBe(200)
+    expect(await recsOf(r), '맞춰 볼 출처가 없으면 기록도 없다').toEqual([])
+  })
+
+  it('출처 목록이 아예 없어도(필드 누락) 마찬가지다', async () => {
+    mockFetch(() => ok({ choices: [{ message: { content: '아무개 | 2026-10-27 | 지어냄 | https://zzz.invalid/a' } }] }))
+    expect(await recsOf(await records(REQ))).toEqual([])
+  })
+
   it('**자기 인용을 버린다** — 기사 자신이 근거가 될 수는 없다', async () => {
     // 실측: 기록 48건 중 8건(17%)이 그 기사 자신이거나 같은 매체의 전재였다.
     흐름(

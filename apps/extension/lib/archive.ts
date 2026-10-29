@@ -112,6 +112,31 @@ function sameUrl(a: string, b: string): boolean {
 const expired = (r: Report, now: number): boolean => now - r.at >= ARCHIVE_TTL_MS
 
 /**
+ * **디스크에 남길 것만 골라 낸다.** 넘겨받은 것을 그대로 쓰지 않는다.
+ *
+ * 한 번 당했다 (승원 리뷰 #34): `buildReport` 가 `{ ...article }` 로 펼치면서
+ * `body` 가 따라 들어갔다. `Report` 타입에 `body` 가 없어도 **런타임에는 지워지지
+ * 않는다** — 타입은 모양을 적어 둔 것이지 거르는 장치가 아니다. 기사 전문이 그대로
+ * 디스크에 남을 뻔했다.
+ *
+ * 그래서 **쓰는 자리에서** 고른다. 위에서 고쳐도 다음 사람이 또 펼칠 수 있고,
+ * 그때 새는 곳은 늘 여기다. 문서에 적어 둔 것(제목·주소·인용)과 이 목록이 같아야 한다.
+ */
+function 보관할것(r: Report): Report {
+  return {
+    url: r.url,
+    headline: r.headline,
+    date: r.date,
+    at: r.at,
+    stage: r.stage,
+    rows: r.rows,
+    claims: r.claims,
+    ...(r.brief ? { brief: r.brief } : {}),
+    ...(r.reason ? { reason: r.reason } : {}),
+  }
+}
+
+/**
  * 보관된 리포트들. **새것이 앞이다.** 만료된 것은 빼고 돌려준다 —
  * 쓸어내기가 아직 안 돌았어도 사용자 눈에 보이지 않게 한다.
  */
@@ -137,7 +162,7 @@ export async function saveToArchive(report: Report): Promise<void> {
     // **못 읽었으면 쓰지 않는다.** 빈 목록 위에 얹으면 보관해 둔 것이 전부 날아간다.
     if (!box) return
     const kept = box.items.filter((r) => !expired(r, now) && !sameUrl(r.url, report.url))
-    const next = [report, ...kept].sort((a, b) => b.at - a.at).slice(0, ARCHIVE_MAX)
+    const next = [보관할것(report), ...kept].sort((a, b) => b.at - a.at).slice(0, ARCHIVE_MAX)
     await write(next)
   })
 }

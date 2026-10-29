@@ -134,10 +134,20 @@ function baseHost(url: string): string {
 export function keepUsable(found: readonly Found[], citations: readonly string[], articleUrl: string): Found[] {
   const 본문매체 = baseHost(articleUrl)
   const 찾은주소 = new Set(citations.map((c) => c.trim()))
+  // **출처 목록이 비면 **아무것도** 쓸 수 없다.**
+  //
+  // 처음에는 `찾은주소.size > 0` 일 때만 주소를 맞춰 봤다. 목록이 비었을 때
+  // 그냥 통과시킨 것인데, 그러면 **검증을 가장 못 하는 상황에서 검증을 끈다.**
+  // 모델이 지어낸 주소가 Jev 를 거쳐 화면의 링크까지 그대로 간다.
+  //
+  // 기록이 없는 리포트는 "기록을 찾지 못했습니다" 로 끝난다 — 멀쩡한 결말이다.
+  // 지어낸 주소를 내보내는 것보다 낫다. (승원 리뷰 #34)
+  if (찾은주소.size === 0) return []
+
   const out: Found[] = []
   for (const r of found) {
     // 검색이 돌려주지 않은 주소는 지어낸 것이다.
-    if (찾은주소.size > 0 && !찾은주소.has(r.url)) continue
+    if (!찾은주소.has(r.url)) continue
     // 자기 인용은 근거가 되지 않는다.
     if (본문매체 && baseHost(r.url) === 본문매체) continue
     if (out.some((x) => x.url === r.url)) continue
