@@ -109,6 +109,11 @@ export default defineContentScript({
         handled.add(t.anchor)
         attach(t.url, t.headline, t.anchor)
       }
+      // **훑을 때마다 본다.** 범례는 표시가 하나라도 붙은 뒤에 뜨는데, 포털이 목록을
+      // 나중에 그리면 첫 표시도 나중에 생긴다. 처음 한 번만 보면 그 경우 아이콘은
+      // 붙고 범례는 끝내 안 뜬다 — 닫은 적 없는 사용자가 "제목만 본 결과" 라는
+      // 안내를 못 본다 (승원 리뷰 #39). 이미 띄웠으면 안에서 바로 돌아간다.
+      void maybeShowLegend()
     }
 
     // --- 포털은 목록을 다시 그린다 ------------------------------------------
@@ -145,13 +150,21 @@ export default defineContentScript({
     // **표시가 하나라도 붙은 뒤에 띄운다.** 기사 목록이 아닌 페이지(설정, 검색 결과)
     // 에서도 이 스크립트가 돌 수 있는데, 거기서 설명할 표시가 없으면 상자만 뜬다.
     let legend: { host: HTMLElement; close: () => void } | undefined
+    // **한 번 닫으면 이 페이지에서 다시 묻지 않는다.** `scan()` 이 돌 때마다 부르므로
+    // 저장소를 매번 읽지 않게 기억해 둔다.
+    let 닫았음 = false
     async function maybeShowLegend(): Promise<void> {
-      if (legend || document.querySelector(`.${MARK_CLASS}`) === null) return
-      if (await legendDismissed()) return
-      if (legend) return // 기다리는 사이에 다른 호출이 띄웠다
+      if (legend || 닫았음) return
+      if (document.querySelector(`.${MARK_CLASS}`) === null) return
+      if (await legendDismissed()) {
+        닫았음 = true
+        return
+      }
+      if (legend || 닫았음) return // 기다리는 사이에 다른 호출이 띄웠거나 닫았다
       legend = createLegend(document, content.portal.legend, () => {
         legend?.close()
         legend = undefined
+        닫았음 = true
         void dismissLegend()
       })
       document.body.append(legend.host)
@@ -166,6 +179,5 @@ export default defineContentScript({
     })
 
     scan()
-    void maybeShowLegend()
   },
 })
