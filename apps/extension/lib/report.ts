@@ -77,6 +77,16 @@ export interface Report {
   brief?: ReportBrief
   /** 실패했으면 왜 */
   reason?: string
+  /**
+   * **보관함에서 꺼내 온 것인가.**
+   *
+   * 꺼내 온 것은 *그때의 모습*이다. 그 뒤로 기사도 주변 보도도 달라졌을 수 있다 —
+   * 말하지 않으면 사용자는 방금 조사한 결과로 읽는다. 리포트 화면이 이 값을 보고
+   * 한 줄을 붙인다.
+   *
+   * 보관할 때는 떨어져 나간다 (lib/archive.ts 의 `보관할것`).
+   */
+  restored?: boolean
 }
 
 /**
@@ -108,6 +118,16 @@ export async function peekReport(): Promise<Report | null> {
   } catch {
     return null
   }
+}
+
+/**
+ * 보관해 둔 리포트를 **지금 보는 것으로 되돌린다.**
+ *
+ * 리포트 칸은 하나다. 보관본을 열려면 그 칸에 들어가야 화면 둘(팝업·리포트 탭)이
+ * 같은 것을 본다. **새로 만들지 않는다** — 이미 가진 것을 꺼내 놓을 뿐이다.
+ */
+export async function restoreReport(report: Report): Promise<void> {
+  await put({ ...report, restored: true })
 }
 
 /** 리포트를 버린다. 탭을 닫거나 새로 만들 때 부른다. */

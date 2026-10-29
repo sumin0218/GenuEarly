@@ -441,15 +441,39 @@ describe('리포트는 그 기사의 것이어야 한다', () => {
   const B = 'https://n.news.naver.com/mnews/article/437/0000518013?iid=829'
 
   const done = (url: string) =>
-    ({ url, headline: '머리글', date: '2026-10-28', at: 0, stage: 'done', rows: [], claims: [] }) as never
+    ({ url, headline: '머리글', date: '2026-10-28', at: Date.now(), stage: 'done', rows: [], claims: [] }) as never
 
-  function mount(stored: unknown): void {
+  /** 보관함(local)에 들어 있는 것. 칸(session)과 **다른 저장소**다. */
+  let 보관됨: unknown[] = []
+  /** 새 탭으로 열린 주소. 리포트를 열었는지 본다. */
+  let 열린탭: string[] = []
+  /** 칸에 되돌려 놓은 것. 보관본을 꺼내 놓았는지 본다. */
+  let 칸에쓴것: unknown[] = []
+
+  function mount(stored: unknown, archived: unknown[] = []): void {
+    보관됨 = archived
+    열린탭 = []
+    칸에쓴것 = []
     vi.stubGlobal('browser', {
       storage: {
-        session: { get: () => Promise.resolve(stored ? { report: stored } : {}) },
+        session: {
+          get: () => Promise.resolve(stored ? { report: stored } : {}),
+          set: (o: Record<string, unknown>) => {
+            칸에쓴것.push(o.report)
+            return Promise.resolve()
+          },
+        },
+        local: { get: () => Promise.resolve({ archive: { v: 1, items: 보관됨 } }) },
         onChanged: { addListener: () => {} },
       },
-      tabs: { query: () => Promise.resolve([{ id: 1 }]), sendMessage: () => Promise.resolve(null), create: () => Promise.resolve() },
+      tabs: {
+        query: () => Promise.resolve([{ id: 1 }]),
+        sendMessage: () => Promise.resolve(null),
+        create: (o: { url: string }) => {
+          열린탭.push(o.url)
+          return Promise.resolve()
+        },
+      },
       runtime: { getURL: (x: string) => x },
     })
     const box = document.createElement('div'); box.id = 'report-box'; box.hidden = true
@@ -531,6 +555,45 @@ describe('리포트는 그 기사의 것이어야 한다', () => {
     const btn = document.getElementById('report-run') as HTMLButtonElement
     expect(btn.disabled).toBe(false)
     expect(btn.textContent).toBe(content.report.button)
+  })
+
+  // 사용자가 겪은 흐름: A 리포트 → B 리포트 → 다시 A.
+  // 칸은 하나라 A 로 돌아오면 칸에는 B 가 있다. **보관함에는 A 가 그대로 있다** —
+  // 그것을 안 보면 스무 초와 크레딧을 또 쓴다.
+  it('A→B→A 로 돌아오면 보관본을 쓴다 — 다시 만들지 않는다', async () => {
+    mount(done(B), [done(A)])
+    render(green(A))
+    await settle()
+    expect(label(), '이미 가진 것을 두고 "만들기" 를 권하면 안 된다').toBe(content.report.open)
+  })
+
+  it('보관본을 열 때는 칸에 꺼내 놓고 연다 — 새로 만들지 않는다', async () => {
+    mount(done(B), [done(A)])
+    render(green(A))
+    await settle()
+
+    ;(document.getElementById('report-run') as HTMLButtonElement).click()
+    await settle()
+
+    expect(열린탭, '리포트 탭이 열려야 한다').toEqual(['/report.html'])
+    expect(칸에쓴것).toHaveLength(1)
+    const 꺼낸것 = 칸에쓴것[0] as { url: string; restored?: boolean }
+    expect(꺼낸것.url).toBe(A)
+    expect(꺼낸것.restored, '그때의 모습이라고 화면이 말할 수 있어야 한다').toBe(true)
+  })
+
+  it('보관본이 없으면 그대로 만들기다', async () => {
+    mount(done(B), [])
+    render(green(A))
+    await settle()
+    expect(label()).toBe(content.report.button)
+  })
+
+  it('보관본이 있어도 남의 조사 중에는 기다린다 — 칸을 쓸 수 없다', async () => {
+    mount({ ...(done(B) as object), stage: 'records', claims: [], at: Date.now() }, [done(A)])
+    render(green(A))
+    await settle()
+    expect((document.getElementById('report-run') as HTMLButtonElement).disabled).toBe(true)
   })
 
   it('주소를 견주는 것은 normalizeUrl 이다', () => {
