@@ -787,9 +787,14 @@ function drawReport(
         // **보관본이 있으면 꺼내 놓고 연다. 새로 만들지 않는다.**
         // 칸에 남의 것이 들어 있을 뿐, 이 기사의 리포트는 이미 디스크에 있다.
         if (보관본 && !도는중(have)) {
-          await restoreReport(보관본)
-          await browser.tabs.create({ url: browser.runtime.getURL('/report.html') })
-          return
+          // **꺼내 놓는 데 성공했을 때만 연다.** 못 꺼냈는데 열면 칸에 남아 있는
+          // 남의 리포트가 열린다 — 이 기능이 고치려던 바로 그 증상이다.
+          if (await restoreReport(보관본)) {
+            await browser.tabs.create({ url: browser.runtime.getURL('/report.html') })
+            return
+          }
+          // 못 꺼냈으면 아래로 내려가 새로 만든다. 스무 초가 걸려도 **그 기사의**
+          // 리포트가 뜬다.
         }
         // **돌고 있는 것이 있으면 시작하지 않는다.** 그리는 쪽에서 이미 막지만,
         // 팝업을 연 뒤에 시작된 조사도 있다 — 누르는 순간 다시 본다.

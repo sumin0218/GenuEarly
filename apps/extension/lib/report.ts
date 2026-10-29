@@ -126,8 +126,19 @@ export async function peekReport(): Promise<Report | null> {
  * 리포트 칸은 하나다. 보관본을 열려면 그 칸에 들어가야 화면 둘(팝업·리포트 탭)이
  * 같은 것을 본다. **새로 만들지 않는다** — 이미 가진 것을 꺼내 놓을 뿐이다.
  */
-export async function restoreReport(report: Report): Promise<void> {
-  await put({ ...report, restored: true })
+export async function restoreReport(report: Report): Promise<boolean> {
+  // **`put` 을 쓰지 않는다.** `put` 은 실패를 삼킨다 — 만드는 중이라면 그래도 된다.
+  // 진행 한 칸을 못 적었을 뿐 다음 칸에서 따라잡는다.
+  //
+  // 여기는 다르다. **못 썼는데 썼다고 하면 칸에는 남의 리포트가 그대로 있고**,
+  // 부르는 쪽은 그것을 모른 채 탭을 연다 — 다른 기사의 리포트가 열린다.
+  // 고치려던 바로 그 증상이다 (승원 리뷰 #35).
+  try {
+    await browser.storage.session.set({ [REPORT_KEY]: { ...report, restored: true } satisfies Report })
+    return true
+  } catch {
+    return false
+  }
 }
 
 /** 리포트를 버린다. 탭을 닫거나 새로 만들 때 부른다. */

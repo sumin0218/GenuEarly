@@ -450,15 +450,20 @@ describe('리포트는 그 기사의 것이어야 한다', () => {
   /** 칸에 되돌려 놓은 것. 보관본을 꺼내 놓았는지 본다. */
   let 칸에쓴것: unknown[] = []
 
-  function mount(stored: unknown, archived: unknown[] = []): void {
+  /** 칸(session)에 쓰기가 거절되는 상황. 저장소가 꽉 찼거나 막혔을 때다. */
+  let 쓰기막힘 = false
+
+  function mount(stored: unknown, archived: unknown[] = [], 막을까 = false): void {
     보관됨 = archived
     열린탭 = []
     칸에쓴것 = []
+    쓰기막힘 = 막을까
     vi.stubGlobal('browser', {
       storage: {
         session: {
           get: () => Promise.resolve(stored ? { report: stored } : {}),
           set: (o: Record<string, unknown>) => {
+            if (쓰기막힘) return Promise.reject(new Error('막힘'))
             칸에쓴것.push(o.report)
             return Promise.resolve()
           },
@@ -580,6 +585,19 @@ describe('리포트는 그 기사의 것이어야 한다', () => {
     const 꺼낸것 = 칸에쓴것[0] as { url: string; restored?: boolean }
     expect(꺼낸것.url).toBe(A)
     expect(꺼낸것.restored, '그때의 모습이라고 화면이 말할 수 있어야 한다').toBe(true)
+  })
+
+  it('**꺼내 놓지 못하면 열지 않는다** — 칸에 남의 리포트가 그대로 있다', async () => {
+    // 복원 실패를 삼키면, 칸에는 B 가 남아 있는데 A 를 연 것처럼 탭을 띄운다.
+    // 그러면 B 의 리포트가 열린다 — 이 기능이 고치려던 바로 그 증상이다 (리뷰 #35).
+    mount(done(B), [done(A)], true)
+    render(green(A))
+    await settle()
+
+    ;(document.getElementById('report-run') as HTMLButtonElement).click()
+    await settle()
+
+    expect(열린탭, '못 꺼냈으면 탭을 열지 않는다').toEqual([])
   })
 
   it('보관본이 없으면 그대로 만들기다', async () => {
