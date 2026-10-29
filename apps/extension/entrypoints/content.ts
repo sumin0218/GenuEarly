@@ -5,7 +5,7 @@
 //
 // **판단 호출은 여기서 하지 않는다.** background 로 보낸다 (lib/protocol.ts 참고).
 import '../assets/content.css'
-import { ARTICLE_EXCLUDE_MATCHES, ARTICLE_MATCHES } from '../match-patterns'
+import { ARTICLE_EXCLUDE_MATCHES, ARTICLE_MATCHES, TEST_FIXTURE_MATCHES } from '../match-patterns'
 import content from '../../../packages/content/ui.ko.json'
 import { findEvidence } from '@genuearly/shared'
 import { packPicks, readExplain, unpackPicks, writeExplain } from '../lib/cache'
@@ -82,7 +82,10 @@ function createBadge() {
 
 export default defineContentScript({
   // 대상 페이지의 원본은 match-patterns.ts 다. host_permissions 와 같은 값을 쓴다.
-  matches: [...ARTICLE_MATCHES],
+  //
+  // 개발 빌드에서는 수동 테스트 자료도 받는다. `import.meta.env.DEV` 는 빌드 때
+  // 상수로 접히므로 **배포본 번들에는 이 주소들이 남지 않는다.**
+  matches: [...ARTICLE_MATCHES, ...(import.meta.env.DEV ? TEST_FIXTURE_MATCHES : [])],
 
 // **댓글 화면에서는 아예 돌지 않는다.** 주소에 `article` 이 들어 있지만 본문이 없어
   // 지금까지 ⚪ 배지가 떴다 — 판단해 보고 실패한 것처럼 보이지만 기사 페이지가 아니다.
