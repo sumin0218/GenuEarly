@@ -4,7 +4,7 @@
 // 보내면 중계 서버의 IP 당 한도(분당 60)를 한 사람이 혼자 쓴다.
 //
 // **판단 호출은 여기서 하지 않는다.** background 로 보낸다 (lib/protocol.ts).
-import { PORTAL_LIST_EXCLUDE_MATCHES, PORTAL_LIST_MATCHES } from '../match-patterns'
+import { PORTAL_LIST_EXCLUDE_MATCHES, PORTAL_LIST_MATCHES, TEST_FIXTURE_MATCHES } from '../match-patterns'
 import content from '../../../packages/content/ui.ko.json'
 import {
   LEGEND_CLASS,
@@ -58,12 +58,19 @@ function runner(limit: number) {
 }
 
 export default defineContentScript({
-  matches: [...PORTAL_LIST_MATCHES],
+  // 개발 빌드에서는 수동 테스트 자료의 목록 페이지도 받는다 (match-patterns.ts).
+  matches: [...PORTAL_LIST_MATCHES, ...(import.meta.env.DEV ? TEST_FIXTURE_MATCHES : [])],
   // 기사 본문 페이지에서는 ①이 배지를 띄운다. ②까지 돌면 관련 기사 링크마다
   // 표시가 붙어 읽는 중에 끼어든다 (match-patterns.ts).
   excludeMatches: [...PORTAL_LIST_EXCLUDE_MATCHES],
 
   main(ctx) {
+    // **기사 페이지에서는 돌지 않는다.** 테스트 자료는 목록과 기사가 같은 곳에 산다
+    // (`file://`·localhost). 기사에서는 ①이 배지를 띄우는데 ②까지 돌면 "다음 →"
+    // 링크에 표시가 붙어 읽는 중에 끼어든다 — 인사이트·위키트리에서 기사 본문을
+    // 뺀 것과 같은 이유다. 주소가 아니라 모양으로 가른다 (lib/extract.ts 와 같은 잣대).
+    if (import.meta.env.DEV && document.querySelector('article#article h1#headline')) return
+
     const enqueue = runner(MAX_CONCURRENT)
 
     // **한 번 다룬 제목은 다시 다루지 않는다.** 목록이 다시 그려질 때마다 훑어도

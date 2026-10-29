@@ -145,6 +145,18 @@ export const TEST_FIXTURE_MATCHES = [
   'http://localhost/*',
 ] as const
 
+/**
+ * 수동 테스트 자료의 **기사** 주소인가. `c-001`, `o-014`, `r-007` 같은 모양이다.
+ *
+ * **주소 패턴으로 가르지 않는다.** 그 자료는 `file:///C:/…/manual-news/c-001.html`
+ * 로도 `http://localhost:4173/c-001` 로도 열린다 — 앞에 무엇이 붙을지 모르고,
+ * `manual-news` 처럼 경로 중간에 붙임표가 들어 있어 `*-*` 같은 패턴은 목록 페이지
+ * (`index`, `clickbait`, `people`, `organizations`)까지 삼킨다.
+ *
+ * 그래서 파일 이름만 본다. 목록 페이지에는 붙임표가 없다.
+ */
+const FIXTURE_ARTICLE = /\/[cor]-\d+(?:\.html)?$/
+
 /** manifest 의 host_permissions 에 들어가는 값. **배포본 기준이다.** */
 export const HOST_PERMISSIONS = [...ARTICLE_MATCHES, ...PORTAL_LIST_MATCHES]
 
@@ -194,9 +206,15 @@ export function isArticleUrl(raw: string): boolean {
     return false
   }
   // javascript: 같은 스킴을 여기서 먼저 떨어뜨린다 (secure-coding.md 4절).
-  if (url.protocol !== 'https:') return false
+  //
+  // 개발 빌드에서는 테스트 자료가 사는 둘을 더 받는다. **배포본은 https 뿐이다** —
+  // `import.meta.env.DEV` 가 빌드 때 false 로 접혀 아래 가지가 사라진다.
+  const 테스트스킴 = Boolean(import.meta.env.DEV) && (url.protocol === 'file:' || url.hostname === 'localhost')
+  if (url.protocol !== 'https:' && !테스트스킴) return false
   const bare = `${url.origin}${url.pathname}`
   // **빼는 쪽을 먼저 본다.** 댓글 화면은 주소에 `article` 이 들어 있지만 기사가 아니다.
   if (ARTICLE_EXCLUDE_RES.some((re) => re.test(bare))) return false
-  return ARTICLE_RES.some((re) => re.test(bare))
+  if (ARTICLE_RES.some((re) => re.test(bare))) return true
+  // 개발 빌드에서는 수동 테스트 자료의 기사도 받는다. 배포본에서는 이 가지가 접힌다.
+  return Boolean(import.meta.env.DEV) && FIXTURE_ARTICLE.test(url.pathname)
 }
