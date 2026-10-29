@@ -6,7 +6,15 @@
 // **판단 호출은 여기서 하지 않는다.** background 로 보낸다 (lib/protocol.ts).
 import { PORTAL_LIST_MATCHES } from '../match-patterns'
 import content from '../../../packages/content/ui.ko.json'
-import { MARK_CLASS, collectTitles, createMark } from '../lib/portal'
+import {
+  LEGEND_CLASS,
+  MARK_CLASS,
+  collectTitles,
+  createLegend,
+  createMark,
+  dismissLegend,
+  legendDismissed,
+} from '../lib/portal'
 import type { HeadlineVerdict, JudgeHeadlineMessage } from '../lib/protocol'
 
 /**
@@ -108,9 +116,12 @@ export default defineContentScript({
     // **무한 루프가 돌지 않는다.** 우리가 동그라미를 넣으면 MutationObserver 가 다시 울리지만,
     // 다시 훑어도 `handled` 때문에 새로 넣을 것이 없어 거기서 멈춘다 (requirements.md 4-5절).
     // 아래의 `isOurs` 는 그 한 바퀴조차 돌지 않게 하는 덤이다.
+    const OURS = `.${MARK_CLASS}, .${LEGEND_CLASS}`
     const isOurs = (n: Node): boolean => {
       const el = n.nodeType === Node.ELEMENT_NODE ? (n as Element) : n.parentElement
-      return Boolean(el?.closest(`.${MARK_CLASS}`)) || (n as Element).classList?.contains(MARK_CLASS)
+      if (el?.closest(OURS)) return true
+      const cl = (n as Element).classList
+      return Boolean(cl?.contains(MARK_CLASS) || cl?.contains(LEGEND_CLASS))
     }
 
     let scheduled: ReturnType<typeof setTimeout> | undefined
@@ -125,13 +136,36 @@ export default defineContentScript({
     })
     mo.observe(document.body, { childList: true, subtree: true })
 
+    // --- 범례 ---------------------------------------------------------------
+    //
+    // **아이콘만으로는 뜻이 전해지지 않는다.** 제목 옆 동그라미를 처음 본 사람은
+    // 그것이 무엇을 말하는지 알 길이 없다 — 특히 이 표시가 **제목만** 본 것이라는
+    // 점은 짐작할 수 없다. 오른쪽 아래에 한 번 설명하고, 닫으면 다시 띄우지 않는다.
+    //
+    // **표시가 하나라도 붙은 뒤에 띄운다.** 기사 목록이 아닌 페이지(설정, 검색 결과)
+    // 에서도 이 스크립트가 돌 수 있는데, 거기서 설명할 표시가 없으면 상자만 뜬다.
+    let legend: { host: HTMLElement; close: () => void } | undefined
+    async function maybeShowLegend(): Promise<void> {
+      if (legend || document.querySelector(`.${MARK_CLASS}`) === null) return
+      if (await legendDismissed()) return
+      if (legend) return // 기다리는 사이에 다른 호출이 띄웠다
+      legend = createLegend(document, content.portal.legend, () => {
+        legend?.close()
+        legend = undefined
+        void dismissLegend()
+      })
+      document.body.append(legend.host)
+    }
+
     ctx.onInvalidated(() => {
       mo.disconnect()
       observer.disconnect()
       if (scheduled) clearTimeout(scheduled)
       for (const el of document.querySelectorAll(`.${MARK_CLASS}`)) el.remove()
+      for (const el of document.querySelectorAll(`.${LEGEND_CLASS}`)) el.remove()
     })
 
     scan()
+    void maybeShowLegend()
   },
 })
