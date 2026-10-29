@@ -148,6 +148,20 @@ export async function listArchive(): Promise<Report[]> {
 }
 
 /**
+ * 그 기사의 보관본. 없으면 `null`.
+ *
+ * **팝업이 이것을 본다.** 리포트 칸은 하나뿐이라, A 를 보고 B 를 보고 다시 A 로
+ * 돌아오면 칸에는 B 가 들어 있다. 보관함을 보지 않으면 A 를 **또 만든다** —
+ * 이미 디스크에 있는 것을 두고 스무 초와 크레딧을 다시 쓴다.
+ */
+export async function findArchived(url: string): Promise<Report | null> {
+  const now = Date.now()
+  const box = await read()
+  if (!box) return null
+  return box.items.find((r) => !expired(r, now) && sameUrl(r.url, url)) ?? null
+}
+
+/**
  * 리포트를 보관한다. **다 된 것만 넣는다.**
  *
  * 만드는 중(`claims`·`records`·`brief`)이나 실패한 것을 넣으면 아카이브가 쓰레기통이

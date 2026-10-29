@@ -19,7 +19,8 @@ import {
   type SelectionRecord,
 } from '../../lib/selection'
 import { normalizeUrl } from '../../lib/cache'
-import { REPORT_KEY, type Report } from '../../lib/report'
+import { findArchived } from '../../lib/archive'
+import { REPORT_KEY, restoreReport, type Report } from '../../lib/report'
 import type {
   DisplayLevel,
   ExplainLevel,
@@ -725,9 +726,18 @@ function drawReport(
   // **다른 기사의 리포트는 없는 것으로 본다.** 그래야 버튼이 "만들기" 로 돌아간다.
   const mine = (r: Report | null) => (sameArticle(r, here) ? r : null)
 
+  /**
+   * 이 기사의 **보관본.** 칸에 남의 것이 들어 있을 때 대신 쓴다.
+   *
+   * 칸은 하나뿐이라 A→B→A 로 돌아오면 칸에는 B 가 있다. 보관함을 보지 않으면
+   * A 를 **또 만든다** — 이미 디스크에 있는 것을 두고 스무 초와 크레딧을 다시 쓴다.
+   */
+  let 보관본: Report | null = null
+
   const paint = (raw: Report | null) => {
     const r = 살아있는(raw)
-    const face = reportFace(mine(r))
+    // 칸에 든 것이 이 기사 것이면 그것을, 아니면 보관본을 쓴다.
+    const face = reportFace(mine(r) ?? 보관본)
 
     // **남의 조사가 돌고 있으면 기다린다.**
     //
@@ -735,6 +745,8 @@ function drawReport(
     // A 기사를 조사하는 중에 B 기사에서 또 누르면 둘이 같은 칸에 번갈아 쓰면서
     // 진행도 결과도 뒤섞인다. **남의 것을 "없는 것으로 보는" 처리가 열어 둔 길**이다 —
     // 그 전에는 `reportFace` 가 busy 를 돌려줘서 막혀 있었다.
+    // **보관본이 있어도 남의 조사 중에는 막는다.** 꺼내 놓으려면 칸에 써야 하는데
+    // 그 칸을 지금 남이 쓰고 있다.
     const 남이도는중 = mine(r) === null && 도는중(r)
 
     btn.textContent = face.label
@@ -747,6 +759,9 @@ function drawReport(
 
   void (async () => {
     try {
+      // **보관함을 먼저 본다.** 칸에 남의 것이 들어 있어도 이 기사 리포트가
+      // 이미 있을 수 있다 — 그러면 다시 만들 이유가 없다.
+      if (here) 보관본 = await findArchived(here)
       const got = (await browser.storage.session.get(REPORT_KEY)) as Record<string, Report | undefined>
       paint(got[REPORT_KEY] ?? null)
     } catch {
@@ -768,6 +783,18 @@ function drawReport(
         if (mine(have)?.stage === 'done') {
           await browser.tabs.create({ url: browser.runtime.getURL('/report.html') })
           return
+        }
+        // **보관본이 있으면 꺼내 놓고 연다. 새로 만들지 않는다.**
+        // 칸에 남의 것이 들어 있을 뿐, 이 기사의 리포트는 이미 디스크에 있다.
+        if (보관본 && !도는중(have)) {
+          // **꺼내 놓는 데 성공했을 때만 연다.** 못 꺼냈는데 열면 칸에 남아 있는
+          // 남의 리포트가 열린다 — 이 기능이 고치려던 바로 그 증상이다.
+          if (await restoreReport(보관본)) {
+            await browser.tabs.create({ url: browser.runtime.getURL('/report.html') })
+            return
+          }
+          // 못 꺼냈으면 아래로 내려가 새로 만든다. 스무 초가 걸려도 **그 기사의**
+          // 리포트가 뜬다.
         }
         // **돌고 있는 것이 있으면 시작하지 않는다.** 그리는 쪽에서 이미 막지만,
         // 팝업을 연 뒤에 시작된 조사도 있다 — 누르는 순간 다시 본다.
