@@ -1,0 +1,405 @@
+{
+  "created_on": "2026-10-29",
+  "authoring_tool": "Codex",
+  "purpose": "manual-extension-testing-only",
+  "official_eval": false,
+  "counts": {
+    "total": 45,
+    "people": 15,
+    "organizations": 15,
+    "clickbait": {
+      "trivial": 5,
+      "true": 5,
+      "false": 5
+    },
+    "fictional": 40,
+    "source_verified": 5
+  },
+  "items": [
+    {
+      "id": "r-001",
+      "path": "r-001.html",
+      "category": "people",
+      "subtype": "person",
+      "truth_status": "fictional",
+      "sources": []
+    },
+    {
+      "id": "r-002",
+      "path": "r-002.html",
+      "category": "people",
+      "subtype": "person",
+      "truth_status": "fictional",
+      "sources": []
+    },
+    {
+      "id": "r-003",
+      "path": "r-003.html",
+      "category": "people",
+      "subtype": "person",
+      "truth_status": "fictional",
+      "sources": []
+    },
+    {
+      "id": "r-004",
+      "path": "r-004.html",
+      "category": "people",
+      "subtype": "person",
+      "truth_status": "fictional",
+      "sources": []
+    },
+    {
+      "id": "r-005",
+      "path": "r-005.html",
+      "category": "people",
+      "subtype": "person",
+      "truth_status": "fictional",
+      "sources": []
+    },
+    {
+      "id": "r-006",
+      "path": "r-006.html",
+      "category": "people",
+      "subtype": "person",
+      "truth_status": "fictional",
+      "sources": []
+    },
+    {
+      "id": "r-007",
+      "path": "r-007.html",
+      "category": "people",
+      "subtype": "person",
+      "truth_status": "fictional",
+      "sources": []
+    },
+    {
+      "id": "r-008",
+      "path": "r-008.html",
+      "category": "people",
+      "subtype": "person",
+      "truth_status": "fictional",
+      "sources": []
+    },
+    {
+      "id": "r-009",
+      "path": "r-009.html",
+      "category": "people",
+      "subtype": "person",
+      "truth_status": "fictional",
+      "sources": []
+    },
+    {
+      "id": "r-010",
+      "path": "r-010.html",
+      "category": "people",
+      "subtype": "person",
+      "truth_status": "fictional",
+      "sources": []
+    },
+    {
+      "id": "r-011",
+      "path": "r-011.html",
+      "category": "people",
+      "subtype": "person",
+      "truth_status": "fictional",
+      "sources": []
+    },
+    {
+      "id": "r-012",
+      "path": "r-012.html",
+      "category": "people",
+      "subtype": "person",
+      "truth_status": "fictional",
+      "sources": []
+    },
+    {
+      "id": "r-013",
+      "path": "r-013.html",
+      "category": "people",
+      "subtype": "person",
+      "truth_status": "fictional",
+      "sources": []
+    },
+    {
+      "id": "r-014",
+      "path": "r-014.html",
+      "category": "people",
+      "subtype": "person",
+      "truth_status": "fictional",
+      "sources": []
+    },
+    {
+      "id": "r-015",
+      "path": "r-015.html",
+      "category": "people",
+      "subtype": "person",
+      "truth_status": "fictional",
+      "sources": []
+    },
+    {
+      "id": "o-001",
+      "path": "o-001.html",
+      "category": "organizations",
+      "subtype": "place",
+      "truth_status": "fictional",
+      "sources": []
+    },
+    {
+      "id": "o-002",
+      "path": "o-002.html",
+      "category": "organizations",
+      "subtype": "place",
+      "truth_status": "fictional",
+      "sources": []
+    },
+    {
+      "id": "o-003",
+      "path": "o-003.html",
+      "category": "organizations",
+      "subtype": "place",
+      "truth_status": "fictional",
+      "sources": []
+    },
+    {
+      "id": "o-004",
+      "path": "o-004.html",
+      "category": "organizations",
+      "subtype": "place",
+      "truth_status": "fictional",
+      "sources": []
+    },
+    {
+      "id": "o-005",
+      "path": "o-005.html",
+      "category": "organizations",
+      "subtype": "place",
+      "truth_status": "fictional",
+      "sources": []
+    },
+    {
+      "id": "o-006",
+      "path": "o-006.html",
+      "category": "organizations",
+      "subtype": "organization",
+      "truth_status": "fictional",
+      "sources": []
+    },
+    {
+      "id": "o-007",
+      "path": "o-007.html",
+      "category": "organizations",
+      "subtype": "organization",
+      "truth_status": "fictional",
+      "sources": []
+    },
+    {
+      "id": "o-008",
+      "path": "o-008.html",
+      "category": "organizations",
+      "subtype": "organization",
+      "truth_status": "fictional",
+      "sources": []
+    },
+    {
+      "id": "o-009",
+      "path": "o-009.html",
+      "category": "organizations",
+      "subtype": "organization",
+      "truth_status": "fictional",
+      "sources": []
+    },
+    {
+      "id": "o-010",
+      "path": "o-010.html",
+      "category": "organizations",
+      "subtype": "organization",
+      "truth_status": "fictional",
+      "sources": []
+    },
+    {
+      "id": "o-011",
+      "path": "o-011.html",
+      "category": "organizations",
+      "subtype": "corporation",
+      "truth_status": "fictional",
+      "sources": []
+    },
+    {
+      "id": "o-012",
+      "path": "o-012.html",
+      "category": "organizations",
+      "subtype": "corporation",
+      "truth_status": "fictional",
+      "sources": []
+    },
+    {
+      "id": "o-013",
+      "path": "o-013.html",
+      "category": "organizations",
+      "subtype": "corporation",
+      "truth_status": "fictional",
+      "sources": []
+    },
+    {
+      "id": "o-014",
+      "path": "o-014.html",
+      "category": "organizations",
+      "subtype": "corporation",
+      "truth_status": "fictional",
+      "sources": []
+    },
+    {
+      "id": "o-015",
+      "path": "o-015.html",
+      "category": "organizations",
+      "subtype": "corporation",
+      "truth_status": "fictional",
+      "sources": []
+    },
+    {
+      "id": "c-001",
+      "path": "c-001.html",
+      "category": "clickbait",
+      "subtype": "trivial",
+      "truth_status": "fictional",
+      "sources": []
+    },
+    {
+      "id": "c-002",
+      "path": "c-002.html",
+      "category": "clickbait",
+      "subtype": "trivial",
+      "truth_status": "fictional",
+      "sources": []
+    },
+    {
+      "id": "c-003",
+      "path": "c-003.html",
+      "category": "clickbait",
+      "subtype": "trivial",
+      "truth_status": "fictional",
+      "sources": []
+    },
+    {
+      "id": "c-004",
+      "path": "c-004.html",
+      "category": "clickbait",
+      "subtype": "trivial",
+      "truth_status": "fictional",
+      "sources": []
+    },
+    {
+      "id": "c-005",
+      "path": "c-005.html",
+      "category": "clickbait",
+      "subtype": "trivial",
+      "truth_status": "fictional",
+      "sources": []
+    },
+    {
+      "id": "c-006",
+      "path": "c-006.html",
+      "category": "clickbait",
+      "subtype": "true",
+      "truth_status": "source_verified",
+      "sources": [
+        {
+          "title": "Premier League — Son and Salah win 2021/22 Golden Boot award (2022-05-22)",
+          "url": "https://www.premierleague.com/en/news/2626553"
+        }
+      ]
+    },
+    {
+      "id": "c-007",
+      "path": "c-007.html",
+      "category": "clickbait",
+      "subtype": "true",
+      "truth_status": "source_verified",
+      "sources": [
+        {
+          "title": "NobelPrize.org — Han Kang, Facts, Nobel Prize in Literature 2024",
+          "url": "https://www.nobelprize.org/prizes/literature/2024/han/facts/"
+        }
+      ]
+    },
+    {
+      "id": "c-008",
+      "path": "c-008.html",
+      "category": "clickbait",
+      "subtype": "true",
+      "truth_status": "source_verified",
+      "sources": [
+        {
+          "title": "Academy of Motion Picture Arts and Sciences — The 92nd Academy Awards, 2020",
+          "url": "https://www.oscars.org/oscars/ceremonies/2020/A--E"
+        }
+      ]
+    },
+    {
+      "id": "c-009",
+      "path": "c-009.html",
+      "category": "clickbait",
+      "subtype": "true",
+      "truth_status": "source_verified",
+      "sources": [
+        {
+          "title": "International Olympic Committee — Yuna Kim blazes an icy trail for the Republic of Korea",
+          "url": "https://www.olympics.com/ioc/news/yuna-kim-blazes-an-icy-trail-for-the-republic-of-korea?esi=true"
+        }
+      ]
+    },
+    {
+      "id": "c-010",
+      "path": "c-010.html",
+      "category": "clickbait",
+      "subtype": "true",
+      "truth_status": "source_verified",
+      "sources": [
+        {
+          "title": "BIGHIT MUSIC — BTS Official Profile",
+          "url": "https://bts.ibighit.com/eng/profile/"
+        }
+      ]
+    },
+    {
+      "id": "c-011",
+      "path": "c-011.html",
+      "category": "clickbait",
+      "subtype": "false",
+      "truth_status": "fictional",
+      "sources": []
+    },
+    {
+      "id": "c-012",
+      "path": "c-012.html",
+      "category": "clickbait",
+      "subtype": "false",
+      "truth_status": "fictional",
+      "sources": []
+    },
+    {
+      "id": "c-013",
+      "path": "c-013.html",
+      "category": "clickbait",
+      "subtype": "false",
+      "truth_status": "fictional",
+      "sources": []
+    },
+    {
+      "id": "c-014",
+      "path": "c-014.html",
+      "category": "clickbait",
+      "subtype": "false",
+      "truth_status": "fictional",
+      "sources": []
+    },
+    {
+      "id": "c-015",
+      "path": "c-015.html",
+      "category": "clickbait",
+      "subtype": "false",
+      "truth_status": "fictional",
+      "sources": []
+    }
+  ]
+}

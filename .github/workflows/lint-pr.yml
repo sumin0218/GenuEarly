@@ -69,6 +69,11 @@ jobs:
       # 이 검사가 빌드된 manifest 를 읽어 금지 권한과 와일드카드 호스트를 막는다.
       - name: 확장 프로그램 테스트 (빌드 포함)
         run: npm test -w @genuearly/extension
+      - name: 수동 테스트 기사 생성·선택 버튼 검사
+        run: |
+          node eval/fixtures/manual-news/build.cjs
+          node eval/fixtures/manual-news/verify.mjs
+          git diff --exit-code -- eval/fixtures/manual-news
 
   proxy:
     runs-on: ubuntu-latest
