@@ -946,3 +946,65 @@ describe('하지 않은 일을 했다고 말하지 않는다', () => {
     expect(detailText()).toContain(content.app.disclaimer)
   })
 })
+
+describe('기사 페이지가 아닐 때', () => {
+  // 전에는 "아직 살펴보지 않았습니다" 로 시작했다. 상태 보고가 먼저 오고 **무엇을
+  // 하면 되는지는 둘째 줄**에 가서야 나왔다. 다음 행동을 앞에 둔다 (ChatKHU 17차).
+  it('다음에 할 일을 먼저 말한다', () => {
+    render({ level: 'UNDETERMINED' })
+    expect(document.getElementById('name')?.textContent).toBe(content.notArticle.title)
+    expect(content.notArticle.title, '제목이 상태 보고로 남아 있다').not.toContain('않았습니다')
+  })
+
+  it('기사를 열라는 것과 선택 검사를 둘 다 알린다', () => {
+    const d = content.notArticle.description
+    expect(d).toContain('기사')
+    expect(d, '③ 선택 검사로 가는 길도 알려야 한다').toMatch(/우클릭|선택|골라/)
+  })
+
+  it('**"분석" 이라고 하지 않는다** — 결론을 냈다는 선언으로 읽힌다', () => {
+    expect(`${content.notArticle.title} ${content.notArticle.description}`).not.toContain('분석')
+  })
+})
+
+describe('범례 다시 보기', () => {
+  // 범례는 ✕ 로 닫으면 다시 안 뜬다. 그런데 **제목 옆 아이콘은 영원히 뜬다** —
+  // 닫는 길만 있고 돌아올 길이 없었다.
+  function mountFoot(): { 지운키: string[] } {
+    const 지운키: string[] = []
+    vi.stubGlobal('browser', {
+      storage: {
+        local: { remove: (k: string) => { 지운키.push(k); return Promise.resolve() } },
+        session: { get: () => Promise.resolve({}) },
+        onChanged: { addListener: () => {} },
+      },
+      tabs: { query: () => Promise.resolve([{ id: 1 }]) },
+      runtime: { getManifest: () => ({ homepage_url: '' }) },
+    })
+    const btn = document.createElement('button')
+    btn.id = 'legend-again'
+    document.body.append(btn)
+    return { 지운키 }
+  }
+
+  it('단추를 누르면 닫았다는 기록을 지운다', () => {
+    const { 지운키 } = mountFoot()
+    render({ level: 'UNDETERMINED' })
+
+    const btn = document.getElementById('legend-again') as HTMLButtonElement
+    expect(btn.textContent).toBe(content.portal.legend.again)
+
+    btn.click()
+    expect(지운키, 'portalLegendSeen 을 지워야 다음에 다시 뜬다').toEqual(['portalLegendSeen'])
+  })
+
+  it('**지금 뜨는 것이 아니라고 말한다** — 띄울 자리는 목록 페이지다', () => {
+    mountFoot()
+    render({ level: 'UNDETERMINED' })
+    const btn = document.getElementById('legend-again') as HTMLButtonElement
+    btn.click()
+
+    expect(btn.textContent).toBe(content.portal.legend.againDone)
+    expect(content.portal.legend.againDone, '언제 뜨는지 밝혀야 한다').toMatch(/다음/)
+  })
+})
