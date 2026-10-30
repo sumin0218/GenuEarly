@@ -384,7 +384,8 @@ describe('범례 — 아이콘이 무슨 뜻인지 말한다', () => {
   })
 
   it('화면과 같은 아이콘을 쓴다 — 범례가 화면과 다르면 범례가 아니다', () => {
-    const svgs = 만든다().box.querySelectorAll('svg')
+    // 단계 줄의 아이콘만 센다. 머리말의 접기 화살표도 svg 다.
+    const svgs = 만든다().box.querySelectorAll('.rows svg')
     expect(svgs).toHaveLength(LEGEND_LEVELS.length)
   })
 
@@ -421,6 +422,30 @@ describe('범례 — 아이콘이 무슨 뜻인지 말한다', () => {
 
     x?.click()
     expect(속(l.box).every((e) => !e.hidden), '다시 펴진다').toBe(true)
+  })
+
+  it('**접으면 제목만 남는다** — 상자 폭도 글자에 맞춘다', () => {
+    const l = 만든다()
+    const box = l.box
+    expect(box.classList.contains('collapsed')).toBe(false)
+
+    box.querySelector('button')?.click()
+    expect(box.classList.contains('collapsed'), '280px 빈 상자가 남으면 접은 것으로 안 보인다').toBe(true)
+    // 제목 줄 말고는 전부 감췄다.
+    expect(속(box).every((e) => e.hidden)).toBe(true)
+    expect(box.querySelector('.title')?.textContent).toBe(COPY.title)
+  })
+
+  it('화살표는 아이콘이고, 접힘에 따라 뒤집힌다 — V 와 ㅅ', () => {
+    const l = 만든다()
+    const svg = l.box.querySelector('button svg')
+    expect(svg, '글자가 아니라 아이콘이어야 한다').not.toBeNull()
+    // 펴져 있으면 위쪽(ㅅ) — 누르면 접힌다.
+    expect(svg?.getAttribute('style') ?? '').toContain('rotate(180deg)')
+
+    l.box.querySelector('button')?.click()
+    // 접히면 아래쪽(V) — 누르면 내려온다.
+    expect(svg?.getAttribute('style') ?? '').not.toContain('rotate(180deg)')
   })
 
   it('접고 편 것을 알려 준다', () => {

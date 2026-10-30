@@ -260,10 +260,13 @@ export function createLegend(
       box-shadow: 0 6px 24px rgba(0, 0, 0, ${dark ? '0.5' : '0.14'});
       font: 400 13px/1.5 -apple-system, BlinkMacSystemFont, "Segoe UI", "Malgun Gothic", sans-serif;
     }
+    /* 접으면 제목 줄만 남으므로 폭도 글자에 맞춘다 */
+    .box.collapsed { width: auto; }
     .head { display: flex; align-items: center; gap: 8px; }
     .title { flex: 1; font-size: 13px; font-weight: 600; margin: 0; }
     .x {
       flex: none; width: 24px; height: 24px; padding: 0;
+      display: flex; align-items: center; justify-content: center;
       font: inherit; line-height: 1; cursor: pointer;
       color: ${dark ? '#b4b4b4' : '#5f6368'};
       background: none; border: 0; border-radius: 6px;
@@ -295,12 +298,20 @@ export function createLegend(
   x.type = 'button'
   x.textContent = '✕'
   // **없애지 않고 접는다.** 제목 줄은 늘 남아 있어 언제든 펼 수 있다.
+  // **글자가 아니라 아이콘이다.** 나머지 표시와 같은 그림을 쓴다 (lib/icon-data.ts).
+  // 접혀 있으면 아래쪽(V) — 누르면 내려온다. 펴져 있으면 위쪽(ㅅ) — 누르면 접힌다.
+  const chevron = createIcon(doc, 'chevron-down', { size: 14 })
+  x.replaceChildren(chevron)
+
   let 접힘 = 시작할때접힘
   const 그린다 = (): void => {
-    x.textContent = 접힘 ? '▸' : '▾'
+    chevron.style.setProperty('transform', 접힘 ? 'none' : 'rotate(180deg)')
     x.setAttribute('aria-label', 접힘 ? copy.expand : copy.collapse)
     x.setAttribute('aria-expanded', String(!접힘))
     for (const el of [lede, rows, solid]) el.hidden = 접힘
+    // **접으면 제목 줄만 남는다.** 폭도 글자에 맞춰 줄인다 — 280px 짜리 빈 상자가
+    // 남아 있으면 접은 것으로 보이지 않는다.
+    box.classList.toggle('collapsed', 접힘)
   }
   x.addEventListener('click', () => {
     접힘 = !접힘
