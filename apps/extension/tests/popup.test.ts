@@ -946,3 +946,23 @@ describe('하지 않은 일을 했다고 말하지 않는다', () => {
     expect(detailText()).toContain(content.app.disclaimer)
   })
 })
+
+describe('기사 페이지가 아닐 때', () => {
+  // 전에는 "아직 살펴보지 않았습니다" 로 시작했다. 상태 보고가 먼저 오고 **무엇을
+  // 하면 되는지는 둘째 줄**에 가서야 나왔다. 다음 행동을 앞에 둔다 (ChatKHU 17차).
+  it('다음에 할 일을 먼저 말한다', () => {
+    render({ level: 'UNDETERMINED' })
+    expect(document.getElementById('name')?.textContent).toBe(content.notArticle.title)
+    expect(content.notArticle.title, '제목이 상태 보고로 남아 있다').not.toContain('않았습니다')
+  })
+
+  it('기사를 열라는 것과 선택 검사를 둘 다 알린다', () => {
+    const d = content.notArticle.description
+    expect(d).toContain('기사')
+    expect(d, '③ 선택 검사로 가는 길도 알려야 한다').toMatch(/우클릭|선택|골라/)
+  })
+
+  it('**"분석" 이라고 하지 않는다** — 결론을 냈다는 선언으로 읽힌다', () => {
+    expect(`${content.notArticle.title} ${content.notArticle.description}`).not.toContain('분석')
+  })
+})

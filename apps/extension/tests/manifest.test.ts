@@ -247,3 +247,52 @@ describe('② 포털 목록 (GE-23)', () => {
     expect(hostPermissions).toContain('https://news.naver.com/section/*')
   })
 })
+
+describe('테스트 자료용 주소는 배포본에 없다', () => {
+  // 수동 테스트 자료(eval/fixtures/manual-news)로 ①을 확인하려면 `file://` 와
+  // `localhost` 를 받아야 한다. **그 둘이 배포본에 들어가면 안 된다** — 사용자의
+  // 모든 로컬 파일을 읽겠다는 뜻이 되고, 설치 경고도 그렇게 뜬다.
+  //
+  // 개발 빌드에만 들어가도록 두 겹으로 가려 두었다 (wxt.config.ts 의 `mode`,
+  // content.ts 의 `import.meta.env.DEV`). **이 검사가 그 둘을 지킨다** —
+  // `npm test` 는 `wxt build`(production)를 돌린 결과를 읽는다.
+  const 글 = JSON.stringify(manifest)
+
+  it('**개발 가림막이 production 과 같은 글자를 본다** — DEV 는 staging 에서도 참이다', () => {
+    // `import.meta.env.DEV` 는 production 이 아닌 **모든** 모드에서 참이다.
+    // wxt.config.ts 는 `mode === 'development'` 로 가리므로, 둘이 다르면
+    // `--mode staging` 같은 빌드에서 host_permissions 에는 없는 주소가
+    // content_scripts 의 matches 에 들어간다 — **MV3 에서 matches 가 곧 호스트 권한**이다.
+    const 자료쓰는곳 = ['../lib/fixture.ts', '../entrypoints/content.ts', '../entrypoints/portal.content.ts']
+    for (const f of 자료쓰는곳) {
+      const src = readFileSync(resolve(__dirname, f), 'utf8')
+      // 주석에 적힌 설명은 세지 않는다 — 실제로 가리는 표현만 본다.
+      const 가린다 = src.includes('import.meta.env.DEV ?') || src.includes('Boolean(import.meta.env.DEV)')
+      expect(가린다, f + ' 가 import.meta.env.DEV 로 가린다 — staging 에서 샌다').toBe(false)
+    }
+    const fixture = readFileSync(resolve(__dirname, '../lib/fixture.ts'), 'utf8')
+    expect(fixture).toContain("import.meta.env.MODE === 'development'")
+    const config = readFileSync(resolve(__dirname, '../wxt.config.ts'), 'utf8')
+    expect(config, 'wxt.config.ts 와 같은 글자를 봐야 한다').toContain("mode === 'development'")
+  })
+
+  it.each(['file://', 'localhost'])('%s 가 manifest 어디에도 없다', (조각) => {
+    expect(글, '개발용 가림막이 뚫렸다 — 배포본이 로컬 파일을 요구하게 된다').not.toContain(조각)
+  })
+
+  it('콘텐츠 스크립트 번들에도 남지 않는다', () => {
+    // `import.meta.env.DEV` 는 빌드 때 false 로 접히고 가지째 사라진다.
+    // 접히지 않으면 주소가 번들 안에 글자로 남는다.
+    const dir = resolve(__dirname, '../.output/chrome-mv3/content-scripts')
+    // **먼저 있는지 본다.** readdirSync 가 먼저 터지면 아래 안내가 뜨지 않는다.
+    expect(existsSync(dir), '빌드 결과가 없다 — npm test 는 wxt build 를 먼저 돌린다').toBe(true)
+    const bundles = readdirSync(dir).filter((f) => f.endsWith('.js'))
+    expect(bundles.length, '콘텐츠 스크립트 번들이 없다').toBeGreaterThan(0)
+    for (const f of bundles) {
+      const js = readFileSync(resolve(dir, f), 'utf8')
+      // 둘 다 본다. 하나만 보면 다른 하나가 새도 통과한다.
+      expect(js, `${f} 에 file:// 주소가 남았다`).not.toContain('file:///*')
+      expect(js, `${f} 에 localhost 주소가 남았다`).not.toContain('http://localhost/*')
+    }
+  })
+})

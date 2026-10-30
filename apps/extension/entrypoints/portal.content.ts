@@ -4,7 +4,13 @@
 // 보내면 중계 서버의 IP 당 한도(분당 60)를 한 사람이 혼자 쓴다.
 //
 // **판단 호출은 여기서 하지 않는다.** background 로 보낸다 (lib/protocol.ts).
-import { PORTAL_LIST_EXCLUDE_MATCHES, PORTAL_LIST_MATCHES } from '../match-patterns'
+import { TEST_FIXTURES_ON, isFixtureArticle, isFixturePage } from '../lib/fixture'
+import {
+  PORTAL_LIST_EXCLUDE_MATCHES,
+  PORTAL_LIST_MATCHES,
+  TEST_FIXTURE_MATCHES,
+  matchPatternToRegExp,
+} from '../match-patterns'
 import content from '../../../packages/content/ui.ko.json'
 import {
   LEGEND_CLASS,
@@ -12,10 +18,10 @@ import {
   collectTitles,
   createLegend,
   createMark,
-  dismissLegend,
-  legendDismissed,
+  legendCollapsed,
+  setLegendCollapsed,
 } from '../lib/portal'
-import type { HeadlineVerdict, JudgeHeadlineMessage } from '../lib/protocol'
+import type { DisplayLevel, HeadlineVerdict, JudgeHeadlineMessage } from '../lib/protocol'
 
 /**
  * 동시에 보내는 요청 수.
@@ -57,13 +63,44 @@ function runner(limit: number) {
   }
 }
 
+/**
+ * 표시 하나에 붙는 설명. **범례와 같은 말을 쓴다.**
+ *
+ * 전에는 배지 문구(`content.badge[level].name`)를 그대로 썼다. 그래서 아이콘에
+ * 마우스를 올리면 "판단하지 못함", "주의할 신호 있음" 이 떴다. **그것은 기사 전체에
+ * 대한 말이다** — 여기 표시는 제목만 보고 낸 것이라 같은 말을 쓰면 안 된다.
+ * 범례를 따로 받아 둔 이유가 바로 그것인데(ChatKHU 15차) 정작 아이콘이 그 말을
+ * 쓰지 않고 있었다.
+ *
+ * 이제 둘이 같은 말을 한다 — 범례에서 "끌어당기는 표현이 뚜렷합니다" 를 읽은 사람이
+ * 아이콘에 마우스를 올리면 같은 문장을 본다.
+ */
+const 표시설명 = (level: DisplayLevel): string =>
+  content.portal.legend.levels[level] ?? content.badge[level].name
+
 export default defineContentScript({
-  matches: [...PORTAL_LIST_MATCHES],
+  // 개발 빌드에서는 수동 테스트 자료의 목록 페이지도 받는다 (match-patterns.ts).
+  matches: [...PORTAL_LIST_MATCHES, ...(TEST_FIXTURES_ON ? TEST_FIXTURE_MATCHES : [])],
   // 기사 본문 페이지에서는 ①이 배지를 띄운다. ②까지 돌면 관련 기사 링크마다
   // 표시가 붙어 읽는 중에 끼어든다 (match-patterns.ts).
   excludeMatches: [...PORTAL_LIST_EXCLUDE_MATCHES],
 
   main(ctx) {
+    // 배포본이 받는 목록 사이트인가. 자료 판별은 그 밖에서만 한다.
+    const 아는목록 = PORTAL_LIST_MATCHES.some((m) => matchPatternToRegExp(m).test(`${location.origin}${location.pathname}`))
+
+    // **테스트 자료에서는 목록 페이지에만 돈다.**
+    //
+    // 기사에서는 ①이 배지를 띄우는데 ②까지 돌면 "다음 →" 링크에 표시가 붙어 읽는
+    // 중에 끼어든다 — 인사이트·위키트리에서 기사 본문을 뺀 것과 같은 이유다.
+    //
+    // **자료가 아닌 곳에서도 돌지 않는다.** 전에는 "기사 페이지면 멈춘다" 만 보아서,
+    // 개발 빌드에서 개발자 자신의 앱(localhost)에도 표시가 붙고 판정 요청이 나갔다
+    // (리뷰에서 발견). 자료인지부터 본다.
+    if (TEST_FIXTURES_ON && !아는목록) {
+      if (!isFixturePage() || isFixtureArticle()) return
+    }
+
     const enqueue = runner(MAX_CONCURRENT)
 
     // **한 번 다룬 제목은 다시 다루지 않는다.** 목록이 다시 그려질 때마다 훑어도
@@ -84,7 +121,7 @@ export default defineContentScript({
 
     function attach(url: string, headline: string, anchor: HTMLAnchorElement): void {
       const mark = createMark(document)
-      mark.render('PENDING', 'headline', content.badge.PENDING.name)
+      mark.render('PENDING', 'headline', 표시설명('PENDING'))
       // 제목 **앞**에 넣는다. 뒤에 넣으면 제목이 두 줄로 접힐 때 홀로 다음 줄로 넘어간다.
       anchor.prepend(mark.host)
 
@@ -95,11 +132,11 @@ export default defineContentScript({
           const msg: JudgeHeadlineMessage = { kind: 'judge-headline', url, headline }
           try {
             const got = (await browser.runtime.sendMessage(msg)) as HeadlineVerdict | undefined
-            if (!got) return mark.render('UNDETERMINED', 'headline', content.badge.UNDETERMINED.name)
-            mark.render(got.level, got.basis, content.badge[got.level].name)
+            if (!got) return mark.render('UNDETERMINED', 'headline', 표시설명('UNDETERMINED'))
+            mark.render(got.level, got.basis, 표시설명(got.level))
           } catch {
             // service worker 가 죽었거나 확장이 다시 로드됐다. ⚪ 는 실패가 아니라 결과다.
-            mark.render('UNDETERMINED', 'headline', content.badge.UNDETERMINED.name)
+            mark.render('UNDETERMINED', 'headline', 표시설명('UNDETERMINED'))
           }
         })
       }
@@ -148,28 +185,25 @@ export default defineContentScript({
     //
     // **아이콘만으로는 뜻이 전해지지 않는다.** 제목 옆 동그라미를 처음 본 사람은
     // 그것이 무엇을 말하는지 알 길이 없다 — 특히 이 표시가 **제목만** 본 것이라는
-    // 점은 짐작할 수 없다. 오른쪽 아래에 한 번 설명하고, 닫으면 다시 띄우지 않는다.
+    // 점은 짐작할 수 없다. 오른쪽 아래에 설명을 두고, 접었으면 접힌 채로 띄운다.
     //
     // **표시가 하나라도 붙은 뒤에 띄운다.** 기사 목록이 아닌 페이지(설정, 검색 결과)
     // 에서도 이 스크립트가 돌 수 있는데, 거기서 설명할 표시가 없으면 상자만 뜬다.
-    let legend: { host: HTMLElement; close: () => void } | undefined
-    // **한 번 닫으면 이 페이지에서 다시 묻지 않는다.** `scan()` 이 돌 때마다 부르므로
-    // 저장소를 매번 읽지 않게 기억해 둔다.
-    let 닫았음 = false
+    // **늘 띄운다. 없애지 않는다.** 지난번에 접어 뒀으면 접힌 채로 뜬다 —
+    // 제목 줄은 남아 있어 언제든 펼 수 있다. 전에는 닫으면 영영 못 봤는데,
+    // 제목 옆 아이콘은 영원히 뜨므로 설명으로 돌아올 길이 있어야 한다.
+    let legend: { host: HTMLElement } | undefined
     async function maybeShowLegend(): Promise<void> {
-      if (legend || 닫았음) return
+      if (legend) return
       if (document.querySelector(`.${MARK_CLASS}`) === null) return
-      if (await legendDismissed()) {
-        닫았음 = true
-        return
-      }
-      if (legend || 닫았음) return // 기다리는 사이에 다른 호출이 띄웠거나 닫았다
-      legend = createLegend(document, content.portal.legend, () => {
-        legend?.close()
-        legend = undefined
-        닫았음 = true
-        void dismissLegend()
-      })
+      const 접힘 = await legendCollapsed()
+      if (legend) return // 기다리는 사이에 다른 호출이 띄웠다
+      legend = createLegend(
+        document,
+        content.portal.legend,
+        (collapsed) => void setLegendCollapsed(collapsed),
+        접힘,
+      )
       document.body.append(legend.host)
     }
 

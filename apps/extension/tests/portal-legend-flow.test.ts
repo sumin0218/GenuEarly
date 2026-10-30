@@ -6,6 +6,7 @@
 // **포털이 목록을 나중에 그려도 범례가 뜨는가.** 처음 한 번만 보면, 시작할 때
 // 기사 링크가 없는 페이지에서는 아이콘만 붙고 범례는 끝내 안 뜬다 (승원 리뷰 #39).
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import content from '../../../packages/content/ui.ko.json'
 import { LEGEND_CLASS, MARK_CLASS } from '../lib/portal'
 
 /** 목록이 다시 그려진 뒤 다시 훑기까지 기다리는 시간. portal.content.ts 와 같아야 한다. */
@@ -23,9 +24,9 @@ function 링크를놓는다(...urls: string[]): void {
 }
 
 /** 저장소와 판단을 흉내 낸다. 판단은 늘 SAFE 로 돌려준다. */
-function stub(닫은적있나 = false): void {
+function stub(접어뒀나 = false): void {
   const local = new Map<string, unknown>()
-  if (닫은적있나) local.set('portalLegendSeen', true)
+  if (접어뒀나) local.set('portalLegendCollapsed', true)
   vi.stubGlobal('browser', {
     storage: {
       local: {
@@ -94,14 +95,15 @@ describe('범례가 뜨는 때', () => {
     expect(범례(), '아이콘만 붙고 범례가 안 뜨던 자리다 (리뷰 #39)').not.toBeNull()
   })
 
-  it('한 번 닫은 사람에게는 나중에도 뜨지 않는다', async () => {
+  it('**접어 둔 사람에게도 상자는 뜬다** — 접힌 채로다. 없애지 않는다', async () => {
     stub(true)
     await 띄운다()
     링크를놓는다(기사(4))
     await 쉰다(RESCAN_DEBOUNCE_MS + 150)
 
     expect(표시()).toBeGreaterThan(0)
-    expect(범례()).toBeNull()
+    const box = 범례()
+    expect(box, '닫아 버리면 설명으로 돌아올 길이 없다').not.toBeNull()
   })
 
   it('여러 번 다시 그려도 범례는 하나다', async () => {
@@ -116,5 +118,42 @@ describe('범례가 뜨는 때', () => {
     await 쉰다(RESCAN_DEBOUNCE_MS + 150)
 
     expect(document.querySelectorAll(`.${LEGEND_CLASS}`)).toHaveLength(1)
+  })
+})
+
+describe('표시에 붙는 설명', () => {
+  // 전에는 배지 문구를 그대로 썼다. 아이콘에 마우스를 올리면 "판단하지 못함",
+  // "주의할 신호 있음" 이 떴는데 **그것은 기사 전체에 대한 말이다.** 여기 표시는
+  // 제목만 보고 낸 것이라 같은 말을 쓰면 안 된다 — 범례를 따로 받아 둔 이유다.
+  const 배지이름 = Object.values(content.badge).map((b) => b.name)
+
+  it('**배지 문구를 쓰지 않는다** — 기사 전체에 대한 말이다', async () => {
+    stub()
+    링크를놓는다(기사(8))
+    await 띄운다()
+    await 쉰다(30)
+
+    const 설명 = [...document.querySelectorAll(`.${MARK_CLASS}`)].map(
+      (el) => el.getAttribute('aria-label') ?? '',
+    )
+    expect(설명.length, '표시가 안 붙었다').toBeGreaterThan(0)
+    for (const 한줄 of 설명) {
+      expect(배지이름, `"${한줄}" 은 배지 문구다`).not.toContain(한줄)
+    }
+  })
+
+  it('범례와 같은 말을 한다 — 둘이 다르면 범례가 범례가 아니다', async () => {
+    stub()
+    링크를놓는다(기사(9))
+    await 띄운다()
+    await 쉰다(30)
+
+    const 범례문구 = Object.values(content.portal.legend.levels)
+    const 표시들 = document.querySelectorAll(`.${MARK_CLASS}`)
+    // **빈 목록을 돌면 아무것도 지키지 못한다.** ②가 표시를 아예 안 달아도 통과한다.
+    expect(표시들.length, '표시가 하나도 안 붙었다').toBeGreaterThan(0)
+    for (const el of 표시들) {
+      expect(범례문구, '표시 설명이 범례에 없는 말이다').toContain(el.getAttribute('aria-label'))
+    }
   })
 })

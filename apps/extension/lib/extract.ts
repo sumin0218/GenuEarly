@@ -7,6 +7,7 @@
 // 선택자는 **예고 없이 바뀐다.** 바뀌면 `extractArticle` 이 `null` 을 돌려주고
 // 배지는 ⚪ 가 된다 — 조용히 틀린 판단을 내는 것보다 낫지만, 그래도 사용자는
 // 아무것도 못 본다. 사이트를 늘릴 때마다 깨질 자리가 하나씩 는다.
+import { TEST_FIXTURES_ON, isFixtureArticle } from './fixture'
 import { splitSentences } from './sentences'
 
 export interface Article {
@@ -40,6 +41,25 @@ interface SiteRule {
   body: string[]
   /** 본문 안에서 걷어낼 것 — 사진 설명, 기자 정보, 관련 기사 */
   drop: string[]
+}
+
+/**
+ * 수동 테스트 자료의 구조 (eval/fixtures/manual-news). **개발 빌드에만 쓰인다.**
+ *
+ * **호스트로 찾지 않는다.** 그 자료는 `file://` 로도 열리고 아무 포트의 localhost
+ * 로도 열린다 — 호스트가 비어 있거나 매번 다르다. 대신 **모양으로 찾는다**:
+ * `article#article` 안에 `h1#headline` 과 `#body` 가 있는 페이지. 그 조합은
+ * 우리가 찍어 낸 자료에만 있다 (eval/fixtures/manual-news/build.cjs).
+ *
+ * 이 규칙이 없으면 테스트 자료에서 ①이 늘 "기사 구조를 읽지 못했다" 로 끝난다 —
+ * 지금까지 그 자료로 ③ 선택 검사밖에 못 해 본 이유다.
+ */
+const FIXTURE_RULE: SiteRule = {
+  host: /.*/,
+  headline: ['article#article h1#headline'],
+  body: ['article#article #body'],
+  // 목록으로 돌아가는 링크, 안내문, 선택 버튼, 출처 접기 — 본문이 아니다.
+  drop: ['script', 'style', 'nav', 'aside', 'details', 'footer', '.toolbar', '.help'],
 }
 
 const RULES: SiteRule[] = [
@@ -144,7 +164,12 @@ const SUBTITLE_MAX_CHARS = 80
 
 /** 지금 페이지가 우리가 아는 기사 페이지면 제목·본문·문장을 돌려준다. */
 export function extractArticle(): Article | null {
-  const rule = RULES.find((r) => r.host.test(location.hostname))
+  // 아는 사이트를 먼저 본다. 거기 없고 **개발 빌드**이면 테스트 자료인지 모양으로 본다.
+  const rule =
+    RULES.find((r) => r.host.test(location.hostname)) ??
+    (TEST_FIXTURES_ON && isFixtureArticle(document)
+      ? FIXTURE_RULE
+      : undefined)
   if (!rule) return null
 
   const bodyEl = pick(rule.body)

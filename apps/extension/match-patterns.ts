@@ -1,3 +1,4 @@
+import { TEST_FIXTURES_ON } from './lib/fixture'
 // 확장 프로그램이 끼어드는 페이지 목록. **여기가 원본이다.**
 //
 // wxt.config.ts 의 host_permissions 와 entrypoints/*.ts 의 matches 가
@@ -122,7 +123,42 @@ export const PORTAL_LIST_EXCLUDE_MATCHES = [
   'https://m.wikitree.co.kr/articles/*',
 ] as const
 
-/** manifest 의 host_permissions 에 들어가는 값. */
+/**
+ * 수동 테스트 자료 (eval/fixtures/manual-news). **개발 빌드에만 들어간다.**
+ *
+ * 지금까지 그 자료로는 ③ 선택 검사만 해 볼 수 있었다 — 오른쪽 클릭 메뉴는 호스트
+ * 권한이 필요 없기 때문이다. **①(배지)은 전혀 확인할 수 없었다.** 본문 추출, 판정,
+ * 배지, 팝업까지 이어지는 길이 가장 자주 깨지는데 그 길을 로컬에서 밟아 볼 수가 없었다.
+ *
+ * 그래서 테스트 자료가 사는 두 곳을 받는다.
+ *
+ *   - `file:///*`        — README 가 권하는 방식(파일을 바로 연다). 크롬에서
+ *                          "파일 URL에 대한 액세스 허용" 을 켜야 한다
+ *   - `http://localhost/*` — 간단한 정적 서버로 띄웠을 때. 포트는 적지 않는다 —
+ *                          match pattern 은 포트를 보지 않으므로 아무 포트나 걸린다
+ *
+ * **배포본에는 들어가지 않는다.** wxt.config.ts 가 `mode === 'development'` 일 때만
+ * host_permissions 에 넣고, content script 의 matches 도 `import.meta.env.DEV` 로
+ * 가린다. 빌드된 manifest 를 읽는 tests/manifest.test.ts 가 그것을 지킨다.
+ */
+export const TEST_FIXTURE_MATCHES = [
+  'file:///*',
+  'http://localhost/*',
+] as const
+
+/**
+ * 수동 테스트 자료의 **기사** 주소인가. `c-001`, `o-014`, `r-007` 같은 모양이다.
+ *
+ * **주소 패턴으로 가르지 않는다.** 그 자료는 `file:///C:/…/manual-news/c-001.html`
+ * 로도 `http://localhost:4173/c-001` 로도 열린다 — 앞에 무엇이 붙을지 모르고,
+ * `manual-news` 처럼 경로 중간에 붙임표가 들어 있어 `*-*` 같은 패턴은 목록 페이지
+ * (`index`, `clickbait`, `people`, `organizations`)까지 삼킨다.
+ *
+ * 그래서 파일 이름만 본다. 목록 페이지에는 붙임표가 없다.
+ */
+const FIXTURE_ARTICLE = /\/[cor]-\d+(?:\.html)?$/
+
+/** manifest 의 host_permissions 에 들어가는 값. **배포본 기준이다.** */
 export const HOST_PERMISSIONS = [...ARTICLE_MATCHES, ...PORTAL_LIST_MATCHES]
 
 /**
@@ -171,9 +207,15 @@ export function isArticleUrl(raw: string): boolean {
     return false
   }
   // javascript: 같은 스킴을 여기서 먼저 떨어뜨린다 (secure-coding.md 4절).
-  if (url.protocol !== 'https:') return false
+  //
+  // 개발 빌드에서는 테스트 자료가 사는 둘을 더 받는다. **배포본은 https 뿐이다** —
+  // `import.meta.env.DEV` 가 빌드 때 false 로 접혀 아래 가지가 사라진다.
+  const 테스트스킴 = TEST_FIXTURES_ON && (url.protocol === 'file:' || url.hostname === 'localhost')
+  if (url.protocol !== 'https:' && !테스트스킴) return false
   const bare = `${url.origin}${url.pathname}`
   // **빼는 쪽을 먼저 본다.** 댓글 화면은 주소에 `article` 이 들어 있지만 기사가 아니다.
   if (ARTICLE_EXCLUDE_RES.some((re) => re.test(bare))) return false
-  return ARTICLE_RES.some((re) => re.test(bare))
+  if (ARTICLE_RES.some((re) => re.test(bare))) return true
+  // 개발 빌드에서는 수동 테스트 자료의 기사도 받는다. 배포본에서는 이 가지가 접힌다.
+  return TEST_FIXTURES_ON && FIXTURE_ARTICLE.test(url.pathname)
 }

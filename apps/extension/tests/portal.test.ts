@@ -12,9 +12,9 @@ import {
   collectTitles,
   createLegend,
   createMark,
-  dismissLegend,
-  legendDismissed,
+  legendCollapsed,
   markLook,
+  setLegendCollapsed,
 } from '../lib/portal'
 import {
   ARTICLE_MATCHES,
@@ -354,7 +354,8 @@ describe('범례 — 아이콘이 무슨 뜻인지 말한다', () => {
   // 이 상자가 있는 이유다.
   const COPY = content.portal.legend
 
-  const 만든다 = (onClose = () => {}) => createLegend(document, COPY, onClose)
+  const 만든다 = (onToggle: (c: boolean) => void = () => {}, 접힘 = false) =>
+    createLegend(document, COPY, onToggle, 접힘)
 
   beforeEach(() => {
     const store = new Map<string, unknown>()
@@ -383,7 +384,8 @@ describe('범례 — 아이콘이 무슨 뜻인지 말한다', () => {
   })
 
   it('화면과 같은 아이콘을 쓴다 — 범례가 화면과 다르면 범례가 아니다', () => {
-    const svgs = 만든다().box.querySelectorAll('svg')
+    // 단계 줄의 아이콘만 센다. 머리말의 접기 화살표도 svg 다.
+    const svgs = 만든다().box.querySelectorAll('.rows svg')
     expect(svgs).toHaveLength(LEGEND_LEVELS.length)
   })
 
@@ -395,30 +397,100 @@ describe('범례 — 아이콘이 무슨 뜻인지 말한다', () => {
     expect(만든다().host.shadowRoot, "mode: 'closed' 라 바깥에서 보이지 않는다").toBeNull()
   })
 
-  it('닫기 단추에 이름이 붙는다 — 글자가 ✕ 뿐이다', () => {
+  it('접기 단추에 이름이 붙는다 — 글자가 화살표뿐이다', () => {
     const x = 만든다().box.querySelector('button')
-    expect(x?.getAttribute('aria-label')).toBe(COPY.close)
+    expect(x?.getAttribute('aria-label')).toBe(COPY.collapse)
+    expect(x?.getAttribute('aria-expanded')).toBe('true')
   })
 
-  it('X 를 누르면 알려 준다', () => {
-    let 닫힘 = 0
-    const l = 만든다(() => 닫힘++)
+  // `hidden` 은 화면에서만 감춘다 — `textContent` 에는 그대로 남는다.
+  // 그래서 글자가 아니라 **감췄는지**를 본다.
+  const 속 = (box: HTMLElement) =>
+    [...box.querySelectorAll<HTMLElement>('.lede, .rows, .solid')]
+
+  it('**없애지 않고 접는다** — 제목 줄은 남아 언제든 펼 수 있다', () => {
+    const l = 만든다()
+    const x = l.box.querySelector('button')
+    expect(속(l.box).length, '접을 것이 없다').toBe(3)
+    expect(속(l.box).every((e) => !e.hidden), '처음에는 펴져 있다').toBe(true)
+
+    x?.click()
+    expect(l.box.textContent, '제목은 남아 있어야 한다').toContain(COPY.title)
+    expect(속(l.box).every((e) => e.hidden), '접었으면 설명은 감춘다').toBe(true)
+    expect(x?.getAttribute('aria-label')).toBe(COPY.expand)
+    expect(x?.getAttribute('aria-expanded')).toBe('false')
+
+    x?.click()
+    expect(속(l.box).every((e) => !e.hidden), '다시 펴진다').toBe(true)
+  })
+
+  it('**접으면 정말 안 보인다** — hidden 속성만으로는 부족하다', () => {
+    // `hidden` 속성이 참이어도 화면에서 사라졌다는 뜻은 아니다. 브라우저 기본
+    // `[hidden] { display: none }` 은 **작성자 스타일에 진다** — `.rows` 에
+    // `display: grid` 를 준 탓에 접어도 단계 다섯 줄이 그대로 보였다.
+    // 속성이 아니라 **규칙이 있는지**를 본다.
+    const css = 만든다().box.getRootNode() as ShadowRoot
+    const 스타일 = [...css.querySelectorAll('style')].map((e) => e.textContent).join(' ')
+    expect(스타일, '[hidden] 을 다시 적지 않으면 display 를 준 요소가 안 숨는다')
+      .toMatch(/\[hidden\][^}]*display:\s*none\s*!important/)
+  })
+
+  it('**접으면 제목만 남는다** — 폭은 그대로 둔다', () => {
+    const l = 만든다()
     l.box.querySelector('button')?.click()
-    expect(닫힘).toBe(1)
+
+    expect(속(l.box).every((e) => e.hidden), '제목 줄 말고는 전부 감춘다').toBe(true)
+    expect(l.box.querySelector('.title')?.textContent).toBe(COPY.title)
+    // 접고 펼 때마다 상자가 커졌다 작아지면 눈에 거슬린다. 자리를 지킨다.
+    //
+    // **폭을 적은 규칙이 하나뿐인지 본다.** 전에는 `collapsed` 클래스를 찾았는데
+    // 그 클래스는 이제 아예 만들지 않아서 **그 검사는 깨질 수가 없었다.**
+    const css = (l.box.getRootNode() as ShadowRoot).querySelector('style')?.textContent ?? ''
+    expect(css, '접힘에 따라 모양을 바꾸는 규칙이 없어야 한다').not.toContain('collapsed')
+  })
+
+  it('화살표는 아이콘이고, 접힘에 따라 뒤집힌다 — 접히면 ㅅ, 펴지면 V', () => {
+    const l = 만든다()
+    const svg = l.box.querySelector('button svg')
+    expect(svg, '글자가 아니라 아이콘이어야 한다').not.toBeNull()
+    // 펴져 있으면 아래쪽(V). 원본 아이콘이 chevron-down 이라 그대로 둔다.
+    expect(svg?.getAttribute('style') ?? '').not.toContain('rotate(180deg)')
+
+    l.box.querySelector('button')?.click()
+    // 접히면 위쪽(ㅅ).
+    expect(svg?.getAttribute('style') ?? '').toContain('rotate(180deg)')
+  })
+
+  it('접고 편 것을 알려 준다', () => {
+    const 받은것: boolean[] = []
+    const l = 만든다((c) => 받은것.push(c))
+    const x = l.box.querySelector('button')
+    x?.click()
+    x?.click()
+    expect(받은것).toEqual([true, false])
+  })
+
+  it('지난번에 접어 뒀으면 접힌 채로 뜬다', () => {
+    const l = 만든다(() => {}, true)
+    expect(l.box.textContent).toContain(COPY.title)
+    expect(속(l.box).every((e) => e.hidden)).toBe(true)
+    expect(l.box.querySelector('button')?.getAttribute('aria-label')).toBe(COPY.expand)
   })
 
   it('판정 점수가 새지 않는다', () => {
     expect(만든다().box.textContent ?? '').not.toMatch(/0\.\d|\d+%|\d+점/)
   })
 
-  it('한 번 닫으면 다시 뜨지 않는다', async () => {
-    expect(await legendDismissed()).toBe(false)
-    await dismissLegend()
-    expect(await legendDismissed()).toBe(true)
+  it('접은 것을 기억한다', async () => {
+    expect(await legendCollapsed()).toBe(false)
+    await setLegendCollapsed(true)
+    expect(await legendCollapsed()).toBe(true)
+    await setLegendCollapsed(false)
+    expect(await legendCollapsed()).toBe(false)
   })
 
-  it('**저장소를 못 읽으면 띄우지 않는다** — 페이지마다 같은 상자가 뜨는 편이 더 해롭다', async () => {
+  it('**저장소를 못 읽으면 접힌 것으로 친다** — 펼쳐진 상자가 매번 뜨는 편이 더 성가시다', async () => {
     vi.stubGlobal('browser', { storage: { local: { get: () => Promise.reject(new Error('막힘')) } } })
-    expect(await legendDismissed()).toBe(true)
+    expect(await legendCollapsed()).toBe(true)
   })
 })
