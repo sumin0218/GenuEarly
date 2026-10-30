@@ -446,16 +446,16 @@ describe('범례 — 아이콘이 무슨 뜻인지 말한다', () => {
     expect(css, '접힘에 따라 폭을 바꾸지 않는다').not.toMatch(/collapsed[^}]*width/)
   })
 
-  it('화살표는 아이콘이고, 접힘에 따라 뒤집힌다 — V 와 ㅅ', () => {
+  it('화살표는 아이콘이고, 접힘에 따라 뒤집힌다 — 접히면 ㅅ, 펴지면 V', () => {
     const l = 만든다()
     const svg = l.box.querySelector('button svg')
     expect(svg, '글자가 아니라 아이콘이어야 한다').not.toBeNull()
-    // 펴져 있으면 위쪽(ㅅ) — 누르면 접힌다.
-    expect(svg?.getAttribute('style') ?? '').toContain('rotate(180deg)')
+    // 펴져 있으면 아래쪽(V). 원본 아이콘이 chevron-down 이라 그대로 둔다.
+    expect(svg?.getAttribute('style') ?? '').not.toContain('rotate(180deg)')
 
     l.box.querySelector('button')?.click()
-    // 접히면 아래쪽(V) — 누르면 내려온다.
-    expect(svg?.getAttribute('style') ?? '').not.toContain('rotate(180deg)')
+    // 접히면 위쪽(ㅅ).
+    expect(svg?.getAttribute('style') ?? '').toContain('rotate(180deg)')
   })
 
   it('접고 편 것을 알려 준다', () => {

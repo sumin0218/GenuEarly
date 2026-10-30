@@ -309,13 +309,16 @@ export function createLegend(
   x.textContent = '✕'
   // **없애지 않고 접는다.** 제목 줄은 늘 남아 있어 언제든 펼 수 있다.
   // **글자가 아니라 아이콘이다.** 나머지 표시와 같은 그림을 쓴다 (lib/icon-data.ts).
-  // 접혀 있으면 아래쪽(V) — 누르면 내려온다. 펴져 있으면 위쪽(ㅅ) — 누르면 접힌다.
+  //
+  // 접혀 있으면 위쪽(ㅅ), 펴져 있으면 아래쪽(V). **상자가 어느 쪽에 붙어 있는지를
+  // 따른다** — 이 상자는 화면 오른쪽 아래에 있어서, 펼쳐지면 위로 자라고 접히면
+  // 아래로 내려앉는다. 화살표가 그 방향을 가리킨다.
   const chevron = createIcon(doc, 'chevron-down', { size: 14 })
   x.replaceChildren(chevron)
 
   let 접힘 = 시작할때접힘
   const 그린다 = (): void => {
-    chevron.style.setProperty('transform', 접힘 ? 'none' : 'rotate(180deg)')
+    chevron.style.setProperty('transform', 접힘 ? 'rotate(180deg)' : 'none')
     x.setAttribute('aria-label', 접힘 ? copy.expand : copy.collapse)
     x.setAttribute('aria-expanded', String(!접힘))
     // 제목 줄만 남기고 나머지는 감춘다. **폭은 건드리지 않는다** (위 주석).
