@@ -15,7 +15,7 @@ import {
   dismissLegend,
   legendDismissed,
 } from '../lib/portal'
-import type { HeadlineVerdict, JudgeHeadlineMessage } from '../lib/protocol'
+import type { DisplayLevel, HeadlineVerdict, JudgeHeadlineMessage } from '../lib/protocol'
 
 /**
  * 동시에 보내는 요청 수.
@@ -57,6 +57,21 @@ function runner(limit: number) {
   }
 }
 
+/**
+ * 표시 하나에 붙는 설명. **범례와 같은 말을 쓴다.**
+ *
+ * 전에는 배지 문구(`content.badge[level].name`)를 그대로 썼다. 그래서 아이콘에
+ * 마우스를 올리면 "판단하지 못함", "주의할 신호 있음" 이 떴다. **그것은 기사 전체에
+ * 대한 말이다** — 여기 표시는 제목만 보고 낸 것이라 같은 말을 쓰면 안 된다.
+ * 범례를 따로 받아 둔 이유가 바로 그것인데(ChatKHU 15차) 정작 아이콘이 그 말을
+ * 쓰지 않고 있었다.
+ *
+ * 이제 둘이 같은 말을 한다 — 범례에서 "끌어당기는 표현이 뚜렷합니다" 를 읽은 사람이
+ * 아이콘에 마우스를 올리면 같은 문장을 본다.
+ */
+const 표시설명 = (level: DisplayLevel): string =>
+  content.portal.legend.levels[level] ?? content.badge[level].name
+
 export default defineContentScript({
   // 개발 빌드에서는 수동 테스트 자료의 목록 페이지도 받는다 (match-patterns.ts).
   matches: [...PORTAL_LIST_MATCHES, ...(import.meta.env.DEV ? TEST_FIXTURE_MATCHES : [])],
@@ -91,7 +106,7 @@ export default defineContentScript({
 
     function attach(url: string, headline: string, anchor: HTMLAnchorElement): void {
       const mark = createMark(document)
-      mark.render('PENDING', 'headline', content.badge.PENDING.name)
+      mark.render('PENDING', 'headline', 표시설명('PENDING'))
       // 제목 **앞**에 넣는다. 뒤에 넣으면 제목이 두 줄로 접힐 때 홀로 다음 줄로 넘어간다.
       anchor.prepend(mark.host)
 
@@ -102,11 +117,11 @@ export default defineContentScript({
           const msg: JudgeHeadlineMessage = { kind: 'judge-headline', url, headline }
           try {
             const got = (await browser.runtime.sendMessage(msg)) as HeadlineVerdict | undefined
-            if (!got) return mark.render('UNDETERMINED', 'headline', content.badge.UNDETERMINED.name)
-            mark.render(got.level, got.basis, content.badge[got.level].name)
+            if (!got) return mark.render('UNDETERMINED', 'headline', 표시설명('UNDETERMINED'))
+            mark.render(got.level, got.basis, 표시설명(got.level))
           } catch {
             // service worker 가 죽었거나 확장이 다시 로드됐다. ⚪ 는 실패가 아니라 결과다.
-            mark.render('UNDETERMINED', 'headline', content.badge.UNDETERMINED.name)
+            mark.render('UNDETERMINED', 'headline', 표시설명('UNDETERMINED'))
           }
         })
       }

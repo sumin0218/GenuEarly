@@ -96,6 +96,20 @@ export default defineContentScript({
   cssInjectionMode: 'ui',
 
   async main(ctx) {
+    // **테스트 자료의 목록 페이지에서는 아무것도 띄우지 않는다.**
+    //
+    // 실제 사이트에서 ①은 기사 주소에만 붙는다. 그런데 테스트 자료는 목록과 기사가
+    // 같은 곳에 살아서(`file://`·localhost) 호스트째 받을 수밖에 없고, 그러면 목록
+    // 페이지에서도 이 스크립트가 돈다. 거기서는 기사를 못 읽으니 "판단하지 못함"
+    // 배지가 뜨는데, **그 자리가 하필 ② 범례 자리다** (둘 다 오른쪽 아래 고정).
+    // 범례를 덮어 버려서 아이콘 설명을 볼 수가 없었다.
+    //
+    // 주소가 아니라 모양으로 가른다 — lib/extract.ts·portal.content.ts 와 같은 잣대다.
+    if (import.meta.env.DEV && !document.querySelector('article#article h1#headline')) {
+      const 아는사이트 = /naver.com|daum.net|insight.co.kr|wikitree.co.kr/.test(location.hostname)
+      if (!아는사이트) return
+    }
+
     const article = extractArticle()
     const badge = createBadge()
     const toast = createToast()
