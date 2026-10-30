@@ -5,13 +5,45 @@ Jev 중계 서버. **API 키를 가진 유일한 곳**이고, Jev를 부르는 �
 루트 규칙이 먼저다: [../../AGENT.md](../../AGENT.md), [../../docs/security/secure-coding.md](../../docs/security/secure-coding.md).
 모델 쪽 사실관계는 [../../docs/jev.md](../../docs/jev.md)가 원본이다.
 
-## 기술 스택: 미정
+## 기술 스택
 
-**언어, 프레임워크, 배포 대상을 아직 정하지 않았다.** 추측해서 코드를 쓰지 않는다.
-정해지면 이 문서와 [../../docs/conventions/code-style.md](../../docs/conventions/code-style.md)의 "스택별 규칙"을 같은 PR에서 갱신한다.
+| | |
+| --- | --- |
+| 런타임·배포 | **Cloudflare Workers** |
+| 언어 | TypeScript |
+| 프레임워크 | **없음.** `fetch` 핸들러 하나다 |
+| 테스트 | Vitest |
+| Jev 호출 | **ChatKHU API Gateway 경유** ([../../docs/jev.md](../../docs/jev.md) 6-1절). HTTP 직접 호출, SDK 안 씀 |
 
-> **TODO: 배포 대상 결정** — 시연·전시 때 안정적으로 떠 있어야 한다. 콜드 스타트가 배지 지연에 직접 영향을 준다.
-> **TODO: SDK를 쓸지 HTTP를 직접 부를지** — 공식 SDK는 Python과 JavaScript가 있고 재시도와 `retry-after`를 기본으로 처리해 준다 ([../../docs/jev.md](../../docs/jev.md) 7절).
+```bash
+npm run dev -w @genuearly/proxy      # 로컬. 로그인 없이 된다
+npm test -w @genuearly/proxy
+npm run compile -w @genuearly/proxy  # 타입 검사
+npm run deploy -w @genuearly/proxy   # 배포. wrangler login 이 먼저 필요하다
+```
+
+### Cloudflare Workers 를 고른 이유
+
+**콜드 스타트가 10ms 미만**이다. 배지가 늦게 뜨면 기능 ①이 사실상 없는 기능이 된다.
+Render 무료는 15분 유휴 후 잠들고 **다시 깨는 데 30~60초**가 걸려서 심사·전시에 쓸 수 없다.
+
+**CPU 10ms 제한은 우리에게 걸리지 않는다.** Cloudflare 문서가 *"네트워크 요청을 기다리는 시간(`fetch` 등)은
+CPU 시간에 들어가지 않는다"* 고 명시한다. 우리가 쓰는 CPU 는 JSON 검증과 요청 조립뿐이고,
+Jev 를 기다리는 시간은 세지 않는다.
+
+무료 한도는 **하루 10만 요청**, 요청당 **서브요청 50개**다.
+
+### 프레임워크를 안 쓰는 이유
+
+만드는 것이 엔드포인트 둘(`/health`, `/v1/judge`)이다. 라우터를 얹을 만큼 크지 않고,
+기능 동결까지 남은 시간에 배울 것을 하나라도 줄이는 쪽이 낫다.
+
+### 설정과 키
+
+- [`wrangler.jsonc`](wrangler.jsonc)가 설정이다. **키를 여기 적지 않는다.** 공개돼도 되는 값만 `vars` 에 둔다
+- 배포 환경 키: `npx wrangler secret put JEV_API_KEY`
+- 로컬 개발 키: [`.dev.vars.example`](.dev.vars.example)을 복사해 `.dev.vars` 로. **커밋되지 않는다**
+- `wrangler.jsonc` 의 `secrets.required` 에 선언해 두어 배포 전에 빠진 키를 알려 준다
 
 ## 왜 있는가
 
@@ -21,7 +53,7 @@ Jev 중계 서버. **API 키를 가진 유일한 곳**이고, Jev를 부르는 �
 
 ## 맡는 일
 
-- Jev 호출 중계 (`POST /v1/systemone`)
+- Jev 호출 중계 — **ChatKHU Gateway 의 `POST /v1/gateway/decisions/`** ([../../docs/jev.md](../../docs/jev.md) 6-1절)
 - API 키 보관
 - 레이트 리밋 대응 (429, 백오프, `retry-after`)
 - 실패를 ⚪ 판단 보류로 바꿔서 돌려주기
@@ -35,9 +67,11 @@ Jev 중계 서버. **API 키를 가진 유일한 곳**이고, Jev를 부르는 �
 
 ## 시크릿
 
-- `JEV_API_KEY`는 **환경변수로만** 받는다. 코드, 설정 파일, 저장소, 로그, 응답 어디에도 넣지 않는다
-- 변수 **이름**만 [.env.example](.env.example)에 값 없이 적는다
-- `.env`를 커밋하지 않는다
+- `JEV_API_KEY`는 **secret 으로만** 받는다. 코드, 설정 파일, 저장소, 로그, 응답 어디에도 넣지 않는다
+  - 배포: `npx wrangler secret put JEV_API_KEY`
+  - 로컬: `.dev.vars` (커밋되지 않는다)
+- 변수 **이름**만 [`.dev.vars.example`](.dev.vars.example)에 값 없이 적는다
+- `.dev.vars`를 커밋하지 않는다. [`wrangler.jsonc`](wrangler.jsonc)의 `vars`에는 **공개돼도 되는 값만** 둔다
 - 에러 응답에 Jev의 원본 에러 본문을 그대로 싣지 않는다. 키나 내부 정보가 섞여 나올 수 있다 (CWE-209)
 - 실수로 키를 올렸다면 **즉시 폐기하고 재발급한 뒤** 팀에 알린다
 
@@ -62,9 +96,12 @@ Jev 중계 서버. **API 키를 가진 유일한 곳**이고, Jev를 부르는 �
 
 사실관계는 [../../docs/jev.md](../../docs/jev.md) 6절에 있다.
 
-- **모델 버전을 고정해서 보낸다.** `jev-latest`가 아니라 `jev-1.13.0`. 별칭은 새 릴리스가 나오면 옮겨 가고, 우리는 확신도 임계값을 특정 버전에 맞춰 놓았다
-- 응답의 `model` 필드를 **로그에 남긴다.** 어느 버전이 낸 결과인지 모르면 회귀를 추적할 수 없다
-- **기사 하나의 판단 항목들을 요청 하나에 묶는다.** Jev는 `state`를 한 번 읽고 모든 질문을 병렬로 평가한다. 요청 수와 토큰 모두에 유리하다
+- **모델 버전을 고정해서 보낸다.** `jev-latest`가 아니라 `jev-1.13.0`. 게이트웨이가 받는 것은 확인했다
+- 응답의 `model` 필드를 **로그에 남긴다.** 다만 **게이트웨이는 항상 `jev-latest`를 돌려준다** —
+  어느 버전이 실제로 답했는지는 이 경로에서 확인할 수 없다 ([../../docs/jev.md](../../docs/jev.md) 6-1절)
+- **요청은 그룹 단위로 나눈다.** 한 요청에 다 묶지 않는다. 제목만 보는 질문에 본문을 섞으면
+  본문 속 인젝션과 context rot 이 제목 판단에 닿는다. 어느 질문이 어느 그룹인지는
+  [../../packages/shared/README.md](../../packages/shared/README.md)의 "요청을 나누는 방법"이 원본이다
 - 기사 본문은 **`state`의 데이터 필드**에 넣는다. `instructions`에 이어 붙이지 않는다 ([../../docs/jev.md](../../docs/jev.md) 3절 ⑥)
 
 ## 실패를 다루는 방식

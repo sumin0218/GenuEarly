@@ -1,7 +1,7 @@
 {
   "name": "genuearly",
   "private": true,
-  "description": "루트 package.json은 커밋 메시지 검사 도구(commitlint, husky) 전용이다. 확장 프로그램과 중계 서버의 기술 스택은 미정이며, 정해지면 각 앱 디렉터리 안에서 관리한다.",
+  "description": "루트 package.json은 커밋 메시지 검사 도구(commitlint, husky)와 워크스페이스 연결 전용이다. 앱 의존성은 각 apps/*, packages/* 안에서 관리한다.",
   "license": "MIT",
   "scripts": {
     "prepare": "husky",
@@ -15,5 +15,9 @@
     "@commitlint/cli": "^20.1.0",
     "@commitlint/config-conventional": "^20.0.0",
     "husky": "^9.1.7"
-  }
+  },
+  "workspaces": [
+    "apps/*",
+    "packages/*"
+  ]
 }

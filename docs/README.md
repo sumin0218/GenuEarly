@@ -3,23 +3,35 @@
 | 문서 | 내용 |
 | --- | --- |
 | [product.md](product.md) | 무엇을 왜 만드는가. 기능, 판단 항목, 배지 단계. **판단 기준의 원본** |
+| [requirements.md](requirements.md) | 화면에서 무엇이 어떻게 보이고 움직이는가. **구현 전에 읽는다** |
+| [design.md](design.md) | 화면이 왜 이렇게 생겼는가. 아이콘, 색 대비, 글자 크기. **스타일을 건드리기 전에 읽는다** |
+| [architecture.md](architecture.md) | 어떤 조각이 무엇을 맡고 그 사이로 무엇이 오가는가. **API 규약 포함** |
+| [stack.md](stack.md) | 무엇을 쓰고 왜 골랐고 무엇을 안 쓰기로 했는가 |
 | [jev.md](jev.md) | Jev 1.13의 한계·요금·한도와 거기서 나온 설계 규칙. 공식 문서에서 확인한 사실만 |
 | [conventions/code-style.md](conventions/code-style.md) | 네이밍, 디렉터리 경계, 상수 관리, 테스트 |
 | [security/secure-coding.md](security/secure-coding.md) | 시큐어 코딩 규칙. **코드 작성 전 필독.** 확장 프로그램 권한 표 포함 |
-| [ai-log/](ai-log/) | AI 활용 과정 기록. 대회 **서식4** 증빙 |
-| [submission/](submission/) | 제출 서류와 일정 |
+| [ai-log/](ai-log/) | AI 활용 과정 기록. 대회 **서식4** 증빙. 파일이 서식4의 6단계와 일치한다 |
+| [ai-log/sources.md](ai-log/sources.md) | 출처·권리·라이선스 목록. 서식4의 두 번째 표 |
+| [submission/](submission/) | 제출 서류 5종, 일정, 서식3·4 분량 제한 |
 
 ## 어떤 순서로 읽나
 
 - **처음 합류했다면**: [../README.md](../README.md) → [../AGENT.md](../AGENT.md) → [../CONTRIBUTING.md](../CONTRIBUTING.md) → [product.md](product.md)
+- **스택을 바꾸거나 의존성을 추가하기 전에**: [stack.md](stack.md)
 - **코드를 쓰기 전에**: [security/secure-coding.md](security/secure-coding.md) → [conventions/code-style.md](conventions/code-style.md)
+- **기능을 구현하기 전에**: [product.md](product.md) → [requirements.md](requirements.md) → [architecture.md](architecture.md)
+- **화면을 건드리기 전에**: [design.md](design.md)
 - **판단 기준이나 프롬프트를 건드리기 전에**: [jev.md](jev.md) → [product.md](product.md) → [../eval/README.md](../eval/README.md)
 
 ## 디렉터리
 
 ```text
 docs/
-  product.md       제품 정의와 판단 기준
+  product.md       무엇을 왜 만드는가. 판단 기준
+  requirements.md  화면에서 어떻게 보이고 움직이는가
+  design.md        화면이 왜 이렇게 생겼는가
+  architecture.md  어떤 조각이 무엇을 맡는가. API 규약
+  stack.md         무엇을 쓰고 왜 골랐는가
   jev.md           Jev 1.13 정리
   conventions/     코드 컨벤션
   security/        보안 규칙
@@ -35,6 +47,10 @@ docs/
 | 내용 | 원본 |
 | --- | --- |
 | 판단 항목과 배지 단계 | [product.md](product.md) |
+| 화면 동작과 상태 | [requirements.md](requirements.md) |
+| 아이콘·색·글자 크기의 근거 | [design.md](design.md) |
+| 모듈 경계와 API 규약 | [architecture.md](architecture.md) |
+| 도구 선택과 그 이유 | [stack.md](stack.md) |
 | Jev의 한계와 한도 | [jev.md](jev.md) |
 | 확장 프로그램 권한 | [security/secure-coding.md](security/secure-coding.md) 2절 |
 | 커밋·브랜치·PR·Jira | [../CONTRIBUTING.md](../CONTRIBUTING.md) |

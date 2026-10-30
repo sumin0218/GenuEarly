@@ -1,0 +1,283 @@
+// 콘텐츠 스크립트 ↔ background ↔ 중계 서버 사이에 오가는 모양.
+//
+// **중계 호출은 background 가 한다.** 콘텐츠 스크립트의 fetch 는 기사 페이지의 origin 으로
+// 나가서 우리 서버가 거절한다 (서버는 chrome-extension:// 만 받는다).
+
+/**
+ * 중계 서버 주소.
+ *
+ * **기본값이 배포 주소다.** 전에는 기본이 `localhost` 였고 빌드할 때마다
+ * `WXT_PROXY_URL` 을 손으로 넣어야 했는데, **한 번 빠뜨리면 모든 기사가 ⚪ 가 된다.**
+ * 실제로 그렇게 나갔고, background 콘솔에만 `Failed to fetch` 가 찍혀 원인을 찾는 데
+ * 한참 걸렸다 — 화면에는 "판단하지 못함" 으로만 보인다.
+ *
+ * 빠뜨렸을 때의 결과가 한쪽은 **조용한 고장**이고 다른 쪽은 **개발 중에 진짜 서버를
+ * 쓰는 것**뿐이라, 기본을 뒤집는 편이 안전하다. 로컬 중계를 보려면 값을 준다.
+ *
+ *   WXT_PROXY_URL=http://localhost:8787 npm run dev -w @genuearly/extension
+ *
+ * 비밀이 아니다 — 주소일 뿐이고 키는 서버만 들고 있다.
+ */
+import type { BadgeLevel, Verdict } from '@genuearly/shared'
+
+export type { BadgeLevel, Verdict }
+
+export const PROXY_URL: string =
+  import.meta.env.WXT_PROXY_URL ?? 'https://genuearly-proxy.genuearly-proxy.workers.dev'
+
+export type Feature = 'page' | 'portal_list' | 'selection' | 'explain'
+
+export interface JudgeRequest {
+  feature: Feature
+  group: string
+  items: string[]
+  state: Record<string, string>
+}
+
+export interface JudgeOk {
+  model: string
+  answers: Record<string, JevAnswer>
+}
+export interface JudgeUndetermined {
+  model: string
+  undetermined: true
+  reason: string
+}
+export type JudgeResponse = JudgeOk | JudgeUndetermined
+
+export type JevAnswer =
+  | { type: 'choice'; choice: string; confidence: number; probabilities?: Record<string, number> }
+  | { type: 'score'; score: number; confidence: number; legend?: Record<string, string> }
+  | { type: 'noul'; noul: number }
+
+export const isUndetermined = (r: JudgeResponse): r is JudgeUndetermined =>
+  (r as JudgeUndetermined).undetermined === true
+
+// ── 콘텐츠 스크립트가 background 에 보내는 것 ────────────────────────────────
+export interface JudgeArticleMessage {
+  kind: 'judge-article'
+  url: string
+  headline: string
+  body: string
+  sentences: string[]
+}
+
+/**
+ * ② 목록의 제목 하나. **본문이 없다** — 목록 페이지에는 제목밖에 없다.
+ *
+ * 그래서 `request_group` 에 `portal_list` 가 있는 항목만 판단한다.
+ * 결과는 ①과 **같은 캐시에 항목 단위로** 쌓인다 (requirements.md 3-6절).
+ */
+export interface JudgeHeadlineMessage {
+  kind: 'judge-headline'
+  url: string
+  headline: string
+}
+
+/** ②가 돌려받는 것. **근거가 무엇이었는지 함께 준다** (requirements.md 4-3절). */
+export interface HeadlineVerdict {
+  level: BadgeLevel
+  /** `'full'` 이면 캐시에 본문까지 본 결과가 있었다는 뜻이다. 비용은 0이었다 */
+  basis: 'headline' | 'full'
+}
+
+/**
+ * 심층 분석. **점수에 들어가지 않는다** — 판정은 이미 났고 그 이유만 묻는다.
+ *
+ * 사용자가 누를 때만 나간다. 기사를 여는 것만으로는 한 건도 나가지 않는다
+ * (judgment-items.json 의 `explain_items`, GE-44).
+ */
+export interface ExplainMessage {
+  kind: 'judge-explain'
+  url: string
+  body: string
+  /** 설명할 판단 항목. `explain_items[].explain_for` 와 같은 값 */
+  itemId: string
+  /** 이미 나온 판정. **중계 서버가 프롬프트에 적어 준다** — 모델은 이것을 바꾸지 않는다 */
+  level: ExplainLevel
+  /**
+   * **코드가 찾아봤는데 빈손이었는가.**
+   *
+   * 코드 사전은 criteria 에 적힌 낱말만 안다. 다른 말로 감정을 자극하면 못 찾고,
+   * 그러면 판정은 걸렸는데 보여 줄 것이 없다. 그때만 LLM 에 넘긴다 —
+   * 코드가 찾았으면 부르지 않는다. 더 정확하고, 빠르고, 크레딧을 쓰지 않는다.
+   */
+  noEvidence?: boolean
+}
+
+/**
+ * 심층 분석을 할 수 있는 판정.
+ *
+ * 🟢·⚪ 는 없다. 설명할 것이 없고, 크레딧을 쓸 이유도 없다.
+ * 중계 서버도 같은 둘만 받는다 (apps/proxy/src/pinpoint.ts).
+ */
+export type ExplainLevel = 'CAUTION' | 'CHECK'
+
+/**
+ * 심층 분석 결과. **두 곳에서 온다.**
+ *
+ * - `found` — Jev 가 **잰** 것. 하위 질문 id → 그런가. 확률은 접어서 준다
+ * - `spans` — 코드가 **찾은** 것. 규칙 id → 본문에서 떼어 온 글자
+ * - `picks` — LLM 이 **집어 온** 것. 목록으로 담을 수 없는 항목(출처·근거)만
+ *
+ * Jev 는 "이 글이 어떤가" 는 재지만 "이 표현이 있는가" 는 못 센다 (docs/jev.md 8절).
+ * 코드는 **정해진 표현**만 찾을 수 있다. 남는 것 — 기관명·실명처럼 목록이 없는 것 —
+ * 만 LLM 이 집어 오고, **집어 온 것은 본문과 글자 대조해 거른다.**
+ *
+ * **셋 다 사람에게 하는 말을 쓰지 않는다.** 화면의 문장은 전부 ChatKHU 가 미리 쓴
+ * 문구이고, 여기 담기는 것은 본문에서 떼어 온 글자와 **고른 이유의 id** 뿐이다.
+ */
+export interface ExplainResult {
+  itemId: string
+  found: Record<string, boolean>
+  /** **원문 그대로다.** 화면에 인용한다 */
+  spans: Record<string, string[]>
+  /** 떼어 온 문장과 **왜 떼어 왔는지.** 하위 질문으로 나뉘지 않는 항목만 */
+  picks?: ExplainPick[]
+}
+
+/**
+ * 떼어 온 문장 하나.
+ *
+ * `why` 는 **미리 정해 둔 이유의 id** 다 (apps/proxy/src/pinpoint.ts 의 REASONS).
+ * 화면에 뜨는 문장은 packages/content 의 `explain.*.reasons` 가 들고 있다 —
+ * **모델은 그 문장을 쓰지 않고 고르기만 한다.**
+ */
+export interface ExplainPick {
+  /** **원문 그대로다.** 화면에 인용한다 */
+  text: string
+  why: string
+}
+
+/**
+ * 리포트를 만들어 달라. **콘텐츠 스크립트가 background 에 보낸다.**
+ *
+ * 본문이 들어 있다. 팝업은 본문을 모르므로 이 메시지를 직접 보내지 못한다 —
+ * 팝업은 콘텐츠 스크립트에 `make-report` 로 부탁하고, 본문은 여기서만 실린다.
+ */
+export interface BuildReportMessage {
+  kind: 'build-report'
+  url: string
+  headline: string
+  /** `YYYY-MM-DD`. **없으면 리포트를 만들지 않는다** — 날짜 없이 기록을 맞추면 거짓 안심이 된다 */
+  date: string
+  body: string
+  /** 일곱 항목의 판정 줄. **팝업이 이미 그리고 있는 값을 그대로 넘긴다** — 다시 판단하지 않는다 */
+  rows: ReportRow[]
+}
+
+/**
+ * 리포트에 싣는 판정 줄 하나.
+ *
+ * 리포트의 "기사를 열었을 때의 신호" 가 이것을 그대로 그린다. **다시 판단하지 않는다** —
+ * 리포트와 배지가 다른 말을 하면 사용자는 둘 중 어느 쪽도 믿지 못한다.
+ */
+export interface ReportRow {
+  id: string
+  name: string
+  text: string
+  level: DisplayLevel
+}
+
+/**
+ * 보관함 고치기. **리포트 탭이 직접 쓰지 않고 여기로 보낸다.**
+ *
+ * 보관함은 한 칸에 배열로 들어 있어 고치려면 읽고-바꾸고-쓴다. 리포트 탭과
+ * background 가 각자 쓰면 겹칠 때 **지운 항목이 되살아난다.** 쓰는 자리를 한
+ * 곳으로 모아 두면 그 안에서 차례를 세울 수 있다 (lib/archive.ts 의 `줄세워`).
+ */
+export interface ArchiveWriteMessage {
+  kind: 'archive-write'
+  /** `remove` 는 한 건, `clear` 는 전부 */
+  what: 'remove' | 'clear'
+  /** `remove` 일 때의 기사 주소 */
+  url?: string
+}
+
+export type Message =
+  | JudgeArticleMessage
+  | JudgeHeadlineMessage
+  | ExplainMessage
+  | BuildReportMessage
+  | ArchiveWriteMessage
+
+// ── 팝업이 콘텐츠 스크립트에 보내는 것 ──────────────────────────────────────
+//
+// **background 를 거치지 않는다.** `tabs.sendMessage` 는 그 탭의 콘텐츠 스크립트에만 간다.
+//
+// 탭별 판정을 background 나 storage 에 쌓아 두고 팝업이 그것을 읽는 쪽이 더 쉽지만,
+// **탭마다의 "어느 기사를 보는 중인가" 는 그 자체가 열람 기록이다.**
+// 콘텐츠 스크립트가 들고 있다가 물어볼 때 건네면 아무 데도 남지 않는다
+// (docs/security/secure-coding.md 6절).
+export interface TabStateMessage {
+  kind: 'get-tab-state'
+}
+
+/**
+ * 심층 분석을 **콘텐츠 스크립트에** 시킨다.
+ *
+ * **팝업은 본문을 받지 않는다** (secure-coding.md 6절, tests/popup.test.ts).
+ * 그래서 팝업이 본문을 들고 중계 서버로 보낼 수 없다. 본문을 들고 있는 것은
+ * 콘텐츠 스크립트뿐이라, 팝업은 "이 항목을 설명해 달라" 고만 하고
+ * 콘텐츠 스크립트가 background 를 거쳐 물어본 뒤 **답만** 돌려준다.
+ */
+/**
+ * 리포트를 만들어 달라. **팝업이 콘텐츠 스크립트에 보낸다.**
+ *
+ * 본문을 들고 있는 것은 콘텐츠 스크립트뿐이라, 팝업은 판정만 넘기고 부탁한다
+ * (심층 분석의 `explain-item` 과 같은 이유다).
+ */
+export interface MakeReportMessage {
+  kind: 'make-report'
+  /** 일곱 항목의 판정 줄 */
+  rows: ReportRow[]
+}
+
+/** 리포트를 만들 수 있는가, 왜 못 만드는가. */
+export type MakeReportAnswer =
+  | { ok: true }
+  | { ok: false; reason: 'not_article' | 'no_date' }
+
+export interface ExplainRequestMessage {
+  kind: 'explain-item'
+  itemId: string
+  /** 팝업이 그리고 있는 그 항목의 판정. 콘텐츠 스크립트가 그대로 넘긴다 */
+  level: ExplainLevel
+}
+
+/** 콘텐츠 스크립트가 지금 그리고 있는 상태. 팝업은 이것을 그대로 그린다. */
+export interface TabState {
+  level: DisplayLevel
+  verdict?: ArticleVerdict
+  /**
+   * **이 판정이 어느 주소의 것인가.** 콘텐츠 스크립트가 자기 `location.href` 를 적는다.
+   *
+   * 팝업이 직접 `tab.url` 을 읽을 수는 없다 — `tabs` 권한이 필요하고, 그 권한은
+   * 금지 목록에 있다 (tests/manifest.test.ts). 그래서 **이미 그 주소에 붙어 있는 쪽이
+   * 말해 준다.** 새 권한이 늘지 않는다.
+   *
+   * 리포트는 하나만 두므로, 들고 있는 리포트가 지금 기사의 것인지 가리는 데 쓴다.
+   */
+  url?: string
+}
+
+/**
+ * 화면에 뜨는 단계.
+ *
+ * `PENDING` 은 **판단 결과가 아니라 화면 상태**다 — 요청을 보내 놓고 기다리는 중이다.
+ * 그래서 `@genuearly/shared` 의 `BadgeLevel` 에는 없고 여기서만 더한다.
+ */
+export type DisplayLevel = BadgeLevel | 'PENDING'
+
+/** 판단 결과. `@genuearly/shared` 의 `Verdict` 를 그대로 쓴다. */
+/**
+ * 기사 하나의 판정.
+ *
+ * `capped` 는 **문장을 상한까지만 봤다**는 뜻이다. `@genuearly/shared` 의 `Verdict` 에는
+ * 없다 — 상한은 점수 규칙이 아니라 **확장 프로그램이 요청 수를 아끼려고 둔 것**이라
+ * 여기서 더한다 (lib/judge.ts 의 MAX_SENTENCES).
+ *
+ * 이것을 안 보내면 **조용히 덜 보는 것**이 된다. 긴 기사의 뒤쪽에 있는 단정은
+ * 판단에서 빠졌는데 화면은 다 본 것처럼 보인다.
+ */
+export type ArticleVerdict = Verdict & { capped?: boolean }

@@ -1,0 +1,10 @@
+{
+  "name": "genuearly-eval-set",
+  "private": true,
+  "description": "평가 세트 준비 스크립트 (../data/README.md). 라벨 입력 시트를 만들 때만 exceljs 를 쓴다.",
+  "type": "module",
+  "license": "MIT",
+  "devDependencies": {
+    "exceljs": "4.4.0"
+  }
+}

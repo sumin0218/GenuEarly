@@ -4,6 +4,11 @@
 .env.*
 !.env.example
 
+# Cloudflare Workers 로컬 secret. 배포 secret 은 wrangler secret put 으로 넣는다.
+.dev.vars
+.dev.vars.*
+!.dev.vars.example
+
 # 자격 증명 파일 — 저장소 안에 두면 그대로 커밋되므로 파일명 자체를 막는다
 *credentials*.json
 client_secret*.json
@@ -15,17 +20,23 @@ client_secret*.json
 # 기사 본문은 커밋하지 않는다. eval/data에는 URL과 라벨만 둔다 (eval/README.md).
 # 테스트용으로 만든 가상의 가짜 기사는 전부 여기에 두고 커밋하지 않는다.
 eval/data/private/
+# 측정 스크립트가 흘린 출력. 기사 제목·문장이 들어간다 (PR #15 에서 실제로 커밋될 뻔했다).
+e2e.txt
+*.e2e.txt
+eval/calibration/pages.json
+eval/calibration/result*.json
 
 # 제출 서류 — 서명이 들어간 파일(개인정보 포함)은 커밋하지 않는다 (docs/submission/README.md)
 docs/submission/signed/
 
-# 확장 프로그램 빌드 산출물 — 빌드 도구 미정이라 흔한 이름을 미리 막아 둔다.
-# 도구가 정해지면 실제 출력 경로로 이 블록을 정리한다.
-dist/
-build/
-out/
+# Cloudflare Workers 로컬 상태 (miniflare)
+.wrangler/
+
+# 확장 프로그램 빌드 산출물 (WXT)
+.output/
+.wxt/
 *.crx
-web-ext-artifacts/
+*.zip
 
 # 의존성·캐시
 node_modules/

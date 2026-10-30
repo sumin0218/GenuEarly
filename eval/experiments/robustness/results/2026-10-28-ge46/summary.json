@@ -1,0 +1,20 @@
+{
+  "date": "2026-10-28",
+  "screen_before": "1.1.0",
+  "screen_after": "1.3.0",
+  "question_set": "1.6.0",
+  "injections_at_measure": "1.1.0",
+  "articles": 8,
+  "body_injections": 9,
+  "requests": {
+    "total": 72,
+    "identical": 72,
+    "different": 0
+  },
+  "normal_articles": {
+    "removed_before": 0,
+    "removed_after": 0
+  },
+  "jev_calls": 2,
+  "note": "요청이 같으면 답도 같다. 72/72 가 같아 그 요청에는 Jev 를 부르지 않았다."
+}

@@ -20,31 +20,47 @@ AI 코딩 도구(Claude Code, Codex, Cursor 등)와 사람이 공통으로 읽�
 모노레포. 현재 상태·일정은 [README.md](README.md)가 진입점이다.
 
 ```
-apps/extension/    크롬 확장 프로그램 (MV3) — 기술 스택 미정
-apps/proxy/        Jev 중계 서버. API 키를 들고 있는 유일한 곳 — 기술 스택 미정
+apps/extension/    크롬 확장 프로그램 (MV3) — WXT + TypeScript
+apps/proxy/        Jev 중계 서버. API 키를 들고 있는 유일한 곳 — Cloudflare Workers
 packages/shared/   판단 스키마, 점수 합산, 배지 단계 결정
 packages/content/  사용자에게 보이는 문구
 eval/              판단 품질 평가 세트와 결과. 기사 본문은 두지 않는다
+tools/             개발할 때만 쓰는 도구. 제품에 배포되지 않는다
 docs/              제품 정의, Jev 정리, 컨벤션, 보안, AI 활용 기록, 제출 서류
 .github/           PR·이슈 양식, 규칙 검사 워크플로
 ```
 
-## 기술 스택: 미정
+## 기술 스택
 
-**언어, 패키지 매니저, 빌드·테스트 도구, 배포 대상을 아직 정하지 않았다.**
+| 영역 | 스택 |
+| --- | --- |
+| 확장 프로그램 | **WXT + TypeScript + Vite**, 테스트는 Vitest ([apps/extension/AGENT.md](apps/extension/AGENT.md)) |
+| 패키지 매니저 | **npm 워크스페이스** (`apps/*`, `packages/*`) |
+| 중계 서버 | **Cloudflare Workers + TypeScript**, 프레임워크 없음 ([apps/proxy/AGENT.md](apps/proxy/AGENT.md)) |
 
-- 정해지지 않은 스택을 추측해서 코드를 쓰지 않는다. 먼저 물어본다
-- 스택을 정하는 것은 그 자체로 하나의 작업이다. 다른 기능 PR에 끼워 넣지 않는다
-- 정해지면 [README.md](README.md)의 구조 표, 이 파일, 해당 앱의 `AGENT.md`, [docs/conventions/code-style.md](docs/conventions/code-style.md)의 "스택별 규칙"을 같은 PR에서 갱신한다
+- 스택을 바꾸는 것은 그 자체로 하나의 작업이다. 다른 기능 PR에 끼워 넣지 않는다
+- 바꾸면 [README.md](README.md)의 구조 표, 이 파일, 해당 앱의 `AGENT.md`, [docs/conventions/code-style.md](docs/conventions/code-style.md)의 "스택별 규칙"을 같은 PR에서 갱신한다
 
-루트의 `package.json`은 **커밋 메시지 검사 도구(commitlint, husky) 전용**이다.
-여기에 앱 의존성을 추가하지 않는다. 이 파일이 있다고 해서 스택이 Node.js로 정해진 것이 아니다.
+### 점수 합산은 확장 프로그램이 한다
+
+`packages/shared`의 [judgment-items.json](packages/shared/judgment-items.json)은 **언어에 묶이지 않는 JSON**이다.
+중계 서버는 이 파일을 읽어 **항목 id 를 검증**하고 Jev 요청을 만든다. **점수 합산과 배지 단계 결정은
+확장 프로그램이 한다.**
+
+서버를 얇게 둔 이유는 코드가 적을수록 빨리 끝나고 덜 깨지기 때문이다. 다만 **"얇다"가 "아무거나 통과시킨다"는
+뜻은 아니다.** 정의되지 않은 항목 id 를 통과시키면 우리 키로 남이 Jev 를 쓰는 셈이 된다.
+
+루트의 `package.json`은 **커밋 메시지 검사 도구(commitlint, husky)와 워크스페이스 연결 전용**이다.
+여기에 앱 의존성을 추가하지 않는다.
 
 ## 작업 전에 읽을 문서
 
 | 하려는 일 | 읽을 것 |
 | --- | --- |
 | 모든 코드 작업 (필수) | [docs/security/secure-coding.md](docs/security/secure-coding.md) |
+| 기능 구현 (필수) | [docs/requirements.md](docs/requirements.md) — 화면 동작과 상태 |
+| 기능 구현 (필수) | [docs/architecture.md](docs/architecture.md) — 모듈 경계, 중계 서버 API 규약 |
+| 의존성 추가·스택 변경 | [docs/stack.md](docs/stack.md) — 무엇을 왜 골랐는가 |
 | 판단 기준·프롬프트·점수 변경 | [docs/jev.md](docs/jev.md), [docs/product.md](docs/product.md) |
 | 사용자에게 보이는 문구 작성 | [docs/product.md](docs/product.md) |
 | 코드 스타일·네이밍 | [docs/conventions/code-style.md](docs/conventions/code-style.md) |
@@ -76,7 +92,7 @@ docs/              제품 정의, Jev 정리, 컨벤션, 보안, AI 활용 기�
 - Jev API 키를 확장 프로그램 코드, 매니페스트, 스토리지, 로그, 커밋 메시지에 넣지 않는다. **키는 중계 서버 환경변수에만 둔다**
 - `.env`를 커밋하지 않는다. 변수 이름은 `apps/proxy/.env.example`에 값 없이 적는다
 - 실제 기사 본문을 저장소에 커밋하지 않는다. 평가 세트에는 URL과 라벨만 둔다
-- 테스트용으로 만든 가상의 가짜 기사를 커밋하지 않는다 (`eval/data/private/`)
+- 테스트용 가상 평가 기사는 `eval/data/private/`에 두고 커밋하지 않는다. 명시적으로 공개 요청된 수동 테스트 45건만 [eval/fixtures/manual-news/](eval/fixtures/manual-news/)에 예외로 둔다. 해당 자료는 테스트·허구 표시와 출처를 포함하고 정식 평가 세트와 분리한다
 - 서명이 들어간 제출 서류를 커밋하지 않는다 (`docs/submission/signed/`)
 - `main`·`develop`에 직접 push하지 않는다
 - 판단 기준이 문서에 없으면 추측해서 구현하지 말고 먼저 물어본다
