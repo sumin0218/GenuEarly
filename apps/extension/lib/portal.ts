@@ -365,6 +365,6 @@ export function createLegend(
   shadow.append(style, box)
   // `box` 를 함께 돌려준다. Shadow 가 닫혀 있어 바깥에서는 안이 보이지 않는데,
   // **이 상자는 글이 전부라 그리는 내용을 검사로 지켜야 한다** — `createMark` 는
-  // 아이콘 하나뿐이라 그럴 것이 없었다. 부르는 쪽은 `host` 와 `close` 만 쓴다.
+  // 아이콘 하나뿐이라 그럴 것이 없었다. 부르는 쪽은 `host` 와 `remove` 만 쓴다.
   return { host, box, remove: () => host.remove() }
 }
