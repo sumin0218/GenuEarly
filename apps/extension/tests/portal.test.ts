@@ -424,16 +424,26 @@ describe('범례 — 아이콘이 무슨 뜻인지 말한다', () => {
     expect(속(l.box).every((e) => !e.hidden), '다시 펴진다').toBe(true)
   })
 
-  it('**접으면 제목만 남는다** — 상자 폭도 글자에 맞춘다', () => {
-    const l = 만든다()
-    const box = l.box
-    expect(box.classList.contains('collapsed')).toBe(false)
+  it('**접으면 정말 안 보인다** — hidden 속성만으로는 부족하다', () => {
+    // `hidden` 속성이 참이어도 화면에서 사라졌다는 뜻은 아니다. 브라우저 기본
+    // `[hidden] { display: none }` 은 **작성자 스타일에 진다** — `.rows` 에
+    // `display: grid` 를 준 탓에 접어도 단계 다섯 줄이 그대로 보였다.
+    // 속성이 아니라 **규칙이 있는지**를 본다.
+    const css = 만든다().box.getRootNode() as ShadowRoot
+    const 스타일 = [...css.querySelectorAll('style')].map((e) => e.textContent).join(' ')
+    expect(스타일, '[hidden] 을 다시 적지 않으면 display 를 준 요소가 안 숨는다')
+      .toMatch(/\[hidden\][^}]*display:\s*none\s*!important/)
+  })
 
-    box.querySelector('button')?.click()
-    expect(box.classList.contains('collapsed'), '280px 빈 상자가 남으면 접은 것으로 안 보인다').toBe(true)
-    // 제목 줄 말고는 전부 감췄다.
-    expect(속(box).every((e) => e.hidden)).toBe(true)
-    expect(box.querySelector('.title')?.textContent).toBe(COPY.title)
+  it('**접으면 제목만 남는다** — 폭은 그대로 둔다', () => {
+    const l = 만든다()
+    l.box.querySelector('button')?.click()
+
+    expect(속(l.box).every((e) => e.hidden), '제목 줄 말고는 전부 감춘다').toBe(true)
+    expect(l.box.querySelector('.title')?.textContent).toBe(COPY.title)
+    // 접고 펼 때마다 상자가 커졌다 작아지면 눈에 거슬린다. 자리를 지킨다.
+    const css = (l.box.getRootNode() as ShadowRoot).querySelector('style')?.textContent ?? ''
+    expect(css, '접힘에 따라 폭을 바꾸지 않는다').not.toMatch(/collapsed[^}]*width/)
   })
 
   it('화살표는 아이콘이고, 접힘에 따라 뒤집힌다 — V 와 ㅅ', () => {

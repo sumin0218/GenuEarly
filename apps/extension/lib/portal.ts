@@ -244,6 +244,16 @@ export function createLegend(
   const style = doc.createElement('style')
   style.textContent = `
     :host { all: initial; }
+    /* hidden 을 우리가 다시 적는다.
+     *
+     * 브라우저 기본 스타일시트에 hidden 규칙이 있지만, 아래에서 .rows 에
+     * display: grid 를 주는 순간 **작성자 스타일이 그것을 이긴다.** 그래서
+     * 접어도 단계 다섯 줄이 그대로 보였다. display 를 지정한 요소는 전부 같은
+     * 함정에 빠지므로 한 줄로 못 박는다.
+     *
+     * 이 주석에 백틱을 쓰지 않는다 — 여기는 템플릿 리터럴 안이라 백틱이
+     * 리터럴을 끊는다. 한 번 그렇게 깨뜨렸다. */
+    [hidden] { display: none !important; }
     .box {
       position: fixed;
       right: 16px;
@@ -260,8 +270,8 @@ export function createLegend(
       box-shadow: 0 6px 24px rgba(0, 0, 0, ${dark ? '0.5' : '0.14'});
       font: 400 13px/1.5 -apple-system, BlinkMacSystemFont, "Segoe UI", "Malgun Gothic", sans-serif;
     }
-    /* 접으면 제목 줄만 남으므로 폭도 글자에 맞춘다 */
-    .box.collapsed { width: auto; }
+    /* **접어도 폭은 그대로다.** 글자에 맞춰 줄여 봤더니 접고 펼 때마다 상자가
+       커졌다 작아져 눈에 거슬렸다. 자리를 지키는 쪽이 조용하다. */
     .head { display: flex; align-items: center; gap: 8px; }
     .title { flex: 1; font-size: 13px; font-weight: 600; margin: 0; }
     .x {
@@ -308,10 +318,8 @@ export function createLegend(
     chevron.style.setProperty('transform', 접힘 ? 'none' : 'rotate(180deg)')
     x.setAttribute('aria-label', 접힘 ? copy.expand : copy.collapse)
     x.setAttribute('aria-expanded', String(!접힘))
+    // 제목 줄만 남기고 나머지는 감춘다. **폭은 건드리지 않는다** (위 주석).
     for (const el of [lede, rows, solid]) el.hidden = 접힘
-    // **접으면 제목 줄만 남는다.** 폭도 글자에 맞춰 줄인다 — 280px 짜리 빈 상자가
-    // 남아 있으면 접은 것으로 보이지 않는다.
-    box.classList.toggle('collapsed', 접힘)
   }
   x.addEventListener('click', () => {
     접힘 = !접힘
