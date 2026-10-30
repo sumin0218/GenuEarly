@@ -4,9 +4,25 @@
 //
 // 여기서 보는 것은 **무엇을 기사 제목으로 보는가**와 **근거가 다른 것을 다르게 그리는가**다.
 // 실제 스크롤 추적과 DOM 삽입은 entrypoints/portal.content.ts 에 있다.
-import { describe, expect, it } from 'vitest'
-import { MIN_HEADLINE_CHARS, collectTitles, createMark, markLook } from '../lib/portal'
-import { ARTICLE_MATCHES, isArticleUrl, matchPatternToRegExp } from '../match-patterns'
+import { beforeEach, describe, expect, it, vi } from 'vitest'
+import content from '../../../packages/content/ui.ko.json'
+import {
+  LEGEND_LEVELS,
+  MIN_HEADLINE_CHARS,
+  collectTitles,
+  createLegend,
+  createMark,
+  legendCollapsed,
+  markLook,
+  setLegendCollapsed,
+} from '../lib/portal'
+import {
+  ARTICLE_MATCHES,
+  PORTAL_LIST_EXCLUDE_MATCHES,
+  PORTAL_LIST_MATCHES,
+  isArticleUrl,
+  matchPatternToRegExp,
+} from '../match-patterns'
 
 /** 목록 한 조각. 포털의 클래스 이름을 흉내 내지 않는다 — 우리는 주소로 찾는다. */
 function listWith(links: { href: string; text: string }[]): HTMLElement {
@@ -36,8 +52,21 @@ describe('match pattern 을 정규식으로', () => {
     expect(re.test('https://vXdaum.net/v/abc'), '점이 와일드카드가 되면 안 된다').toBe(false)
   })
 
-  it('호스트 와일드카드는 거절한다 — 쓰지 않기로 한 모양이다', () => {
-    expect(() => matchPatternToRegExp('https://*.naver.com/')).toThrow()
+  it('맨 앞 `*.` 는 그 도메인과 하위 도메인을 함께 받는다', () => {
+    const re = matchPatternToRegExp('https://*.naver.com/*article*')
+    expect(re.test('https://n.news.naver.com/mnews/ranking/article/422/0000919981')).toBe(true)
+    expect(re.test('https://m.entertain.naver.com/home/article/076/0004459769')).toBe(true)
+    expect(re.test('https://m.sports.naver.com/kbaseball/article/076/0004459867')).toBe(true)
+    // 도메인 자신도 받는다 (MV3 규칙).
+    expect(re.test('https://naver.com/article/1')).toBe(true)
+    // 다른 도메인에 붙여 넣은 것은 안 된다.
+    expect(re.test('https://naver.com.evil.example/article/1')).toBe(false)
+    expect(re.test('https://notnaver.com/article/1')).toBe(false)
+  })
+
+  it('가운데 와일드카드는 거절한다 — `*.com` 이 조용히 통과한다', () => {
+    expect(() => matchPatternToRegExp('https://*.*.com/*')).toThrow()
+    expect(() => matchPatternToRegExp('https://n.*.naver.com/*')).toThrow()
   })
 })
 
@@ -46,9 +75,36 @@ describe('어떤 링크가 기사인가', () => {
   // 표시를 보고 눌러 들어갔는데 아무것도 없는 상태가 된다.
   it('match pattern 과 같은 것을 받아들인다', () => {
     for (const p of ARTICLE_MATCHES) {
-      const sample = p.replace('*', '001/0012345678')
+      // 호스트의 `*.` 와 경로의 `*` 를 그럴듯한 값으로 채워 본다.
+      const sample = p
+        .replace('https://*.', 'https://n.news.')
+        .replace('/*article*', '/mnews/article/001/0012345678')
+        .replace('*', '001/0012345678')
       expect(isArticleUrl(sample), `${p} 가 기사로 안 보인다`).toBe(true)
     }
+  })
+
+  it('article 이 든 네이버 주소는 호스트를 가리지 않고 받는다', () => {
+    // 호스트를 하나씩 세다 보면 반드시 빠뜨린다 (GE-42).
+    for (const u of [
+      'https://n.news.naver.com/mnews/ranking/article/422/0000919981',
+      'https://n.news.naver.com/mnews/hotissue/article/001/0001',
+      'https://m.entertain.naver.com/home/article/076/0004459769',
+      'https://m.sports.naver.com/kbaseball/article/076/0004459867',
+    ]) {
+      expect(isArticleUrl(u), `${u} 가 기사로 안 보인다`).toBe(true)
+    }
+  })
+
+  it('article 이 없으면 받지 않는다', () => {
+    expect(isArticleUrl('https://news.naver.com/section/100')).toBe(false)
+    expect(isArticleUrl('https://www.naver.com/')).toBe(false)
+  })
+
+  it('댓글 페이지는 받지 않는다 — 주소에 article 이 있지만 본문이 없다', () => {
+    expect(isArticleUrl('https://n.news.naver.com/mnews/article/comment/422/0000919981')).toBe(
+      false,
+    )
   })
 
   it('쿼리가 붙어도 기사다 — 포털 목록 링크에는 늘 붙어 있다', () => {
@@ -68,6 +124,54 @@ describe('어떤 링크가 기사인가', () => {
   it('주소가 아니면 던지지 않고 거짓을 준다', () => {
     expect(isArticleUrl('#')).toBe(false)
     expect(isArticleUrl('')).toBe(false)
+  })
+
+  // 섹션 한 페이지(news.naver.com/section/100)에서 실제로 센 값이다 (2026-10-27).
+  // 기사 링크 354개 중 랭킹이 170개, hotissue 가 16개였다 — **절반 가까이**를
+  // 받지 못하고 있었다 (GE-42).
+  describe('네이버가 같은 기사를 거는 네 경로', () => {
+    it.each([
+      ['https://n.news.naver.com/article/056/0012281659', '기본'],
+      ['https://n.news.naver.com/mnews/article/056/0012281659', '모바일'],
+      ['https://n.news.naver.com/mnews/ranking/article/056/0012281954', '랭킹'],
+      ['https://n.news.naver.com/mnews/hotissue/article/662/0000107048', 'hotissue'],
+    ])('%s (%s) 는 기사다', (url) => {
+      expect(isArticleUrl(url)).toBe(true)
+    })
+
+    it('랭킹 주소에 붙는 ntype 쿼리를 떼고 본다', () => {
+      expect(isArticleUrl('https://n.news.naver.com/mnews/ranking/article/056/0012281954?ntype=RANKING'))
+        .toBe(true)
+    })
+
+    it('언론사 자체 도메인도 기사다', () => {
+      // 포털을 거치지 않고 링크를 받아 바로 들어오는 길 (GE-41).
+      expect(isArticleUrl('https://www.insight.co.kr/news/579405')).toBe(true)
+      expect(isArticleUrl('https://www.wikitree.co.kr/articles/1169622')).toBe(true)
+      expect(isArticleUrl('https://m.wikitree.co.kr/articles/1169622')).toBe(true)
+    })
+
+    it('네이버 스포츠·연예도 기사다 — 분류가 경로 가운데 들어간다', () => {
+      expect(isArticleUrl('https://m.sports.naver.com/kbaseball/article/076/0004459867')).toBe(true)
+      expect(isArticleUrl('https://m.sports.naver.com/wfootball/article/076/0004459867')).toBe(true)
+      expect(isArticleUrl('https://m.entertain.naver.com/home/article/076/0004459769')).toBe(true)
+    })
+
+    it('그 사이트의 목록 페이지는 기사가 아니다', () => {
+      // 기사와 모양이 달라 구분된다 — 숫자가 없거나 경로가 다르다.
+      expect(isArticleUrl('https://www.insight.co.kr/economy/')).toBe(false)
+      expect(isArticleUrl('https://www.wikitree.co.kr/categories/1')).toBe(false)
+      expect(isArticleUrl('https://m.sports.naver.com/kbaseball/index')).toBe(false)
+      expect(isArticleUrl('https://m.entertain.naver.com/home')).toBe(false)
+    })
+
+    it('댓글 화면은 기사가 아니다 — 본문이 없다', () => {
+      // `/mnews/article/*` 의 `*` 가 경로 나머지를 전부 덮어서 여기까지 잡힌다.
+      // 지금까지 이 화면에 ⚪ 배지가 떴다. 판단해 보고 실패한 것처럼 보이지만
+      // 애초에 기사 페이지가 아니다.
+      expect(isArticleUrl('https://n.news.naver.com/mnews/article/comment/056/0012281659'))
+        .toBe(false)
+    })
   })
 })
 
@@ -133,9 +237,15 @@ describe('근거가 다르면 다르게 그린다', () => {
   })
 
   it('단계를 색이 아니라 모양이 가른다 — 색각 이상에서도 구분된다', () => {
-    const glyphs = (['SAFE', 'CHECK', 'CAUTION', 'UNDETERMINED'] as const)
-      .map((l) => markLook(l, 'headline').glyph)
-    expect(new Set(glyphs).size, '모양이 겹치면 색으로만 구분된다').toBe(4)
+    const icons = (['SAFE', 'CHECK', 'CAUTION', 'UNDETERMINED'] as const)
+      .map((l) => markLook(l, 'headline').icon)
+    expect(new Set(icons).size, '모양이 겹치면 색으로만 구분된다').toBe(4)
+  })
+
+  it('신호 없음에 체크표를 쓰지 않는다 — "검증됨" 으로 읽힌다', () => {
+    // 우리는 참·거짓을 말하지 않는다 (docs/product.md 2절). 아이콘은 문구보다 먼저
+    // 읽히므로, 아이콘이 그 선을 넘으면 문구를 아무리 조심해 써도 소용없다.
+    expect(markLook('SAFE', 'full').icon).not.toMatch(/check|verif|tick|shield/i)
   })
 })
 
@@ -161,6 +271,226 @@ describe('동그라미를 페이지에 넣을 때', () => {
   it('판정 점수가 DOM 에 새지 않는다', () => {
     const mark = createMark(document)
     mark.render('CAUTION', 'full', '주의할 신호 있음')
-    expect(mark.host.outerHTML).not.toMatch(/0\.\d|\d+%|\d+점/)
+    // **마크업이 아니라 사람이 읽는 것을 본다.** 아이콘 `path` 의 좌표에는 소수점이
+    // 잔뜩 있지만 그것은 그림이지 점수가 아니다. 새면 안 되는 자리는 글자와 aria-label 이다.
+    const words = [
+      mark.host.textContent ?? '',
+      mark.host.getAttribute('aria-label') ?? '',
+      mark.host.title,
+    ].join(' ')
+    expect(words).not.toMatch(/0\.\d|\d+%|\d+점/)
+  })
+})
+
+/** 문서 주소를 바꾼다. 상대 경로(`/articles/123`)가 실제 페이지처럼 풀리게 한다. */
+const setURL = (url: string): void => {
+  ;(window as unknown as { happyDOM: { setURL: (u: string) => void } }).happyDOM.setURL(url)
+}
+
+describe('②가 도는 목록 페이지', () => {
+  // ②는 **선택자를 쓰지 않는다.** 목록에서 a[href] 를 훑어 그 주소가 기사인지만 본다.
+  // 그래서 목록 페이지의 모양을 미리 알 필요가 없고, 분류 페이지를 하나씩 적을 이유도
+  // 없다 — 적으면 사이트가 분류를 늘릴 때 조용히 빠진다 (match-patterns.ts).
+  const 목록에뜨나 = (url: string): boolean => {
+    const bare = `${new URL(url).origin}${new URL(url).pathname}`
+    if (PORTAL_LIST_EXCLUDE_MATCHES.map(matchPatternToRegExp).some((re) => re.test(bare))) return false
+    return PORTAL_LIST_MATCHES.map(matchPatternToRegExp).some((re) => re.test(bare))
+  }
+
+  it.each([
+    ['https://news.naver.com/section/100', '네이버 섹션'],
+    ['https://www.insight.co.kr/', '인사이트 첫 화면'],
+    ['https://www.insight.co.kr/politics/', '인사이트 분류'],
+    ['https://www.insight.co.kr/economy/', '인사이트 분류 — 적어 두지 않은 것도 걸린다'],
+    ['https://www.wikitree.co.kr/', '위키트리 첫 화면'],
+    ['https://www.wikitree.co.kr/districts/busan', '위키트리 지역'],
+    ['https://m.wikitree.co.kr/', '위키트리 모바일'],
+  ])('%s — %s', (url) => {
+    expect(목록에뜨나(url)).toBe(true)
+  })
+
+  it.each([
+    ['https://www.insight.co.kr/news/579686', '인사이트 기사'],
+    ['https://www.wikitree.co.kr/articles/1170180', '위키트리 기사'],
+    ['https://m.wikitree.co.kr/articles/1170180', '위키트리 모바일 기사'],
+  ])('%s 에는 뜨지 않는다 — %s 는 읽는 자리다', (url) => {
+    expect(목록에뜨나(url), '기사에서는 ①이 배지를 띄운다. ②까지 돌면 읽는 중에 끼어든다').toBe(false)
+  })
+
+  it('목록에 걸린 기사 링크를 그대로 찾아낸다 — 선택자를 쓰지 않기 때문에', () => {
+    // 두 사이트가 실제로 거는 모양이다 (2026-10-29 확인). **위키트리는 상대 경로다** —
+    // `a.href` 가 그 페이지 주소를 바탕으로 풀리므로 문서 주소를 위키트리로 둬야
+    // 실제와 같아진다. `<base>` 로는 안 된다: happy-dom 은 `baseURI` 만 바꾸고
+    // `a.href` 해석에는 쓰지 않는다 (확인함). 그러면 상대 경로가 엉뚱한 호스트로
+    // 풀려 **기능이 멀쩡해도 검사가 깨진다.**
+    const 되돌릴주소 = location.href
+    setURL('https://www.wikitree.co.kr/')
+
+    const list = document.createElement('div')
+    for (const [href, text] of [
+      ['https://www.insight.co.kr/news/579686', '인사이트 기사 제목입니다'],
+      ['/articles/1170180', '위키트리 기사 제목입니다'],
+      ['/cs', '고객센터'],
+    ] as const) {
+      const a = document.createElement('a')
+      a.href = href
+      a.textContent = text
+      list.append(a)
+    }
+    document.body.append(list)
+
+    const got = collectTitles(list).map((t) => t.headline)
+    expect(got).toContain('인사이트 기사 제목입니다')
+    expect(got).toContain('위키트리 기사 제목입니다')
+    expect(got, '기사가 아닌 링크에는 달지 않는다').not.toContain('고객센터')
+    list.remove()
+    setURL(되돌릴주소)
+  })
+})
+
+describe('범례 — 아이콘이 무슨 뜻인지 말한다', () => {
+  // 제목 옆 동그라미를 처음 본 사람은 그것이 무엇을 말하는지 알 길이 없다.
+  // **특히 이 표시가 "제목만" 본 것이라는 점은 짐작할 수 없다** — 그것을 말하는 것이
+  // 이 상자가 있는 이유다.
+  const COPY = content.portal.legend
+
+  const 만든다 = (onToggle: (c: boolean) => void = () => {}, 접힘 = false) =>
+    createLegend(document, COPY, onToggle, 접힘)
+
+  beforeEach(() => {
+    const store = new Map<string, unknown>()
+    vi.stubGlobal('browser', {
+      storage: {
+        local: {
+          get: (k: string) => Promise.resolve({ [k]: store.get(k) }),
+          set: (o: Record<string, unknown>) => {
+            for (const [k, v] of Object.entries(o)) store.set(k, v)
+            return Promise.resolve()
+          },
+        },
+      },
+    })
+    ;(globalThis as { __store?: Map<string, unknown> }).__store = store
+  })
+
+  it('**제목만 봤다는 것을 말한다** — 이 상자가 있는 가장 큰 이유다', () => {
+    expect(만든다().box.textContent).toContain(COPY.lede)
+    expect(COPY.lede, '본문을 읽지 않았다는 말이 빠지면 안 된다').toContain('본문')
+  })
+
+  it('다섯 단계를 모두 적는다 — 화면에 뜨는 것 중 빠진 뜻이 없게', () => {
+    const 글 = 만든다().box.textContent ?? ''
+    for (const level of LEGEND_LEVELS) expect(글, `${level} 설명이 없다`).toContain(COPY.levels[level])
+  })
+
+  it('화면과 같은 아이콘을 쓴다 — 범례가 화면과 다르면 범례가 아니다', () => {
+    // 단계 줄의 아이콘만 센다. 머리말의 접기 화살표도 svg 다.
+    const svgs = 만든다().box.querySelectorAll('.rows svg')
+    expect(svgs).toHaveLength(LEGEND_LEVELS.length)
+  })
+
+  it('진한 아이콘의 뜻도 적는다', () => {
+    expect(만든다().box.textContent).toContain(COPY.solid)
+  })
+
+  it('Shadow DOM 안에 둔다 — 포털이 읽지도 망가뜨리지도 못한다', () => {
+    expect(만든다().host.shadowRoot, "mode: 'closed' 라 바깥에서 보이지 않는다").toBeNull()
+  })
+
+  it('접기 단추에 이름이 붙는다 — 글자가 화살표뿐이다', () => {
+    const x = 만든다().box.querySelector('button')
+    expect(x?.getAttribute('aria-label')).toBe(COPY.collapse)
+    expect(x?.getAttribute('aria-expanded')).toBe('true')
+  })
+
+  // `hidden` 은 화면에서만 감춘다 — `textContent` 에는 그대로 남는다.
+  // 그래서 글자가 아니라 **감췄는지**를 본다.
+  const 속 = (box: HTMLElement) =>
+    [...box.querySelectorAll<HTMLElement>('.lede, .rows, .solid')]
+
+  it('**없애지 않고 접는다** — 제목 줄은 남아 언제든 펼 수 있다', () => {
+    const l = 만든다()
+    const x = l.box.querySelector('button')
+    expect(속(l.box).length, '접을 것이 없다').toBe(3)
+    expect(속(l.box).every((e) => !e.hidden), '처음에는 펴져 있다').toBe(true)
+
+    x?.click()
+    expect(l.box.textContent, '제목은 남아 있어야 한다').toContain(COPY.title)
+    expect(속(l.box).every((e) => e.hidden), '접었으면 설명은 감춘다').toBe(true)
+    expect(x?.getAttribute('aria-label')).toBe(COPY.expand)
+    expect(x?.getAttribute('aria-expanded')).toBe('false')
+
+    x?.click()
+    expect(속(l.box).every((e) => !e.hidden), '다시 펴진다').toBe(true)
+  })
+
+  it('**접으면 정말 안 보인다** — hidden 속성만으로는 부족하다', () => {
+    // `hidden` 속성이 참이어도 화면에서 사라졌다는 뜻은 아니다. 브라우저 기본
+    // `[hidden] { display: none }` 은 **작성자 스타일에 진다** — `.rows` 에
+    // `display: grid` 를 준 탓에 접어도 단계 다섯 줄이 그대로 보였다.
+    // 속성이 아니라 **규칙이 있는지**를 본다.
+    const css = 만든다().box.getRootNode() as ShadowRoot
+    const 스타일 = [...css.querySelectorAll('style')].map((e) => e.textContent).join(' ')
+    expect(스타일, '[hidden] 을 다시 적지 않으면 display 를 준 요소가 안 숨는다')
+      .toMatch(/\[hidden\][^}]*display:\s*none\s*!important/)
+  })
+
+  it('**접으면 제목만 남는다** — 폭은 그대로 둔다', () => {
+    const l = 만든다()
+    l.box.querySelector('button')?.click()
+
+    expect(속(l.box).every((e) => e.hidden), '제목 줄 말고는 전부 감춘다').toBe(true)
+    expect(l.box.querySelector('.title')?.textContent).toBe(COPY.title)
+    // 접고 펼 때마다 상자가 커졌다 작아지면 눈에 거슬린다. 자리를 지킨다.
+    //
+    // **폭을 적은 규칙이 하나뿐인지 본다.** 전에는 `collapsed` 클래스를 찾았는데
+    // 그 클래스는 이제 아예 만들지 않아서 **그 검사는 깨질 수가 없었다.**
+    const css = (l.box.getRootNode() as ShadowRoot).querySelector('style')?.textContent ?? ''
+    expect(css, '접힘에 따라 모양을 바꾸는 규칙이 없어야 한다').not.toContain('collapsed')
+  })
+
+  it('화살표는 아이콘이고, 접힘에 따라 뒤집힌다 — 접히면 ㅅ, 펴지면 V', () => {
+    const l = 만든다()
+    const svg = l.box.querySelector('button svg')
+    expect(svg, '글자가 아니라 아이콘이어야 한다').not.toBeNull()
+    // 펴져 있으면 아래쪽(V). 원본 아이콘이 chevron-down 이라 그대로 둔다.
+    expect(svg?.getAttribute('style') ?? '').not.toContain('rotate(180deg)')
+
+    l.box.querySelector('button')?.click()
+    // 접히면 위쪽(ㅅ).
+    expect(svg?.getAttribute('style') ?? '').toContain('rotate(180deg)')
+  })
+
+  it('접고 편 것을 알려 준다', () => {
+    const 받은것: boolean[] = []
+    const l = 만든다((c) => 받은것.push(c))
+    const x = l.box.querySelector('button')
+    x?.click()
+    x?.click()
+    expect(받은것).toEqual([true, false])
+  })
+
+  it('지난번에 접어 뒀으면 접힌 채로 뜬다', () => {
+    const l = 만든다(() => {}, true)
+    expect(l.box.textContent).toContain(COPY.title)
+    expect(속(l.box).every((e) => e.hidden)).toBe(true)
+    expect(l.box.querySelector('button')?.getAttribute('aria-label')).toBe(COPY.expand)
+  })
+
+  it('판정 점수가 새지 않는다', () => {
+    expect(만든다().box.textContent ?? '').not.toMatch(/0\.\d|\d+%|\d+점/)
+  })
+
+  it('접은 것을 기억한다', async () => {
+    expect(await legendCollapsed()).toBe(false)
+    await setLegendCollapsed(true)
+    expect(await legendCollapsed()).toBe(true)
+    await setLegendCollapsed(false)
+    expect(await legendCollapsed()).toBe(false)
+  })
+
+  it('**저장소를 못 읽으면 접힌 것으로 친다** — 펼쳐진 상자가 매번 뜨는 편이 더 성가시다', async () => {
+    vi.stubGlobal('browser', { storage: { local: { get: () => Promise.reject(new Error('막힘')) } } })
+    expect(await legendCollapsed()).toBe(true)
   })
 })

@@ -13,6 +13,19 @@
   </head>
   <body>
     <main class="ge-popup">
+      <!--
+        제품을 밝히는 줄. **판정보다 약하다** — 판정이 주인공이다 (docs/design.md).
+        이름과 버전은 문구가 아니라 사실이라 ChatKHU 를 거치지 않는다.
+        버전은 manifest 에서 읽는다. 두 곳에 적지 않는다.
+      -->
+      <div class="ge-popup__brand">
+        <!-- **src 를 비워 두지 않는다.** 빈 src 는 페이지 자신을 받으러 가서
+             깨진 그림이 뜬다. 주소는 스크립트가 runtime.getURL 로 넣는다. -->
+        <img class="ge-popup__brand-icon" id="brand-icon" alt="" width="16" height="16" hidden />
+        <span class="ge-popup__brand-name">GenuEarly</span>
+        <span class="ge-popup__brand-version" id="version"></span>
+      </div>
+
       <header class="ge-popup__head">
         <span class="ge-popup__mark" id="mark"></span>
         <div class="ge-popup__head-text">
@@ -23,6 +36,31 @@
       <!-- 무엇에 대한 판단인지. ③ 결과일 때만 채운다 (requirements.md 5절). -->
       <p class="ge-popup__scope" id="scope" hidden></p>
       <ul class="ge-popup__items" id="items"></ul>
+
+      <!--
+        판단의 근거. **접혀 있는 것이 기본이다** — 사용자는 판정을 보러 열었지
+        설명을 보러 연 것이 아니다.
+        여기 글자는 전부 ChatKHU 가 쓴다. **문구가 없으면 자리 자체를 그리지 않는다**
+        (tools/content-gen/prompt.md 4차).
+      -->
+      <ul class="ge-popup__details" id="details" hidden></ul>
+
+      <!--
+        공개 기록 리포트. **누를 때만 바깥에 나간다** — 기사를 여는 것만으로는
+        검색이 한 건도 일어나지 않는다. 한 자리에서 세 모양으로 바뀐다:
+        만들기 → 만드는 중(진행) → 새 탭에서 열기.
+      -->
+      <div class="ge-popup__report" id="report-box" hidden>
+        <button class="ge-popup__report-btn" id="report-run" type="button"></button>
+        <p class="ge-popup__report-note" id="report-note" hidden></p>
+      </div>
+
+      <footer class="ge-popup__foot" id="foot" hidden>
+        <button class="ge-popup__link" id="details-toggle" type="button" aria-expanded="false" aria-controls="details"></button>
+        <a class="ge-popup__link" id="homepage" href="" target="_blank" rel="noreferrer noopener"></a>
+        <!-- 아직 아무것도 보내지 않는다 (GE-26). 자리만 둔다 -->
+        <button class="ge-popup__link" id="report-wrong" type="button"></button>
+      </footer>
     </main>
     <script type="module" src="./main.ts"></script>
   </body>

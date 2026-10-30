@@ -5,9 +5,10 @@
 // 문구 자체는 tests/content.test.ts 가 검사한다 (금지어·단정 표현).
 // 여기서 보는 것은 **그 문구가 화면에 제대로 놓이는가**와,
 // 화면에 **있으면 안 되는 것이 새어 나오지 않는가**다.
-import { beforeEach, describe, expect, it } from 'vitest'
+import { beforeEach, describe, expect, it, vi } from 'vitest'
 import content from '../../../packages/content/ui.ko.json'
-import { render, renderTooLong } from '../entrypoints/popup/main'
+import schema from '@genuearly/shared/judgment-items.json'
+import { drawChrome, explainLines, render, renderTooLong, sameArticle } from '../entrypoints/popup/main'
 import type { TabState } from '../lib/protocol'
 
 /** 팝업 문서의 뼈대. entrypoints/popup/index.html 과 id 가 같아야 한다. */
@@ -45,12 +46,24 @@ describe('머리말', () => {
   })
 
   it('기호가 단계마다 다르다 — 색각 이상에서 색만으로 구분되지 않는다', () => {
-    const marks = new Set<string>()
+    // 전에는 색 동그라미 이모지(🟢🟡🔴⚪)였다. 넷이 **같은 동그라미**라 적록색각 이상에서는
+    // 🟢 과 🔴 이 같아 보였다. 지금은 모양이 서로 다른 아이콘이다 (lib/item-view.ts).
+    const shapes = new Set<string>()
     for (const level of ['SAFE', 'CHECK', 'CAUTION', 'UNDETERMINED'] as const) {
       render({ level })
-      marks.add(document.getElementById('mark')?.textContent ?? '')
+      const svg = document.querySelector('#mark svg')
+      shapes.add([...(svg?.querySelectorAll('path') ?? [])].map((p) => p.getAttribute('d')).join('|'))
     }
-    expect(marks.size).toBe(4)
+    expect(shapes.size, '모양이 겹치면 색으로만 구분된다').toBe(4)
+  })
+
+  it('이모지를 쓰지 않는다 — 플랫폼마다 다른 그림이 나온다', () => {
+    // 같은 🟡 이 윈도우에서는 노랑, 안드로이드에서는 주황에 가깝다.
+    // 단계별로 정한 색이 지켜지지 않고, 글꼴이 없으면 네모가 뜬다.
+    for (const level of ['SAFE', 'CHECK', 'CAUTION', 'UNDETERMINED', 'PENDING'] as const) {
+      render({ level })
+      expect(document.getElementById('mark')?.textContent ?? '').toBe('')
+    }
   })
 })
 
@@ -216,5 +229,740 @@ describe('판단이 도는 동안의 팝업', () => {
   it('무엇에 대한 판단인지는 먼저 밝힌다', () => {
     render({ level: 'PENDING' }, document, 'selection')
     expect((document.getElementById('scope') as HTMLElement).hidden).toBe(false)
+  })
+})
+
+describe('제품 정보와 판단 근거', () => {
+  /** 틀까지 갖춘 팝업 문서. entrypoints/popup/index.html 과 id 가 같아야 한다. */
+  function mountFrame(): void {
+    document.body.replaceChildren()
+    const img = document.createElement('img')
+    img.id = 'brand-icon'
+    const version = document.createElement('span')
+    version.id = 'version'
+    const details = document.createElement('ul')
+    details.id = 'details'
+    details.hidden = true
+    const foot = document.createElement('footer')
+    foot.id = 'foot'
+    foot.hidden = true
+    const toggle = document.createElement('button')
+    toggle.id = 'details-toggle'
+    const home = document.createElement('a')
+    home.id = 'homepage'
+    foot.append(toggle, home)
+    document.body.append(img, version, details, foot)
+  }
+
+  /** 4차를 받고 난 뒤의 모습. **실제 문구가 아니다** — 구조만 본다. */
+  const 받은문구 = {
+    homepage: '홈페이지',
+    details: { open: '자세히', close: '접기' },
+    basis: { page: '기사 전체를 보았습니다', headline: '제목만 보았습니다', selection: '고른 글만 보았습니다' },
+    coverage: { sentences: '{total}문장 중 {judged}문장', capped: '앞부분만 보았습니다' },
+    criteria: '기준 {version} · {model}',
+    disclaimer: '참인지 거짓인지는 말하지 않습니다',
+  }
+  const 사실 = { version: '1.0.0', homepageUrl: 'https://example.invalid/', schemaVersion: '1.1.0', model: 'jev-1.13.0' }
+
+  beforeEach(mountFrame)
+
+  it('버전은 문구가 없어도 보인다 — 이름과 숫자는 생성할 말이 아니다', () => {
+    drawChrome(undefined, 사실)
+    expect(document.getElementById('version')?.textContent).toBe('v1.0.0')
+  })
+
+  it('문구가 없으면 자세히도 홈페이지도 그리지 않는다', () => {
+    // **빈 자리를 영어나 임시 한국어로 채우지 않는다.** 그대로 배포본에 들어간다.
+    drawChrome(undefined, { ...사실, basis: 'page' })
+    expect((document.getElementById('foot') as HTMLElement).hidden).toBe(true)
+    expect(document.getElementById('details')?.children.length).toBe(0)
+  })
+
+  it('문구가 들어오면 켜진다 — 코드를 더 고치지 않는다', () => {
+    drawChrome(받은문구, { ...사실, basis: 'page' })
+    expect((document.getElementById('foot') as HTMLElement).hidden).toBe(false)
+    expect(document.getElementById('homepage')?.textContent).toBe('홈페이지')
+    expect((document.getElementById('homepage') as HTMLAnchorElement).href).toContain('example.invalid')
+  })
+
+  it('접혀 있는 것이 기본이다 — 판정을 보러 연 팝업이다', () => {
+    drawChrome(받은문구, { ...사실, basis: 'page' })
+    expect((document.getElementById('details') as HTMLElement).hidden).toBe(true)
+    expect(document.getElementById('details-toggle')?.getAttribute('aria-expanded')).toBe('false')
+  })
+
+  it('눌러서 펼치고 접는다', () => {
+    drawChrome(받은문구, { ...사실, basis: 'page' })
+    const toggle = document.getElementById('details-toggle') as HTMLButtonElement
+    toggle.click()
+    expect((document.getElementById('details') as HTMLElement).hidden).toBe(false)
+    expect(toggle.getAttribute('aria-expanded')).toBe('true')
+    expect(toggle.textContent).toBe('접기')
+    toggle.click()
+    expect((document.getElementById('details') as HTMLElement).hidden).toBe(true)
+  })
+
+  it('무엇을 보고 낸 판단인지 밝힌다', () => {
+    drawChrome(받은문구, { ...사실, basis: 'selection' })
+    const lines = [...document.querySelectorAll('.ge-popup__detail')].map((x) => x.textContent)
+    expect(lines).toContain('고른 글만 보았습니다')
+    expect(lines, '다른 근거의 말이 섞이면 안 된다').not.toContain('기사 전체를 보았습니다')
+  })
+
+  it('몇 문장 중 몇 문장을 봤는지 채워 넣는다', () => {
+    drawChrome(받은문구, { ...사실, basis: 'page', sentences: { total: 28, judged: 24 } })
+    const lines = [...document.querySelectorAll('.ge-popup__detail')].map((x) => x.textContent)
+    expect(lines).toContain('28문장 중 24문장')
+  })
+
+  it('채울 값이 없으면 그 줄을 버린다 — 자리표시자가 화면에 새면 안 된다', () => {
+    drawChrome(받은문구, { version: '1.0.0', basis: 'page' })
+    const text = document.getElementById('details')?.textContent ?? ''
+    expect(text).not.toContain('{')
+    expect(text, '문장 수를 모르는데 줄을 만들지 않는다').not.toContain('문장 중')
+  })
+
+  it('참·거짓을 말하지 않는다는 한 줄이 맨 마지막이다', () => {
+    drawChrome(받은문구, { ...사실, basis: 'page', sentences: { total: 10, judged: 9 } })
+    const lines = [...document.querySelectorAll('.ge-popup__detail')].map((x) => x.textContent)
+    expect(lines[lines.length - 1]).toBe('참인지 거짓인지는 말하지 않습니다')
+  })
+
+  it('점수가 자세히에도 새지 않는다', () => {
+    drawChrome(받은문구, { ...사실, basis: 'page', sentences: { total: 28, judged: 24 } })
+    const text = document.getElementById('details')?.textContent ?? ''
+    expect(text, '문장 수는 얼마나 봤는지이지 점수가 아니다').not.toMatch(/0\.\d|\d+%|\d+점/)
+  })
+
+  it('아이콘 주소가 없으면 깨진 그림을 두지 않는다', () => {
+    drawChrome(받은문구, 사실)
+    expect(document.getElementById('brand-icon')).toBeNull()
+  })
+
+  it('아이콘 주소가 있으면 건다', () => {
+    drawChrome(받은문구, { ...사실, iconUrl: 'chrome-extension://abc/icon/16.png' })
+    expect((document.getElementById('brand-icon') as HTMLImageElement).src).toContain('icon/16.png')
+  })
+})
+
+describe('왜 이 판정인가 — 확신이 모자란 🟡', () => {
+  // decideBadge 는 주의 신호를 셀 때 **확신도 높은 것만** 센다. 그래서 점수가
+  // 주의 쪽인 항목이 있어도 모델이 확신하지 못했으면 🔴 이 아니라 🟡 에 머문다.
+  // 화면은 지금까지 그 둘을 같은 말로 보여 줬다 (PR #20 리뷰).
+  beforeEach(() => {
+    mountDocument()
+    const details = document.createElement('ul')
+    details.id = 'details'
+    details.hidden = true
+    const foot = document.createElement('footer')
+    foot.id = 'foot'
+    const toggle = document.createElement('button')
+    toggle.id = 'details-toggle'
+    const home = document.createElement('a')
+    home.id = 'homepage'
+    foot.append(toggle, home)
+    document.body.append(details, foot)
+  })
+
+  const lines = () =>
+    [...document.querySelectorAll('.ge-popup__detail')].map((x) => x.textContent ?? '')
+
+  it('확신이 모자라 🟡 이면 그렇다고 말한다', () => {
+    // 점수는 주의 쪽인데 확신하지 못한 항목이 있다.
+    render(verdict([item('clickbait_headline', 0.9, false), item('source_citation', 0.2)], 'CHECK'))
+    expect(lines()[0], '맨 앞에 와야 한다 — 자세히의 첫 질문이 "왜 이 판정인가" 다')
+      .toBe(content.app.lowConfidence)
+  })
+
+  it('신호가 뚜렷해서 🟡 이면 그 말을 쓰지 않는다', () => {
+    // 확신은 하는데 점수가 중간이라 🟡 인 경우. 이유가 다르다.
+    render(verdict([item('clickbait_headline', 0.4), item('source_citation', 0.4)], 'CHECK'))
+    expect(lines()).not.toContain(content.app.lowConfidence)
+  })
+
+  it('🔴 이나 🟢 에는 쓰지 않는다', () => {
+    for (const level of ['CAUTION', 'SAFE'] as const) {
+      render(verdict([item('clickbait_headline', 0.9, false)], level))
+      expect(lines(), level).not.toContain(content.app.lowConfidence)
+    }
+  })
+})
+
+describe('주변 기록 버튼은 기사라면 늘 보인다', () => {
+  // **리포트의 주된 일은 흠을 보충하는 것이 아니다.** 한 기사가 전하지 못하는 것을
+  // 옆에 놓는 것이라, 신호가 없어도 할 일이 있다.
+  beforeEach(() => {
+    // 팝업은 저장소를 읽어 진행을 그린다. 여기서는 비어 있는 저장소를 세운다.
+    vi.stubGlobal('browser', {
+      storage: {
+        session: { get: () => Promise.resolve({}) },
+        onChanged: { addListener: () => {} },
+      },
+      tabs: { query: () => Promise.resolve([{ id: 1 }]), sendMessage: () => Promise.resolve(null), create: () => Promise.resolve() },
+      runtime: { getURL: (x: string) => x },
+    })
+    const box = document.createElement('div'); box.id = 'report-box'; box.hidden = true
+    const btn = document.createElement('button'); btn.id = 'report-run'
+    const note = document.createElement('p'); note.id = 'report-note'
+    box.append(btn, note); document.body.append(box)
+  })
+  const box = () => document.getElementById('report-box') as HTMLElement
+
+  it('신호가 하나도 없어도 보인다 — 초록 기사에도 주변 기록은 있다', () => {
+    render(verdict([item('source_citation', 0), item('emotional_language', 0)], 'SAFE'))
+    expect(box().hidden).toBe(false)
+  })
+
+  it('기사가 아닌 곳에는 보이지 않는다 — 판단한 적이 없다', () => {
+    render({ level: 'UNDETERMINED' })
+    expect(box().hidden).toBe(true)
+  })
+
+  it('확인하기 어려운 주장이 걸리면 보인다', () => {
+    render(verdict([item('unverifiable_claim', 0.9)], 'CAUTION'))
+    expect(box().hidden).toBe(false)
+  })
+
+  it('출처 표시가 걸리면 보인다', () => {
+    render(verdict([item('source_citation', 0.5)], 'CHECK'))
+    expect(box().hidden).toBe(false)
+  })
+
+  it('선택한 글에는 보이지 않는다 — 기사 주소도 날짜도 없다', () => {
+    render(verdict([item('unverifiable_claim', 0.9)], 'CAUTION'), document, 'selection')
+    expect(box().hidden).toBe(true)
+  })
+})
+describe('리포트는 그 기사의 것이어야 한다', () => {
+  // 리포트는 하나만 둔다 (lib/report.ts). 쌓으면 그것이 곧 열람 기록이기 때문이다.
+  // 그래서 **주소를 견주지 않으면 남의 리포트를 열어 준다** — 실제로 그랬다.
+  const A = 'https://n.news.naver.com/article/422/0000920529?cds=news_media_pc'
+  const B = 'https://n.news.naver.com/mnews/article/437/0000518013?iid=829'
+
+  const done = (url: string) =>
+    ({ url, headline: '머리글', date: '2026-10-28', at: Date.now(), stage: 'done', rows: [], claims: [] }) as never
+
+  /** 보관함(local)에 들어 있는 것. 칸(session)과 **다른 저장소**다. */
+  let 보관됨: unknown[] = []
+  /** 새 탭으로 열린 주소. 리포트를 열었는지 본다. */
+  let 열린탭: string[] = []
+  /** 칸에 되돌려 놓은 것. 보관본을 꺼내 놓았는지 본다. */
+  let 칸에쓴것: unknown[] = []
+
+  /** 칸(session)에 쓰기가 거절되는 상황. 저장소가 꽉 찼거나 막혔을 때다. */
+  let 쓰기막힘 = false
+
+  function mount(stored: unknown, archived: unknown[] = [], 막을까 = false): void {
+    보관됨 = archived
+    열린탭 = []
+    칸에쓴것 = []
+    쓰기막힘 = 막을까
+    vi.stubGlobal('browser', {
+      storage: {
+        session: {
+          get: () => Promise.resolve(stored ? { report: stored } : {}),
+          set: (o: Record<string, unknown>) => {
+            if (쓰기막힘) return Promise.reject(new Error('막힘'))
+            칸에쓴것.push(o.report)
+            return Promise.resolve()
+          },
+        },
+        local: { get: () => Promise.resolve({ archive: { v: 1, items: 보관됨 } }) },
+        onChanged: { addListener: () => {} },
+      },
+      tabs: {
+        query: () => Promise.resolve([{ id: 1 }]),
+        sendMessage: () => Promise.resolve(null),
+        create: (o: { url: string }) => {
+          열린탭.push(o.url)
+          return Promise.resolve()
+        },
+      },
+      runtime: { getURL: (x: string) => x },
+    })
+    const box = document.createElement('div'); box.id = 'report-box'; box.hidden = true
+    const btn = document.createElement('button'); btn.id = 'report-run'
+    const note = document.createElement('p'); note.id = 'report-note'
+    box.append(btn, note); document.body.append(box)
+  }
+  const label = () => document.getElementById('report-run')?.textContent ?? ''
+  const settle = () => new Promise((r) => setTimeout(r, 0))
+
+  const green = (url: string): TabState => ({
+    ...verdict([item('source_citation', 0)], 'SAFE'),
+    url,
+  })
+
+  it('같은 기사면 연다 — 경로 모양과 꼬리표가 달라도 같은 기사다', async () => {
+    mount(done(A))
+    render(green('https://n.news.naver.com/mnews/article/422/0000920529'))
+    await settle()
+    expect(label()).toBe(content.report.open)
+  })
+
+  it('다른 기사면 새로 만든다 — 남의 리포트를 열어 주지 않는다', async () => {
+    mount(done(A))
+    render(green(B))
+    await settle()
+    expect(label(), '앞 기사의 리포트가 남아 있다고 "열기" 를 띄우면 안 된다')
+      .toBe(content.report.button)
+  })
+
+  it('주소를 모르면 없는 것으로 본다', async () => {
+    mount(done(A))
+    render(verdict([item('source_citation', 0)], 'SAFE'))
+    await settle()
+    expect(label()).toBe(content.report.button)
+  })
+
+  it('남의 조사가 돌고 있으면 또 시작하지 못한다', async () => {
+    // 리포트 칸은 하나뿐이다. A 를 조사하는 중에 B 에서 또 누르면 둘이 같은 칸에
+    // 번갈아 쓰면서 진행도 결과도 뒤섞인다. **남의 것을 없는 것으로 보는 처리가
+    // 열어 둔 길이다** — 그 전에는 reportFace 가 busy 를 돌려줘서 막혀 있었다.
+    mount({ ...(done(A) as object), stage: 'records', claims: [], at: Date.now() })
+    render(green(B))
+    await settle()
+
+    const btn = document.getElementById('report-run') as HTMLButtonElement
+    expect(btn.disabled, '칸이 하나라 둘을 동시에 만들 수 없다').toBe(true)
+    const note = document.getElementById('report-note') as HTMLElement
+    expect(note.hidden, '말없이 막힌 단추는 고장으로 읽힌다').toBe(false)
+    expect(note.textContent).toBe(content.report.waiting)
+  })
+
+  it('남의 것이 끝나 있으면 내 것을 만들 수 있다', async () => {
+    mount(done(A))
+    render(green(B))
+    await settle()
+    const btn = document.getElementById('report-run') as HTMLButtonElement
+    expect(btn.disabled).toBe(false)
+    expect(btn.textContent).toBe(content.report.button)
+  })
+
+  it('**멈춘 조사는 단추를 잠그지 않는다** — service worker 는 일하는 중에도 꺼진다', async () => {
+    // 꺼지면 storage.session 에 records 인 채로 남고 브라우저를 닫기 전까지 그대로다.
+    // 그것을 "도는 중" 으로 읽으면 어느 기사에서도 리포트를 못 만든다.
+    mount({ ...(done(A) as object), stage: 'records', claims: [], at: Date.now() - 10 * 60 * 1000 })
+    render(green(B))
+    await settle()
+
+    const btn = document.getElementById('report-run') as HTMLButtonElement
+    expect(btn.disabled, '멈춘 조사 하나가 기능 전체를 잠그면 안 된다').toBe(false)
+    expect(btn.textContent).toBe(content.report.button)
+  })
+
+  it('멈춘 내 조사도 다시 시작할 수 있다', async () => {
+    mount({ ...(done(A) as object), stage: 'brief', claims: [], at: Date.now() - 10 * 60 * 1000 })
+    render(green(A))
+    await settle()
+
+    const btn = document.getElementById('report-run') as HTMLButtonElement
+    expect(btn.disabled).toBe(false)
+    expect(btn.textContent).toBe(content.report.button)
+  })
+
+  // 사용자가 겪은 흐름: A 리포트 → B 리포트 → 다시 A.
+  // 칸은 하나라 A 로 돌아오면 칸에는 B 가 있다. **보관함에는 A 가 그대로 있다** —
+  // 그것을 안 보면 스무 초와 크레딧을 또 쓴다.
+  it('A→B→A 로 돌아오면 보관본을 쓴다 — 다시 만들지 않는다', async () => {
+    mount(done(B), [done(A)])
+    render(green(A))
+    await settle()
+    expect(label(), '이미 가진 것을 두고 "만들기" 를 권하면 안 된다').toBe(content.report.open)
+  })
+
+  it('보관본을 열 때는 칸에 꺼내 놓고 연다 — 새로 만들지 않는다', async () => {
+    mount(done(B), [done(A)])
+    render(green(A))
+    await settle()
+
+    ;(document.getElementById('report-run') as HTMLButtonElement).click()
+    await settle()
+
+    expect(열린탭, '리포트 탭이 열려야 한다').toEqual(['/report.html'])
+    expect(칸에쓴것).toHaveLength(1)
+    const 꺼낸것 = 칸에쓴것[0] as { url: string; restored?: boolean }
+    expect(꺼낸것.url).toBe(A)
+    expect(꺼낸것.restored, '그때의 모습이라고 화면이 말할 수 있어야 한다').toBe(true)
+  })
+
+  it('**꺼내 놓지 못하면 열지 않는다** — 칸에 남의 리포트가 그대로 있다', async () => {
+    // 복원 실패를 삼키면, 칸에는 B 가 남아 있는데 A 를 연 것처럼 탭을 띄운다.
+    // 그러면 B 의 리포트가 열린다 — 이 기능이 고치려던 바로 그 증상이다 (리뷰 #35).
+    mount(done(B), [done(A)], true)
+    render(green(A))
+    await settle()
+
+    ;(document.getElementById('report-run') as HTMLButtonElement).click()
+    await settle()
+
+    expect(열린탭, '못 꺼냈으면 탭을 열지 않는다').toEqual([])
+  })
+
+  it('보관본이 없으면 그대로 만들기다', async () => {
+    mount(done(B), [])
+    render(green(A))
+    await settle()
+    expect(label()).toBe(content.report.button)
+  })
+
+  it('보관본이 있어도 남의 조사 중에는 기다린다 — 칸을 쓸 수 없다', async () => {
+    mount({ ...(done(B) as object), stage: 'records', claims: [], at: Date.now() }, [done(A)])
+    render(green(A))
+    await settle()
+    expect((document.getElementById('report-run') as HTMLButtonElement).disabled).toBe(true)
+  })
+
+  it('주소를 견주는 것은 normalizeUrl 이다', () => {
+    const r = done(A) as unknown as Parameters<typeof sameArticle>[0]
+    expect(sameArticle(r, A)).toBe(true)
+    expect(sameArticle(r, B)).toBe(false)
+    expect(sameArticle(r, undefined)).toBe(false)
+    expect(sameArticle(null, A)).toBe(false)
+    expect(sameArticle(r, '주소가 아니다'), '깨진 주소에 터지지 않는다').toBe(false)
+  })
+})
+describe('덜 본 것을 말한다', () => {
+  // 문장 상한에 걸려 뒤쪽이 빠졌으면 그렇게 적는다. **조용히 덜 보지 않는다** —
+  // 상한을 40 에서 15 로 줄였기 때문에 이 줄이 더 중요해졌다 (lib/judge.ts).
+  // render() 는 drawChrome 을 거쳐 근거 줄을 채운다. mountDocument 는 판정 자리만
+  // 만들어 두므로 여기서 `details` 를 더해 준다.
+  beforeEach(() => {
+    // drawChrome 은 이 넷이 다 있어야 끝까지 간다 (하나라도 없으면 일찍 돌아간다).
+    for (const [tag, id] of [
+      ['ul', 'details'],
+      ['footer', 'foot'],
+      ['button', 'details-toggle'],
+      ['a', 'homepage'],
+    ] as const) {
+      const el = document.createElement(tag)
+      el.id = id
+      document.body.append(el)
+    }
+  })
+
+  const details = () => [...document.querySelectorAll('.ge-popup__detail')].map((x) => x.textContent)
+
+  it('capped 면 앞부분만 봤다고 적는다', () => {
+    const base = verdict([item('emotional_language', 0.5)], 'CHECK')
+    render({ ...base, verdict: { ...base.verdict!, capped: true } as never })
+    expect(details()).toContain(content.app.coverage.capped)
+  })
+
+  it('capped 가 아니면 적지 않는다 — 다 본 기사에 겁을 주지 않는다', () => {
+    render(verdict([item('emotional_language', 0.5)], 'CHECK'))
+    expect(details()).not.toContain(content.app.coverage.capped)
+  })
+})
+describe('4차 문구가 실제로 쓰인다', () => {
+  // 문구를 받아 놓고 배선을 안 하면 ui.ko.json 에만 남는다.
+  it('app 의 문구가 전부 어딘가에서 쓰인다', () => {
+    const used = new Set([
+      'homepage', 'details', 'basis', 'coverage', 'criteria', 'lowConfidence', 'disclaimer',
+      'unpinned',
+    ])
+    const keys = Object.keys(content.app).filter((k) => !k.startsWith('$'))
+    expect(keys.filter((k) => !used.has(k)), '배선하지 않은 문구가 있다').toEqual([])
+  })
+
+  it('무엇을 보고 낸 판단인지 셋 다 있다', () => {
+    expect(Object.keys(content.app.basis).sort()).toEqual(['headline', 'page', 'selection'])
+  })
+
+  it('자리표시자가 짝이 맞는다', () => {
+    expect(content.app.coverage.sentences).toContain('{total}')
+    expect(content.app.coverage.sentences).toContain('{judged}')
+    expect(content.app.criteria).toContain('{version}')
+    expect(content.app.criteria).toContain('{model}')
+  })
+})
+
+describe('왜 이 판정인가 — 항목별 설명', () => {
+  // 두 곳에서 온다 — Jev 가 **잰** 것과 코드가 **찾은** 것.
+  // Jev 는 "이 표현이 있는가" 를 못 센다 (docs/jev.md 8절). 그 일은 코드가 한다.
+  const parts = content.explain.emotional_language.parts
+
+  it('코드가 찾은 글자를 그대로 인용한다', () => {
+    const lines = explainLines('emotional_language', {
+      itemId: 'emotional_language',
+      found: {},
+      spans: { emo_exclaim: ['!!'], emo_repeat: [], emo_fear: [] },
+    })
+    expect(lines[0]).toEqual({ text: parts.emo_exclaim.present, quotes: ['!!'] })
+    expect(lines.map((l) => l.text)).toContain(parts.emo_repeat.absent)
+  })
+
+  it('Jev 가 잰 것과 코드가 찾은 것이 한 목록에 들어간다', () => {
+    const lines = explainLines('ai_style_signal', {
+      itemId: 'ai_style_signal',
+      found: { ai_same_frame: true },
+      spans: { ai_summary_phrase: ['결론적으로'] },
+    })
+    expect(lines.map((l) => l.text)).toEqual([
+      content.explain.ai_style_signal.parts.ai_same_frame.present,
+      content.explain.ai_style_signal.parts.ai_summary_phrase.present,
+    ])
+  })
+
+  it('본 것이 전부 아니오면 한 줄로 말한다', () => {
+    const lines = explainLines('emotional_language', {
+      itemId: 'emotional_language',
+      found: {},
+      spans: { emo_exclaim: [], emo_repeat: [], emo_fear: [] },
+    })
+    expect(lines).toEqual([{ text: content.explain.emotional_language.none }])
+  })
+
+  it('답 자체가 없으면 아무 줄도 만들지 않는다', () => {
+    // 묻지도 못한 경우다. 접힌 채로 둔다.
+    expect(explainLines('emotional_language', null)).toEqual([])
+  })
+
+  it('빈 답에는 **빈 화면 대신 한 줄**을 둔다', () => {
+    // 눌렀는데 아무것도 안 뜨는 것이 가장 나쁘다. 못 찾았으면 못 찾았다고 적는다.
+    expect(explainLines('emotional_language', { itemId: 'emotional_language', found: {}, spans: {} }))
+      .toEqual([{ text: content.explain.emotional_language.none }])
+  })
+
+  it('짝 문구가 없는 항목은 떼어 온 문장마다 **왜** 를 붙인다', () => {
+    // 출처 표시는 기관명·실명이라 목록을 만들 수 없다. 그래서 하위 질문이 아니라
+    // **본문에서 떼어 온 문장**에 이유 하나씩을 붙인다 (apps/proxy/src/pinpoint.ts).
+    const lines = explainLines('source_citation', {
+      itemId: 'source_citation',
+      found: {},
+      spans: {},
+      picks: [
+        { text: '한 관계자는', why: 'src_group_only' },
+        { text: '업계에서는 이미 예견된 일이었다', why: 'src_none' },
+      ],
+    })
+    expect(lines).toEqual([
+      { text: content.explain.source_citation.reasons.src_group_only, quotes: ['한 관계자는'] },
+      {
+        text: content.explain.source_citation.reasons.src_none,
+        quotes: ['업계에서는 이미 예견된 일이었다'],
+      },
+    ])
+  })
+
+  it('같은 이유는 한 줄로 모은다', () => {
+    // 똑같은 말을 두 번 적으면 두 가지를 짚은 것처럼 보인다.
+    const lines = explainLines('source_citation', {
+      itemId: 'source_citation',
+      found: {},
+      spans: {},
+      picks: [
+        { text: '앞 문장', why: 'src_none' },
+        { text: '뒤 문장', why: 'src_none' },
+      ],
+    })
+    expect(lines).toEqual([
+      { text: content.explain.source_citation.reasons.src_none, quotes: ['앞 문장', '뒤 문장'] },
+    ])
+  })
+
+  it('모르는 이유는 버린다 — 화면에 띄울 문구가 없다', () => {
+    // 여기가 모델이 쓴 한국어가 새어 들어올 수 있는 유일한 구멍이다. 막아 둔다.
+    expect(
+      explainLines('source_citation', {
+        itemId: 'source_citation',
+        found: {},
+        spans: {},
+        picks: [{ text: '한 관계자는', why: '이 기사는 거짓입니다' }],
+      }),
+    ).toEqual([{ text: content.explain.source_citation.none }])
+  })
+
+  it('집어 온 대목이 없으면 "찾지 못했다" 고 말한다 — 빈 화면을 두지 않는다', () => {
+    // 눌렀는데 아무것도 안 뜨는 것이 가장 나쁘다. 못 찾았으면 못 찾았다고 적는다.
+    expect(
+      explainLines('source_citation', { itemId: 'source_citation', found: {}, spans: {} }),
+    ).toEqual([{ text: content.explain.source_citation.none }])
+  })
+
+  it('집어 온 문장은 우리가 쓴 말과 섞이지 않는다', () => {
+    // 화면의 **문장은 전부 ChatKHU 가 미리 쓴 것**이고, 인용은 본문 글자 그대로다.
+    const text = "앤트로픽의 기업공개 소식이 국내 주식시장에 '산소호흡기'가 됐다."
+    const lines = explainLines('unverifiable_claim', {
+      itemId: 'unverifiable_claim',
+      found: {},
+      spans: {},
+      picks: [{ text, why: 'uvc_causal' }],
+    })
+    const line = lines[0]!
+    expect(line.text).toBe(content.explain.unverifiable_claim.reasons.uvc_causal)
+    expect(line.quotes).toEqual([text])
+  })
+
+  it('같은 id 면 Jev 가 낸 줄에 코드가 찾은 글자가 붙는다', () => {
+    // 제목 표현은 **둘이 나눠 맡는다** — Jev 가 "큰 수식어가 있는가" 를 재고,
+    // 코드가 그게 어느 낱말인지 찾는다. id 가 같아서 한 줄로 합쳐진다.
+    const lines = explainLines('clickbait_headline', {
+      itemId: 'clickbait_headline',
+      found: { clk_inflating: true, clk_hiding: false },
+      spans: { clk_inflating: ['충격'] },
+    })
+    expect(lines).toContainEqual({
+      text: content.explain.clickbait_headline.parts.clk_inflating.present,
+      quotes: ['충격'],
+    })
+    // 코드가 맡지 않는 쪽은 Jev 의 답만 글로 남는다. 인용이 붙지 않는다.
+    expect(lines).toContainEqual({
+      text: content.explain.clickbait_headline.parts.clk_hiding.absent,
+    })
+  })
+
+  it('걸린 항목에 "신호가 보이지 않습니다" 라고 적지 않는다', () => {
+    // 실제로 이렇게 떴다 — 윗줄은 "제목이 내용을 감추거나 부풀린 표현을 씁니다",
+    // 아랫줄은 "제목 표현에서 주의할 신호가 보이지 않습니다". 정면으로 어긋난다.
+    // 판정을 내리는 물음과 쪼갠 물음은 서로 다른 물음이라 이 일이 생긴다.
+    const 빈답 = { itemId: 'clickbait_headline', found: { clk_hiding: false }, spans: {} }
+    for (const level of ['CAUTION', 'CHECK'] as const) {
+      expect(explainLines('clickbait_headline', 빈답, level), level).toEqual([
+        { text: content.app.unpinned },
+      ])
+    }
+  })
+
+  it('걸리지 않은 항목에는 그대로 "보이지 않습니다" 라고 적는다', () => {
+    // 판정과 어긋나지 않으니 바꿀 이유가 없다. 여기서 바꾸면 되레 겁을 준다.
+    const 빈답 = { itemId: 'clickbait_headline', found: { clk_hiding: false }, spans: {} }
+    expect(explainLines('clickbait_headline', 빈답, 'SAFE')).toEqual([
+      { text: content.explain.clickbait_headline.none },
+    ])
+  })
+
+  it('집어 올 항목에서도 어긋나지 않는다', () => {
+    // 출처 표시·확인하기 어려운 주장도 같은 일이 난다 (LLM 이 못 집었을 때).
+    const 빈답 = { itemId: 'unverifiable_claim', found: {}, spans: {} }
+    expect(explainLines('unverifiable_claim', 빈답, 'CAUTION')).toEqual([
+      { text: content.app.unpinned },
+    ])
+  })
+  it('코드가 빈손이면 LLM 이 집어 온 것을 **같은 문구로** 보인다', () => {
+    // 감정적 표현·공유 유도는 전용 "왜" 문구가 없다. 코드가 찾던 것과 같은
+    // 하위 항목이라, 이미 있는 문구를 그대로 쓴다.
+    const lines = explainLines('emotional_language', {
+      itemId: 'emotional_language',
+      found: {},
+      spans: {},
+      picks: [{ text: '참을 수 없는 배신', why: 'emo_repeat' }],
+    }, 'CAUTION')
+    expect(lines).toEqual([
+      {
+        text: content.explain.emotional_language.parts.emo_repeat.present,
+        quotes: ['참을 수 없는 배신'],
+      },
+    ])
+  })
+  it('점수 숫자가 설명에 새지 않는다', () => {
+    const lines = explainLines('emotional_language', {
+      itemId: 'emotional_language',
+      found: {},
+      spans: { emo_exclaim: ['!!'] },
+    })
+    expect(lines.map((l) => l.text).join(' ')).not.toMatch(/0\.\d|\d+%|\d+점/)
+  })
+})
+
+describe('펼침은 걸린 항목에만 붙는다', () => {
+  // 일곱 줄이 전부 눌리는 것처럼 보이면 안 된다.
+  const opens = () => document.querySelectorAll('.ge-popup__item-open')
+
+  it('🔴·🟡 이고 설명할 말이 있는 항목에만 붙는다', () => {
+    render(verdict([
+      item('emotional_language', 0.9),    // 🔴 + 설명 있음 → 붙는다
+      item('clickbait_headline', 0.5),    // 🟡 + 설명 있음 → 붙는다
+      item('headline_body_match', 0),     // 🟢 → 안 붙는다
+    ], 'CAUTION'))
+    expect(opens()).toHaveLength(2)
+    expect([...opens()].map((o) => o.textContent))
+      .toEqual([content.items.emotional_language.name, content.items.clickbait_headline.name])
+  })
+
+  it('걸린 항목은 **하나도 빠짐없이** 펼칠 수 있다', () => {
+    // 어디가 부족한지 모르면 답답하다 (GE-44). 쪼갠 질문이든, 코드가 찾는 규칙이든,
+    // 본문에서 집어 오는 대목이든 — 일곱 항목 모두 설명하는 길이 있다.
+    const 모두 = (schema.items as { id: string }[]).map((i) => i.id)
+    render(verdict(모두.map((id) => item(id, 0.9)), 'CAUTION'))
+    expect(opens()).toHaveLength(모두.length)
+  })
+
+  it('🟢·⚪ 에는 붙지 않는다', () => {
+    render(verdict([item('emotional_language', 0), item('clickbait_headline', null)], 'SAFE'))
+    expect(opens()).toHaveLength(0)
+  })
+
+  it('선택한 글에는 붙지 않는다 — 탭의 기사에 물어보는 길이다', () => {
+    render(verdict([item('emotional_language', 0.9)], 'CAUTION'), document, 'selection')
+    expect(opens()).toHaveLength(0)
+  })
+
+  it('접혀 있는 것이 기본이다', () => {
+    render(verdict([item('emotional_language', 0.9)], 'CAUTION'))
+    expect(opens()[0]?.getAttribute('aria-expanded')).toBe('false')
+    expect((document.querySelector('.ge-popup__why') as HTMLElement).hidden).toBe(true)
+  })
+})
+
+describe('하지 않은 일을 했다고 말하지 않는다', () => {
+  beforeEach(() => {
+    mountDocument()
+    const img = document.createElement('img')
+    img.id = 'brand-icon'
+    const version = document.createElement('span')
+    version.id = 'version'
+    const details = document.createElement('ul')
+    details.id = 'details'
+    details.hidden = true
+    const foot = document.createElement('footer')
+    foot.id = 'foot'
+    const toggle = document.createElement('button')
+    toggle.id = 'details-toggle'
+    const home = document.createElement('a')
+    home.id = 'homepage'
+    foot.append(toggle, home)
+    document.body.append(img, version, details, foot)
+  })
+
+  const detailText = () => document.getElementById('details')?.textContent ?? ''
+
+  it('판단한 적이 없으면 무엇을 보았다고 말하지 않는다', () => {
+    // 기사 페이지가 아닌 곳에서 아이콘을 누른 경우.
+    render({ level: 'UNDETERMINED' })
+    expect(detailText(), '하지 않은 일을 했다고 말하면 안 된다')
+      .not.toContain(content.app.basis.page)
+  })
+
+  it('판단했으면 무엇을 보았는지 말한다', () => {
+    render(verdict([item('source_citation', 0.2)], 'SAFE'))
+    expect(detailText()).toContain(content.app.basis.page)
+  })
+
+  it('판단한 적이 없어도 틀은 그린다 — 빈 화면을 남기지 않는다', () => {
+    render({ level: 'UNDETERMINED' })
+    // 전제 한 줄은 판단 여부와 상관없이 할 말이다.
+    expect(detailText()).toContain(content.app.disclaimer)
+  })
+})
+
+describe('기사 페이지가 아닐 때', () => {
+  // 전에는 "아직 살펴보지 않았습니다" 로 시작했다. 상태 보고가 먼저 오고 **무엇을
+  // 하면 되는지는 둘째 줄**에 가서야 나왔다. 다음 행동을 앞에 둔다 (ChatKHU 17차).
+  it('다음에 할 일을 먼저 말한다', () => {
+    render({ level: 'UNDETERMINED' })
+    expect(document.getElementById('name')?.textContent).toBe(content.notArticle.title)
+    expect(content.notArticle.title, '제목이 상태 보고로 남아 있다').not.toContain('않았습니다')
+  })
+
+  it('기사를 열라는 것과 선택 검사를 둘 다 알린다', () => {
+    const d = content.notArticle.description
+    expect(d).toContain('기사')
+    expect(d, '③ 선택 검사로 가는 길도 알려야 한다').toMatch(/우클릭|선택|골라/)
+  })
+
+  it('**"분석" 이라고 하지 않는다** — 결론을 냈다는 선언으로 읽힌다', () => {
+    expect(`${content.notArticle.title} ${content.notArticle.description}`).not.toContain('분석')
   })
 })

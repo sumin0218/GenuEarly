@@ -6,7 +6,9 @@
 // **여기는 배선만 둔다.** 판단 흐름은 lib/judge.ts 에 있다 — 테스트에서 부를 수 있게.
 import content from '../../../packages/content/ui.ko.json'
 import { sweepExpired } from '../lib/cache'
-import { callProxy, judgeArticle, judgeHeadline, setIconBadge } from '../lib/judge'
+import { buildReport, clearReport } from '../lib/report'
+import { clearArchive, removeArchived, sweepArchive } from '../lib/archive'
+import { callProxy, judgeArticle, judgeExplain, judgeHeadline, setIconBadge } from '../lib/judge'
 import { judgeSelection, putSelectionPending, putSelectionResult } from '../lib/selection'
 import type { ArticleVerdict, HeadlineVerdict, Message } from '../lib/protocol'
 
@@ -17,6 +19,10 @@ export default defineBackground(() => {
   // **만료된 캐시를 비운다.** 남겨 두면 그 자체가 열람 기록이 된다
   // (docs/security/secure-coding.md 7절). service worker 가 깨어날 때마다 한 번.
   void sweepExpired().then((n) => { if (n) console.info('[GenuEarly] 만료 캐시', n, '건 비움') })
+
+  // 보관한 리포트도 같은 이유로 쓸어낸다. 사용자가 지우지 않아도 서른 날이 지나면
+  // 사라진다 — 상한과 함께, 아카이브가 영구 열람 기록이 되지 않게 하는 둘째 장치다.
+  void sweepArchive().then((n) => { if (n) console.info('[GenuEarly] 만료 리포트', n, '건 비움') })
 
   // --- ③ 선택 텍스트 검사 --------------------------------------------------
   //
@@ -89,8 +95,27 @@ export default defineBackground(() => {
 
   browser.runtime.onMessage.addListener((raw, sender, sendResponse) => {
     const msg = raw as Message
-    // **보낸 곳을 확인한다.** 우리 콘텐츠 스크립트가 아니면 받지 않는다.
-    if (!sender.tab || sender.id !== browser.runtime.id) return false
+    // **보낸 곳을 확인한다.** 우리 확장에서 온 것이 아니면 받지 않는다.
+    // `externally_connectable` 을 쓰지 않으므로 이 id 는 우리 것뿐이다.
+    if (sender.id !== browser.runtime.id) return false
+
+    // 보관함 고치기. **쓰는 자리를 여기 하나로 모은다** — 리포트 탭이 직접 쓰면
+    // 리포트가 막 보관되는 순간과 겹쳐 지운 항목이 되살아난다 (lib/archive.ts).
+    //
+    // **이것만 `sender.tab` 이 없다.** 리포트 탭은 콘텐츠 스크립트가 아니라 우리
+    // 확장 페이지라 `tab` 이 붙지 않는다. 아래의 `!sender.tab` 보다 앞에 둬야 한다 —
+    // 뒤에 뒀다가 삭제가 **조용히 아무 일도 하지 않았다.**
+    if (msg?.kind === 'archive-write') {
+      const 일 = msg.what === 'clear' ? clearArchive() : removeArchived(msg.url ?? '')
+      일.then(() => sendResponse({ ok: true })).catch((e) => {
+        console.warn('[GenuEarly] 보관함 고치기 실패', e)
+        sendResponse({ ok: false })
+      })
+      return true
+    }
+
+    // 나머지는 전부 콘텐츠 스크립트에서 온다. 탭이 없으면 우리가 아는 길이 아니다.
+    if (!sender.tab) return false
 
     // ② 목록의 제목 하나. **아이콘 배지를 건드리지 않는다** — 목록 페이지에는 기사가
     // 서른 개 있고, 그중 하나의 판정을 탭 전체의 상태로 올리면 그 페이지가 주의 대상처럼
@@ -102,6 +127,34 @@ export default defineBackground(() => {
           console.warn('[GenuEarly] 제목 판단 실패', e)
           sendResponse({ level: 'UNDETERMINED', basis: 'headline' } satisfies HeadlineVerdict)
         })
+      return true
+    }
+
+    // 심층 분석. **아이콘 배지도 판정도 건드리지 않는다** — 판정은 이미 났고
+    // 이것은 그 이유를 묻는 것뿐이다 (GE-44).
+    if (msg?.kind === 'judge-explain') {
+      judgeExplain(msg)
+        .then(sendResponse)
+        .catch((e) => {
+          console.warn('[GenuEarly] 심층 분석 실패', e)
+          sendResponse(null)
+        })
+      return true
+    }
+
+    // 심층 분석 리포트. **답을 기다리지 않는다** — 스무 초가 걸려서 메시지로 돌려주면
+    // 그 사이에 팝업이 닫히거나 service worker 가 꺼진다. 진행은 storage.session 에 적고
+    // 팝업과 리포트 탭이 그것을 읽는다 (lib/report.ts).
+    if (msg?.kind === 'build-report') {
+      void clearReport()
+        .then(() =>
+          buildReport(
+            { url: msg.url, headline: msg.headline, date: msg.date, body: msg.body },
+            msg.rows,
+          ),
+        )
+        .catch((e) => console.warn('[GenuEarly] 리포트 만들기 실패', e))
+      sendResponse({ started: true })
       return true
     }
 

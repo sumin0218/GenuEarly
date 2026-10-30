@@ -1,6 +1,6 @@
 {
   "$comment": "Jev 판단 항목의 원본. 규칙과 필드 설명은 README.md의 '판단 항목 정의' 절에 있다. 각 항목의 question 객체가 Jev API의 questions 값이 된다. 보낼 때 instructions 뒤에 최상위 common_instructions 를 줄바꿈으로 덧붙이는 것 하나만 코드가 하고, 그 밖에는 손대지 않는다. question 바깥의 필드는 우리 코드가 쓰는 메타데이터이므로 보내지 않는다. criteria의 키 순서가 곧 Jev에 보내는 보기 순서다. 순서를 바꾸면 답이 달라질 수 있으므로 eval 없이 바꾸지 않는다. 점수 합산과 eval은 순서가 아니라 signals 값을 읽는다.",
-  "version": "1.1.0",
+  "version": "1.6.0",
   "model": "jev-1.13.0",
   "language": "ko",
   "state_fields": {
@@ -12,13 +12,13 @@
   "request_groups": {
     "headline_only": {
       "state_fields": ["headline"],
-      "required": { "page": ["headline"], "portal_list": ["headline"] },
+      "required": { "page": ["headline"], "portal_list": ["headline"], "explain": ["headline"] },
       "description": "제목만 넣는 요청. ② 포털 목록과 같은 모양이다"
     },
     "headline_body": {
       "state_fields": ["headline", "body"],
-      "required": { "page": ["headline", "body"], "selection": ["body"] },
-      "min_body_chars": { "page": null, "selection": null },
+      "required": { "page": ["headline", "body"], "selection": ["body"], "explain": ["body"] },
+      "min_body_chars": { "page": null, "selection": null, "explain": null },
       "short_body_fallback": "portal_list",
       "description": "제목과 본문을 넣는 요청. body가 기능별 min_body_chars보다 짧으면 이 요청을 보내지 않고 이 그룹의 항목을 ⚪로 둔다. 단, request_group에 short_body_fallback 기능(portal_list)의 값이 있는 항목은 그 그룹으로 보낸다. 값은 eval 후에 정한다 (null은 미정)"
     },
@@ -163,6 +163,133 @@
           }
         }
       ]
+    }
+  ],
+  "$explain_comment": "설명 전용 질문. **items 가 아니라 여기 있다** — items 를 훑는 쪽(점수 설정 검사, 사용자 문구 검사, lib/judge.ts 의 plan())이 걸러 주기를 기대하지 않고 구조로 갈라 둔다. 점수에 들어가지 않으므로 배지는 바뀌지 않는다. **여기 남은 것은 \"글 전체가 어떤가\" 를 묻는 질문뿐이다.** \"이 표현이 있는가\" 를 묻던 질문 13개는 뺐다 — 글자가 그대로 있어도 Jev 가 못 찾는다 (docs/jev.md 8절 실측). 그 일은 코드가 한다.",
+  "explain_items": [
+{
+      "id": "clickbait_headline_parts",
+      "explain_for": "clickbait_headline",
+      "$comment": "clickbait_headline 의 instructions 가 \"감추는 방식\" 과 \"부풀리는 방식\" 두 가지를 이름 붙여 적어 두었다. 그 둘을 따로 물을 뿐이다.",
+      "type": "noul",
+      "unit": "article",
+      "request_group": { "explain": "headline_only" },
+      "basis_fields": ["headline"],
+      "questions": [
+      {
+        "id": "clk_hiding",
+        "question": {
+          "type": "noul",
+          "instructions": "`headline` 필드의 제목이 무엇에 관한 기사인지 가리는가? '결국 이것', '그 이유는' 처럼 지시어로 대상을 가리거나, 말줄임표·물음표로 궁금증만 남기는 경우를 말한다. '[단독]', '[속보]' 같은 언론사 말머리는 제외한다. `headline` 필드의 글자만 본다.",
+          "criteria": { "true": "대상을 가리거나 궁금증만 남기는 표현이 있다", "false": "없다" }
+        }
+      },
+      {
+        "id": "clk_inflating",
+        "question": {
+          "type": "noul",
+          "instructions": "`headline` 필드의 제목에 사안보다 큰 수식어가 붙어 있는가? '충격', '경악', '역대급', '난리 났다' 같은 표현을 말한다. `headline` 필드의 글자만 본다.",
+          "criteria": { "true": "사안보다 큰 수식어가 붙어 있다", "false": "붙어 있지 않다" }
+        }
+      }
+      ]
+    },
+    {
+      "id": "headline_body_match_parts",
+      "explain_for": "headline_body_match",
+      "$comment": "headline_body_match 의 criteria 가 \"본문 일부만 반영\" 을 셋으로 나눠 적어 두었다(핵심이 빠짐 / 곁가지를 핵심처럼 / 조건을 떼고 단정). 그 셋과 \"본문과 어긋남\" 을 따로 묻는다.",
+      "type": "noul",
+      "unit": "article",
+      "request_group": { "explain": "headline_body" },
+      "basis_fields": ["headline","body"],
+      "questions": [
+      {
+        "id": "hbm_missing",
+        "question": {
+          "type": "noul",
+          "instructions": "`headline` 필드 제목의 핵심 내용이 `body` 필드의 본문에 빠져 있는가? 제목의 핵심 내용은 제목의 주어와 서술어가 전하는 사건이나 주장이다. 말투와 표현의 강도는 보지 않는다.",
+          "criteria": { "true": "제목의 핵심 내용이 본문에 없다", "false": "본문에 있다" }
+        }
+      },
+      {
+        "id": "hbm_sidepoint",
+        "question": {
+          "type": "noul",
+          "instructions": "`headline` 필드의 제목이 `body` 필드 본문의 곁가지를 핵심처럼 내세우는가?",
+          "criteria": { "true": "곁가지를 핵심처럼 내세운다", "false": "그렇지 않다" }
+        }
+      },
+      {
+        "id": "hbm_dropped_scope",
+        "question": {
+          "type": "noul",
+          "instructions": "`headline` 필드의 제목이 `body` 필드 본문에 적힌 조건이나 범위를 떼어 내고 단정해 전하는가? 본문의 '~할 수도 있다', '일부 지역에서' 같은 한정을 제목이 빼고 전하는 경우를 말한다.",
+          "criteria": { "true": "조건이나 범위를 떼고 단정한다", "false": "그렇지 않다" }
+        }
+      },
+      {
+        "id": "hbm_contradicts",
+        "question": {
+          "type": "noul",
+          "instructions": "`body` 필드의 본문이 `headline` 필드 제목의 핵심 내용과 반대되거나 다른 사실을 적어 두었는가? 제목의 내용이 본문에 그저 빠져 있는 경우는 여기에 들지 않는다.",
+          "criteria": { "true": "본문이 제목과 반대되거나 다른 사실을 적었다", "false": "그렇지 않다" }
+        }
+      }
+      ]
+    },
+{
+      "id": "ai_style_signal_parts",
+      "explain_for": "ai_style_signal",
+      "$comment": "ai_style_signal 의 instructions 가 \"기계 생성 글의 문체 특징\" 으로 다섯을 들어 두었다. 그 다섯을 따로 묻는다. 등급은 바뀌지 않는다.",
+      "type": "noul",
+      "unit": "article",
+      "request_group": { "explain": "headline_body" },
+      "basis_fields": ["body"],
+      "questions": [
+      {
+        "id": "ai_same_frame",
+        "question": {
+          "type": "noul",
+          "instructions": "`body` 필드의 글에 같은 틀의 문장이 반복되는가? 주어와 서술어의 짜임이 거의 같은 문장이 줄줄이 이어지는 경우를 말한다.",
+          "criteria": { "true": "같은 틀의 문장이 반복된다", "false": "반복되지 않는다" }
+        }
+      },
+      {
+        "id": "ai_even_length",
+        "question": {
+          "type": "noul",
+          "instructions": "`body` 필드의 글에서 문장 길이와 문단 구성이 고르게 맞춰져 있는가? 보도자료나 날씨·증시 기사는 원래 정형적이므로, 정형성 자체보다 지나치게 고른지를 본다.",
+          "criteria": { "true": "문장 길이와 문단 구성이 고르게 맞춰져 있다", "false": "그렇지 않다" }
+        }
+      },
+{
+        "id": "ai_generic",
+        "question": {
+          "type": "noul",
+          "instructions": "`body` 필드의 글에 사안과 동떨어진 일반론이 섞여 있는가? 이 기사에만 해당하지 않고 아무 기사에나 붙일 수 있는 서술을 말한다.",
+          "criteria": { "true": "사안과 동떨어진 일반론이 섞여 있다", "false": "섞여 있지 않다" }
+        }
+      }
+      ]
+    }
+  ],
+  "$report_comment": "심층 분석 리포트 전용 질문. **items 도 explain_items 도 아니다** — 기사 글이 아니라 **밖에서 찾아온 기록과 기사 문장을 맞춰 보는** 질문이라 성격이 다르다. 점수에 들어가지 않고 배지를 바꾸지 않는다. 사용자가 리포트를 만들라고 눌렀을 때만 나간다. **Jev 는 여기서도 아무것도 찾아보지 않는다** — 기록은 sonar 가 찾아 `record` 필드에 넣어 주고, Jev 는 두 필드의 글자만 비교한다. **날짜는 Jev 가 모른다**: 다른 날 기록에도 뒷받침이라고 답한다(실측 48건 중 21%). 날짜 비교는 코드가 하고 화면 표시를 덮는다 (apps/proxy/src/records.ts).",
+  "report_items": [
+    {
+      "id": "record_entailment",
+      "$comment": "한 질문에 한 판단만 담는다. '기록이 이 문장을 뒷받침하는가' 하나다. 기록이 여럿이면 요청도 여럿이다 — 한 요청에 기록을 모아 넣으면 '여러 판단 숨기기' 가 된다 (docs/jev.md 3절).",
+      "type": "choice",
+      "unit": "record",
+      "state_fields": ["claim", "record"],
+      "question": {
+        "type": "choice",
+        "instructions": "`record` 필드의 기록이 `claim` 필드의 문장을 뒷받침하는지 고르라. 판단 근거는 두 필드에 적힌 글자로 한정한다. 바깥 지식을 쓰지 않는다. 기록이 그 문장과 다른 사안을 다루면 무관이다.",
+        "criteria": {
+          "supports": "기록이 그 문장의 내용을 뒷받침한다",
+          "contradicts": "기록이 그 문장과 어긋나는 내용을 담고 있다",
+          "unrelated": "기록이 그 문장과 다른 사안이거나, 뒷받침도 반박도 하지 않는다"
+        }
+      }
     }
   ]
 }

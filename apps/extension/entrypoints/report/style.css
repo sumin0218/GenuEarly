@@ -1,0 +1,617 @@
+/* 심층 분석 리포트.
+ *
+ * **팝업과 같은 토큰을 쓴다** (docs/design.md 7절). 값을 그때그때 고르면 같은 성격의
+ * 여백이 자리마다 달라진다. 다른 것은 셋뿐이다.
+ *
+ *   ① 바탕이 어둡다 — 로고가 검정·초록이라 거기에 맞춘다. 팝업의 어두운 모드 값 그대로다
+ *   ② 24px 한 단계를 더했다 — 리포트 제목용. 팝업은 18/14/12 셋이면 됐다
+ *   ③ 폭이 760px 다 — 한글 40~45자/줄. 팝업의 340px 은 툴바에 매달린 크기였다
+ *
+ * **색이 뜻하는 것은 하나다.** 빨강·노랑은 Jev 의 형식 판정이고, 초록은 제품이다.
+ * 기록 대조(뒷받침·어긋남·무관)에는 색을 쓰지 않는다 — 색을 주면 리포트가 판정처럼
+ * 읽힌다 (docs/design.md 3절 "색이 차지하는 몫").
+ */
+
+:root {
+  /* 면은 세 단계. 팝업의 어두운 모드와 같은 값이다 */
+  --ge-ground: #0d0d0d;
+  --ge-bg: #111111;
+  --ge-surface: #1a1a1c;
+  --ge-ink: #ffffff;
+  --ge-muted: #b4b4b4; /* #111 위에서 9.11:1 */
+  --ge-rule: #272727;
+
+  /* 제품 색. **아이콘에서 뽑았다** — 로고의 초록과 남색이다 */
+  --ge-brand: #02b67f; /* #111 위에서 6.96:1 */
+  --ge-brand-ink: #0d0d0d; /* 초록 위에 얹는 글자 */
+
+  /* 단계 색. 어두운 바탕용. lib/item-view.ts 의 LEVEL_INK_DARK 와 같다 */
+  --ge-caution: #f87171;
+  --ge-check: #f0b429;
+  --ge-undetermined: #b4b4b4;
+  --ge-quiet: #5a5a5a;
+
+  --ge-space-2: 2px;
+  --ge-space-4: 4px;
+  --ge-space-8: 8px;
+  --ge-space-12: 12px;
+  --ge-space-16: 16px;
+  --ge-space-24: 24px;
+  --ge-space-32: 32px;
+  --ge-space-64: 64px;
+
+  --ge-radius-4: 4px;
+  --ge-radius-8: 8px;
+
+  --ge-fs-display: 24px;
+  --ge-fs-title: 18px;
+  --ge-fs-body: 14px;
+  --ge-fs-meta: 12px;
+
+  --ge-focus-ring: 0 0 0 3px rgba(2, 182, 127, 0.3);
+  --ge-ease: 0.15s ease;
+
+  /* 본문 읽기 폭. 한글 40~45자/줄 */
+  --ge-measure: 760px;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  background: var(--ge-ground);
+  color: var(--ge-ink);
+  font-family: 'Noto Sans KR', 'Malgun Gothic', system-ui, sans-serif;
+  font-size: var(--ge-fs-body);
+  line-height: 1.6;
+  -webkit-font-smoothing: antialiased;
+}
+
+a {
+  color: var(--ge-brand);
+  text-decoration: none;
+}
+a:hover {
+  text-decoration: underline;
+}
+:focus-visible {
+  outline: none;
+  box-shadow: var(--ge-focus-ring);
+  border-radius: var(--ge-radius-4);
+}
+
+.ge-report {
+  padding: 0 var(--ge-space-16) var(--ge-space-64);
+}
+
+/* ── 머리띠 ────────────────────────────────────────────── */
+.ge-report__bar {
+  max-width: var(--ge-measure);
+  margin: 0 auto;
+  display: flex;
+  align-items: center;
+  gap: var(--ge-space-8);
+  padding: var(--ge-space-16) 0;
+  color: var(--ge-muted);
+  font-size: var(--ge-fs-meta);
+}
+.ge-report__logo {
+  display: block;
+  border-radius: var(--ge-radius-4);
+}
+.ge-report__logo[hidden] {
+  display: none;
+}
+.ge-report__brand {
+  color: var(--ge-ink);
+  font-weight: 600;
+  font-size: var(--ge-fs-body);
+}
+.ge-report__spacer {
+  flex: 1;
+}
+.ge-report__ghost {
+  font: inherit;
+  color: var(--ge-muted);
+  background: none;
+  border: 0;
+  border-radius: var(--ge-radius-8);
+  padding: var(--ge-space-8) var(--ge-space-12);
+  cursor: pointer;
+  transition: color var(--ge-ease);
+}
+.ge-report__ghost:hover {
+  color: var(--ge-ink);
+}
+
+/* 보관함 여는 단추. **막대 셋을 여기서 그린다** — 아이콘 데이터가 필요한 모양이
+ * 아니고, lib/icon-data.ts 는 Reicon 생성물이라 손대지 않는다 (그 파일 머리말).
+ * `currentColor` 로 그려서 글자 색 하나만 바꾸면 세 줄이 같이 따라온다. */
+.ge-report__menu {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  height: 32px;
+  color: var(--ge-muted);
+  background: none;
+  border: 0;
+  border-radius: var(--ge-radius-8);
+  padding: 0;
+  cursor: pointer;
+  transition: color var(--ge-ease);
+}
+.ge-report__menu:hover {
+  color: var(--ge-ink);
+}
+.ge-report__menu:focus-visible {
+  outline: 0;
+  box-shadow: var(--ge-focus-ring);
+}
+.ge-report__menu[aria-expanded='true'] {
+  color: var(--ge-brand);
+}
+
+/* 가운데 막대가 요소 자신, 위아래가 가짜 요소. 셋이 2px 씩, 사이가 5px */
+.ge-report__bars,
+.ge-report__bars::before,
+.ge-report__bars::after {
+  display: block;
+  width: 16px;
+  height: 2px;
+  border-radius: 1px;
+  background: currentColor;
+}
+.ge-report__bars {
+  position: relative;
+}
+.ge-report__bars::before,
+.ge-report__bars::after {
+  content: '';
+  position: absolute;
+  left: 0;
+}
+.ge-report__bars::before {
+  top: -5px;
+}
+.ge-report__bars::after {
+  top: 5px;
+}
+
+/* ── 섹션 ──────────────────────────────────────────────── */
+.ge-report__body {
+  display: flex;
+  flex-direction: column;
+  gap: var(--ge-space-16);
+}
+
+/* 테두리와 그림자를 같이 쓰지 않는다. 어두운 바탕에서는 **톤이 가른다** */
+.ge-card {
+  max-width: var(--ge-measure);
+  width: 100%;
+  margin: 0 auto;
+  background: var(--ge-bg);
+  border-radius: var(--ge-radius-8);
+  padding: var(--ge-space-32);
+}
+
+.ge-card__accent {
+  width: 32px;
+  height: 2px;
+  background: var(--ge-brand);
+  margin-bottom: var(--ge-space-16);
+}
+
+.ge-card__title {
+  margin: 0 0 var(--ge-space-4);
+  font-size: var(--ge-fs-title);
+  font-weight: 600;
+}
+.ge-card__lede {
+  margin: 0 0 var(--ge-space-16);
+  color: var(--ge-muted);
+  font-size: var(--ge-fs-meta);
+}
+
+/* 선은 머리말과 내용을 가르는 한 줄뿐이다 (docs/design.md 4절) */
+.ge-card__rule {
+  padding-top: var(--ge-space-16);
+  border-top: 1px solid var(--ge-rule);
+}
+
+/* ── ① 머리 ───────────────────────────────────────────── */
+.ge-report__headline {
+  margin: 0 0 var(--ge-space-8);
+  font-size: var(--ge-fs-display);
+  font-weight: 600;
+  line-height: 1.4;
+}
+.ge-report__source {
+  margin: 0 0 var(--ge-space-24);
+  color: var(--ge-muted);
+  font-size: var(--ge-fs-meta);
+}
+.ge-facts {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--ge-space-32);
+  padding: var(--ge-space-16) 0;
+  border-top: 1px solid var(--ge-rule);
+}
+.ge-fact__label {
+  color: var(--ge-muted);
+  font-size: var(--ge-fs-meta);
+}
+.ge-fact__value {
+  font-size: var(--ge-fs-title);
+  font-weight: 500;
+}
+.ge-fact__value--brand {
+  color: var(--ge-brand);
+}
+.ge-note {
+  margin: var(--ge-space-16) 0 0;
+  padding: var(--ge-space-12) var(--ge-space-16);
+  background: var(--ge-surface);
+  border-radius: var(--ge-radius-8);
+  color: var(--ge-muted);
+  font-size: var(--ge-fs-meta);
+}
+
+/* ── ② 한눈에 ─────────────────────────────────────────── */
+.ge-items {
+  list-style: none;
+  margin: 0;
+  padding: var(--ge-space-16) 0 0;
+  border-top: 1px solid var(--ge-rule);
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: var(--ge-space-12) var(--ge-space-32);
+}
+.ge-item {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--ge-space-8);
+}
+.ge-item__mark {
+  flex: 0 0 auto;
+  margin-top: var(--ge-space-4);
+}
+.ge-item__name {
+  font-weight: 500;
+}
+.ge-item__name--quiet {
+  font-weight: 400;
+  color: var(--ge-muted);
+}
+.ge-item__desc {
+  color: var(--ge-muted);
+  font-size: var(--ge-fs-meta);
+}
+
+/* ── ③ 주장별 대조 ────────────────────────────────────── */
+.ge-claim {
+  padding: var(--ge-space-24) 0 0;
+  border-top: 1px solid var(--ge-rule);
+}
+.ge-claim__head {
+  display: flex;
+  gap: var(--ge-space-12);
+  align-items: baseline;
+}
+.ge-claim__no {
+  flex: 0 0 auto;
+  color: var(--ge-brand);
+  font-size: var(--ge-fs-meta);
+  font-weight: 500;
+}
+.ge-claim__quote {
+  font-size: var(--ge-fs-title);
+  line-height: 1.5;
+  quotes: '\201C' '\201D';
+}
+.ge-claim__why {
+  margin: var(--ge-space-12) 0 0 56px;
+  color: var(--ge-muted);
+  font-size: var(--ge-fs-meta);
+}
+.ge-claim__note {
+  margin: var(--ge-space-12) 0 0 56px;
+  padding: var(--ge-space-12) var(--ge-space-16);
+  background: var(--ge-bg);
+  border-radius: var(--ge-radius-8);
+  color: var(--ge-muted);
+  font-size: var(--ge-fs-meta);
+}
+.ge-claim__note strong {
+  color: var(--ge-ink);
+  font-weight: 500;
+}
+
+.ge-records {
+  list-style: none;
+  margin: var(--ge-space-16) 0 0 56px;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: var(--ge-space-2);
+}
+.ge-record {
+  display: flex;
+  gap: var(--ge-space-12);
+  padding: var(--ge-space-12) var(--ge-space-16);
+  background: var(--ge-surface);
+  border-radius: var(--ge-radius-8);
+}
+/* **대조 결과에 색을 쓰지 않는다.** 글자로만 말한다 */
+.ge-record__verdict {
+  flex: 0 0 72px;
+  font-weight: 500;
+}
+.ge-record__main {
+  flex: 1;
+  min-width: 0;
+}
+.ge-record__press {
+  font-weight: 500;
+}
+.ge-record__when {
+  margin-left: var(--ge-space-8);
+  color: var(--ge-muted);
+  font-size: var(--ge-fs-meta);
+}
+/* 날짜가 다른 것만 눈에 띈다 — 실측에서 다섯 중 하나가 이 함정이었다 */
+.ge-record__when--other {
+  color: var(--ge-check);
+}
+.ge-record__text {
+  display: block;
+}
+.ge-record__link {
+  font-size: var(--ge-fs-meta);
+}
+
+/* ── ⑤ 직접 확인해 볼 것 ──────────────────────────────── */
+.ge-where {
+  margin: var(--ge-space-12) 0 0;
+  padding-left: var(--ge-space-24);
+  color: var(--ge-muted);
+  font-size: var(--ge-fs-meta);
+}
+
+/* ── ⑥ 한계 ───────────────────────────────────────────── */
+.ge-limits {
+  color: var(--ge-muted);
+  font-size: var(--ge-fs-meta);
+}
+.ge-limits ul {
+  margin: 0 0 var(--ge-space-16);
+  padding-left: var(--ge-space-24);
+  display: flex;
+  flex-direction: column;
+  gap: var(--ge-space-4);
+}
+.ge-limits strong {
+  color: var(--ge-ink);
+  font-weight: 500;
+}
+.ge-versions {
+  padding-top: var(--ge-space-16);
+  border-top: 1px solid var(--ge-rule);
+}
+
+/* ── 기다리는 중 ──────────────────────────────────────── */
+.ge-waiting {
+  max-width: var(--ge-measure);
+  margin: 0 auto;
+  padding: var(--ge-space-64) var(--ge-space-32);
+  text-align: center;
+  color: var(--ge-muted);
+}
+
+/* ── 지난 리포트 보관함 ──────────────────────────────────
+ *
+ * **카드보다 한 톤 낮다.** 리포트 본문과 같은 무게로 보이면 지난 것이 지금 것과
+ * 나란히 서 버린다. 바탕을 `--ge-ground` 로 두고 선 하나로만 가른다.
+ */
+/* 본문을 덮는 막. **서랍보다 아래, 그 밖의 모든 것보다 위.** */
+.ge-archive__scrim {
+  position: fixed;
+  inset: 0;
+  z-index: 1;
+  background: rgba(0, 0, 0, 0.6);
+}
+
+/* 오른쪽에서 열리는 서랍. 폭은 본문 읽기 폭의 절반쯤 — 목록은 훑는 자리다 */
+.ge-archive {
+  position: fixed;
+  top: 0;
+  right: 0;
+  z-index: 2;
+  width: min(400px, 100vw);
+  height: 100%;
+  overflow-y: auto;
+  background: var(--ge-bg);
+  border-left: 1px solid var(--ge-rule);
+  padding: var(--ge-space-24);
+}
+.ge-archive:focus-visible {
+  outline: 0;
+  box-shadow: var(--ge-focus-ring);
+}
+
+/* 열릴 때만 미끄러진다. 닫을 때는 `hidden` 이라 애니메이션이 걸리지 않는다 */
+@media (prefers-reduced-motion: no-preference) {
+  .ge-archive {
+    animation: ge-slide-in 0.18s ease-out;
+  }
+}
+@keyframes ge-slide-in {
+  from {
+    transform: translateX(16px);
+    opacity: 0;
+  }
+}
+
+/* 서랍 닫기 (✕). 머리말 오른쪽 끝 */
+.ge-archive__close {
+  flex: none;
+  font: inherit;
+  color: var(--ge-muted);
+  background: none;
+  border: 0;
+  border-radius: var(--ge-radius-4);
+  padding: var(--ge-space-4) var(--ge-space-8);
+  cursor: pointer;
+  transition: color var(--ge-ease);
+}
+.ge-archive__close:hover {
+  color: var(--ge-ink);
+}
+.ge-archive__close:focus-visible {
+  outline: 0;
+  box-shadow: var(--ge-focus-ring);
+}
+
+.ge-archive__head {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: var(--ge-space-4);
+}
+.ge-archive__spacer {
+  flex: 1;
+}
+/* 서랍이 좁아 "모두 삭제" 와 "취소" 가 머리말에 다 안 들어간다 */
+.ge-archive__head .ge-report__ghost {
+  padding: var(--ge-space-4) var(--ge-space-8);
+  font-size: var(--ge-fs-meta);
+}
+/* 되돌릴 수 없는 단추. **색은 여기서만 경고로 쓴다** — 판정이 아니라 동작이다 */
+.ge-archive__danger {
+  color: var(--ge-caution);
+}
+
+.ge-archive__note,
+.ge-archive__empty {
+  margin: var(--ge-space-4) 0 0;
+  color: var(--ge-muted);
+  font-size: var(--ge-fs-meta);
+}
+
+.ge-archive__list {
+  list-style: none;
+  margin: var(--ge-space-16) 0 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+}
+
+.ge-archive__row {
+  display: flex;
+  align-items: center;
+  gap: var(--ge-space-8);
+  border-top: 1px solid var(--ge-rule);
+}
+.ge-archive__row:first-child {
+  border-top: 0;
+}
+
+.ge-archive__open {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: var(--ge-space-2);
+  font: inherit;
+  text-align: left;
+  color: var(--ge-ink);
+  background: none;
+  border: 0;
+  border-radius: var(--ge-radius-4);
+  padding: var(--ge-space-12) var(--ge-space-4);
+  cursor: pointer;
+  transition: color var(--ge-ease);
+}
+.ge-archive__open:hover .ge-archive__title {
+  color: var(--ge-brand);
+}
+.ge-archive__open:focus-visible {
+  outline: 0;
+  box-shadow: var(--ge-focus-ring);
+}
+
+/* 제목이 길면 한 줄로 자른다 — 목록은 훑는 자리다 */
+.ge-archive__title {
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+  overflow: hidden;
+  transition: color var(--ge-ease);
+}
+.ge-archive__meta {
+  color: var(--ge-muted);
+  font-size: var(--ge-fs-meta);
+  font-variant-numeric: tabular-nums;
+}
+.ge-archive__now {
+  color: var(--ge-brand);
+  font-size: var(--ge-fs-meta);
+}
+
+.ge-archive__del {
+  flex: none;
+  font: inherit;
+  font-size: var(--ge-fs-meta);
+  color: var(--ge-quiet);
+  background: none;
+  border: 0;
+  border-radius: var(--ge-radius-4);
+  padding: var(--ge-space-8);
+  cursor: pointer;
+  transition: color var(--ge-ease);
+}
+.ge-archive__del:hover {
+  color: var(--ge-caution);
+}
+.ge-archive__del:focus-visible {
+  outline: 0;
+  box-shadow: var(--ge-focus-ring);
+}
+
+/* 보관본을 열었을 때 맨 위에 붙는 한 줄 */
+.ge-archive__restored {
+  max-width: var(--ge-measure);
+  width: 100%;
+  margin: 0 auto;
+  color: var(--ge-muted);
+  font-size: var(--ge-fs-meta);
+}
+
+/* ── 좁은 화면 ────────────────────────────────────────── */
+@media (max-width: 720px) {
+  .ge-card {
+    padding: var(--ge-space-24) var(--ge-space-16);
+  }
+  .ge-items {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .ge-claim__why,
+  .ge-claim__note,
+  .ge-records {
+    margin-left: 0;
+  }
+  .ge-record {
+    flex-direction: column;
+    gap: var(--ge-space-4);
+  }
+  /* 좁으면 서랍이 아니라 덮개다 */
+  .ge-archive {
+    width: 100vw;
+    border-left: 0;
+    padding: var(--ge-space-24) var(--ge-space-16);
+  }
+}

@@ -22,7 +22,16 @@ for (const a of articles) {
   sentences += sents.length
   const body = screen(a.body).removed
   const sent = sents.filter((s) => screen(s).removed).length
-  if (body || sent) hits.push({ id: a.id, kind: a.kind ?? (a.url ? 'real' : null), body_removed: body, sentences_hit: sent })
+  // **제목은 보지 않는다.** 걷어내기가 제목을 건드리지 않으므로 여기서 세면
+  // 코드가 하지 않는 일을 재는 셈이 된다 (GE-47 되돌림).
+  if (body || sent) {
+    hits.push({
+      id: a.id,
+      kind: a.kind ?? (a.url ? 'real' : null),
+      body_removed: body,
+      sentences_hit: sent,
+    })
+  }
 }
 const summary = {
   date: new Date().toISOString().slice(0, 10),
@@ -34,7 +43,9 @@ const summary = {
   articles_hit: hits.length,
   hits,
 }
-console.log(`걷어내기 ${SCREEN_VERSION}: 기사 ${articles.length}건, 문장 ${sentences}개 중 걷어낸 기사 ${hits.length}건`)
+console.log(
+  `걷어내기 ${SCREEN_VERSION}: 기사 ${articles.length}건, 문장 ${sentences}개 중 걷어낸 기사 ${hits.length}건`,
+)
 for (const h of hits) console.log(`  ${h.id}  본문 ${h.body_removed}, 문장 ${h.sentences_hit}`)
 if (outdir) {
   mkdirSync(resolve(outdir), { recursive: true })

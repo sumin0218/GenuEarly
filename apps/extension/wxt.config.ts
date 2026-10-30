@@ -1,5 +1,5 @@
 import { defineConfig } from 'wxt'
-import { HOST_PERMISSIONS } from './match-patterns'
+import { HOST_PERMISSIONS, TEST_FIXTURE_MATCHES } from './match-patterns'
 
 // WXT 설정. https://wxt.dev/api/config.html
 //
@@ -10,9 +10,16 @@ import { HOST_PERMISSIONS } from './match-patterns'
 // 권한 표의 원본은 docs/security/secure-coding.md 2절이다.
 // 여기를 고치면 그 표도 같은 PR에서 고친다.
 export default defineConfig({
-  manifest: {
+  // **manifest 를 함수로 둔다.** 개발 빌드에만 테스트 자료용 주소를 더하기 위해서다.
+  // 배포본(`wxt build`, `wxt zip`)은 `mode` 가 'production' 이라 아래 가지가 돌지 않는다.
+  manifest: ({ mode }) => ({
     name: 'GenuEarly',
     description: '기사를 읽는 순간과 공유하려는 순간에 주의가 필요한 신호를 알려 줍니다.',
+
+    // 팝업 꼬리말의 홈페이지 링크와 chrome://extensions 의 "웹사이트" 가 이것을 쓴다.
+    // **주소를 두 곳에 적지 않는다** — 팝업은 manifest 에서 읽는다.
+    // 랜딩 페이지(GE-40)가 생기면 그 주소로 바꾼다.
+    homepage_url: 'https://github.com/sumin0218/GenuEarly',
 
     // 권한은 최소로. 늘리는 PR은 "이 권한 없이는 안 되는 이유"를 본문에 적는다.
     //
@@ -33,6 +40,13 @@ export default defineConfig({
 
     // 와일드카드 도메인(<all_urls>, *://*/*)을 쓰지 않는다. 호스트를 명시한다.
     // 목록은 match-patterns.ts 가 원본이다. content_scripts 와 같은 값을 쓴다.
-    host_permissions: [...HOST_PERMISSIONS],
-  },
+    //
+    // 개발 빌드에서만 수동 테스트 자료(eval/fixtures/manual-news)를 더한다.
+    // **배포본에는 들어가지 않는다** — tests/manifest.test.ts 가 빌드된 manifest 를
+    // 읽어 `file://` 와 `localhost` 가 없는지 본다.
+    host_permissions: [
+      ...HOST_PERMISSIONS,
+      ...(mode === 'development' ? TEST_FIXTURE_MATCHES : []),
+    ],
+  }),
 })

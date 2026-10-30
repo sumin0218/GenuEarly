@@ -4,8 +4,10 @@
 // 사람이 읽고 넘기는 것에 기대지 않는다. 문구는 앞으로 ChatKHU 로 다시 만들 수도 있고,
 // 그때 이 검사가 유일한 관문이다.
 import { describe, expect, it } from 'vitest'
+import { BANNED_WORDS } from '@genuearly/shared'
 import content from '../../../packages/content/ui.ko.json'
 import schema from '../../../packages/shared/judgment-items.json'
+import { evidenceRuleIds } from '@genuearly/shared'
 
 /** 문구 안의 모든 문자열을 자리 이름과 함께 편다. */
 function strings(node: unknown, path = ''): [string, string][] {
@@ -17,18 +19,21 @@ function strings(node: unknown, path = ''): [string, string][] {
   return []
 }
 
-/** `$comment`·`source` 는 사용자에게 보이지 않는다. 규칙 검사에서 뺀다. */
-const visible = strings(content).filter(([p]) => !p.startsWith('$comment') && !p.startsWith('source'))
+/**
+ * `$comment`·`source` 는 사용자에게 보이지 않는다. 규칙 검사에서 뺀다.
+ *
+ * **어느 깊이에 있든 뺀다.** 맨 위만 보면 `app.$comment` 같은 중간 주석이
+ * 사용자 문구로 세어져 길이·말투 검사에 걸린다.
+ */
+const visible = strings(content).filter(
+  ([p]) => !p.split('.').includes('$comment') && !p.startsWith('source'),
+)
 
 describe('단정하지 않는다', () => {
   // docs/product.md 2절. 이 제품은 기사가 참인지 거짓인지 말하지 않는다.
-  const 금지 = [
-    '가짜', '허위', '거짓', '사실이 아', '사실무근', '조작',
-    '신뢰할 수 있', '믿을 만', '믿어도', '안전한 기사', '검증된',
-    // **신호가 없는 항목(safe)의 문구가 합격 판정으로 읽히면 안 된다.**
-    // 우리는 신호를 찾지 못한 것이지 그 점에서 옳다고 확인한 것이 아니다.
-    '문제없', '이상 없', '적절합', '타당합', '정확합', '충분합',
-  ]
+  // **목록은 packages/shared 가 들고 있다.** 미리 써 둔 문구를 검사하는 여기와,
+  // 실행 중에 생성된 리포트 글을 거르는 중계 서버가 **같은 목록**을 봐야 한다.
+  const 금지 = BANNED_WORDS
 
   it.each(금지)('"%s" 를 쓰지 않는다', (word) => {
     const hit = visible.filter(([, v]) => v.includes(word))
@@ -80,9 +85,24 @@ describe('빠진 문구가 없다', () => {
   })
 
   it('판단 항목 전부에 문구가 있다', () => {
-    // 빠지면 배지 상세에 그 항목만 통째로 안 보인다.
+    // 빠지면 상세에 그 항목만 통째로 안 보인다.
+    //
+    // 설명 전용 항목은 `items` 가 아니라 `explain_items` 에 있다. 여기 걸리지 않는다.
     const ids = (schema.items as { id: string }[]).map((i) => i.id)
     expect(Object.keys(content.items).sort()).toEqual([...ids].sort())
+  })
+
+  it('설명 전용 항목은 점수에 들어가지 않는다', () => {
+    // **배지가 바뀌면 안 된다.** request_group 에 점수를 내는 기능이 있으면
+    // plan() 이 집어 가서 가중평균에 섞인다.
+    const 점수내는기능 = ['page', 'portal_list', 'selection']
+    const 설명전용 = ((schema as { explain_items?: unknown[] }).explain_items ?? []) as
+      { id: string; request_group: Record<string, string> }[]
+    expect(설명전용.length, '설명 전용 항목이 하나는 있어야 이 검사가 산다').toBeGreaterThan(0)
+    for (const i of 설명전용) {
+      const 샌것 = Object.keys(i.request_group).filter((f) => 점수내는기능.includes(f))
+      expect(샌것, `${i.id} 가 ${샌것.join(',')} 에서도 불린다`).toEqual([])
+    }
   })
 
   it('항목마다 이름·신호없음·신호·보류 네 가지가 다 있다', () => {
@@ -123,7 +143,16 @@ describe('길이', () => {
   })
 
   it('한 줄 설명이 50자를 넘지 않는다', () => {
-    const long = visible.filter(([p, v]) => !p.startsWith('feedback.notice') && len(v) > 50)
+    // **리포트는 빠진다.** 50자는 340px 팝업에서 한 줄에 들어가야 한다는 뜻이었다.
+    // 리포트는 전체 탭(760px)이라 그 이유가 없다 — 대신 아래에서 따로 재 둔다.
+    const 예외 = (p: string) => p.startsWith('feedback.notice') || p.startsWith('report.')
+    const long = visible.filter(([p, v]) => !예외(p) && len(v) > 50)
+    expect(long.map(([p, v]) => `${p} (${len(v)}자)`)).toEqual([])
+  })
+
+  it('리포트 문구가 120자를 넘지 않는다', () => {
+    // 전체 탭이라 50자보다 길어도 되지만, 상한이 없으면 문단이 된다.
+    const long = visible.filter(([p, v]) => p.startsWith('report.') && len(v) > 120)
     expect(long.map(([p, v]) => `${p} (${len(v)}자)`)).toEqual([])
   })
 })
@@ -134,5 +163,87 @@ describe('출처를 밝힌다', () => {
     expect(content.source.tool).toBe('ChatKHU')
     expect(content.source.model).toBeTruthy()
     expect(content.source.prompt).toBeTruthy()
+  })
+})
+
+describe('설명 문구가 질문과 짝이 맞는다', () => {
+  // 질문을 더해 놓고 문구를 안 쓰면 화면에 빈 줄이 생기고,
+  // 문구만 써 놓고 질문을 안 보내면 영영 안 보인다.
+  const explainItems = ((schema as { explain_items?: unknown[] }).explain_items ?? []) as {
+    id: string
+    explain_for: string
+    questions: { id: string }[]
+  }[]
+
+  /**
+   * **아직 ChatKHU 문구를 받지 못한 항목.** 받으면 여기서 지운다.
+   *
+   * 질문은 먼저 넣고 문구는 뒤에 받는다 — 코딩 도구가 한국어를 지어내지 않기 때문이다
+   * (tools/content-gen/README.md). 문구가 없는 항목은 화면에 펼침이 붙지 않는다.
+   * **이 목록은 줄어들기만 해야 한다.**
+   */
+  const 문구_대기: string[] = []
+
+  it('설명 항목마다 문구가 있거나, 대기 목록에 있다', () => {
+    const 빠진것 = explainItems
+      .filter((i) => !(content.explain as unknown as Record<string, unknown>)[i.explain_for])
+      .map((i) => i.explain_for)
+      .filter((id) => !문구_대기.includes(id))
+    expect(빠진것, 'ChatKHU 문구를 받아 넣거나 대기 목록에 적는다').toEqual([])
+  })
+
+  it('대기 목록에 이미 받은 것이 남아 있지 않다', () => {
+    const 이미받음 = 문구_대기.filter((id) => (content.explain as unknown as Record<string, unknown>)[id])
+    expect(이미받음, '문구를 받았으면 대기 목록에서 지운다').toEqual([])
+  })
+
+  it('코드가 찾는 규칙마다 "찾았다"와 "못 찾았다"가 둘 다 있다', () => {
+    // 규칙은 있는데 문구가 없으면 화면에 빈 줄이 생긴다.
+    const parts: Record<string, { present?: string; absent?: string }> = {}
+    for (const copy of Object.values(content.explain as unknown as Record<string, { parts?: Record<string, { present?: string; absent?: string }> }>)) {
+      Object.assign(parts, copy?.parts ?? {})
+    }
+    for (const id of evidenceRuleIds()) {
+      expect(parts[id]?.present, `${id}.present`).toBeTruthy()
+      expect(parts[id]?.absent, `${id}.absent`).toBeTruthy()
+    }
+  })
+
+  it('하위 질문마다 "찾았다"와 "못 찾았다"가 둘 다 있다', () => {
+    for (const item of explainItems) {
+      if (문구_대기.includes(item.explain_for)) continue
+      const parts = (content.explain as unknown as Record<string, { parts: Record<string, { present?: string; absent?: string }> }>)
+        [item.explain_for]?.parts ?? {}
+      for (const q of item.questions) {
+        expect(parts[q.id]?.present, `${q.id}.present`).toBeTruthy()
+        expect(parts[q.id]?.absent, `${q.id}.absent`).toBeTruthy()
+      }
+    }
+  })
+
+  it('쓰지 않는 문구가 남아 있지 않다', () => {
+    // **짝의 출처가 둘이다.** Jev 가 재는 하위 질문과, 코드가 찾는 규칙
+    // (packages/shared 의 evidence.ts). 어느 쪽에도 없는 문구는 영영 안 보인다.
+    const 질문 = new Set([
+      ...explainItems.flatMap((i) => i.questions.map((q) => q.id)),
+      ...evidenceRuleIds(),
+    ])
+    for (const [itemId, copy] of Object.entries(content.explain as unknown as Record<string, unknown>)) {
+      if (itemId.startsWith('$')) continue
+      const parts = (copy as { parts?: Record<string, unknown> }).parts ?? {}
+      for (const id of Object.keys(parts)) {
+        expect(질문.has(id), `${id} 문구는 있는데 묻는 질문이 없다`).toBe(true)
+      }
+    }
+  })
+
+  it('찾았다와 못 찾았다가 서로 다른 말이다', () => {
+    for (const [itemId, copy] of Object.entries(content.explain as unknown as Record<string, unknown>)) {
+      if (itemId.startsWith('$')) continue
+      const parts = (copy as { parts?: Record<string, { present: string; absent: string }> }).parts ?? {}
+      for (const [id, v] of Object.entries(parts)) {
+        expect(v.present, `${id}`).not.toBe(v.absent)
+      }
+    }
   })
 })
