@@ -1,3 +1,4 @@
+import { TEST_FIXTURES_ON } from './lib/fixture'
 // 확장 프로그램이 끼어드는 페이지 목록. **여기가 원본이다.**
 //
 // wxt.config.ts 의 host_permissions 와 entrypoints/*.ts 의 matches 가
@@ -209,12 +210,12 @@ export function isArticleUrl(raw: string): boolean {
   //
   // 개발 빌드에서는 테스트 자료가 사는 둘을 더 받는다. **배포본은 https 뿐이다** —
   // `import.meta.env.DEV` 가 빌드 때 false 로 접혀 아래 가지가 사라진다.
-  const 테스트스킴 = Boolean(import.meta.env.DEV) && (url.protocol === 'file:' || url.hostname === 'localhost')
+  const 테스트스킴 = TEST_FIXTURES_ON && (url.protocol === 'file:' || url.hostname === 'localhost')
   if (url.protocol !== 'https:' && !테스트스킴) return false
   const bare = `${url.origin}${url.pathname}`
   // **빼는 쪽을 먼저 본다.** 댓글 화면은 주소에 `article` 이 들어 있지만 기사가 아니다.
   if (ARTICLE_EXCLUDE_RES.some((re) => re.test(bare))) return false
   if (ARTICLE_RES.some((re) => re.test(bare))) return true
   // 개발 빌드에서는 수동 테스트 자료의 기사도 받는다. 배포본에서는 이 가지가 접힌다.
-  return Boolean(import.meta.env.DEV) && FIXTURE_ARTICLE.test(url.pathname)
+  return TEST_FIXTURES_ON && FIXTURE_ARTICLE.test(url.pathname)
 }

@@ -149,7 +149,10 @@ describe('표시에 붙는 설명', () => {
     await 쉰다(30)
 
     const 범례문구 = Object.values(content.portal.legend.levels)
-    for (const el of document.querySelectorAll(`.${MARK_CLASS}`)) {
+    const 표시들 = document.querySelectorAll(`.${MARK_CLASS}`)
+    // **빈 목록을 돌면 아무것도 지키지 못한다.** ②가 표시를 아예 안 달아도 통과한다.
+    expect(표시들.length, '표시가 하나도 안 붙었다').toBeGreaterThan(0)
+    for (const el of 표시들) {
       expect(범례문구, '표시 설명이 범례에 없는 말이다').toContain(el.getAttribute('aria-label'))
     }
   })

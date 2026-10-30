@@ -7,6 +7,7 @@
 // 선택자는 **예고 없이 바뀐다.** 바뀌면 `extractArticle` 이 `null` 을 돌려주고
 // 배지는 ⚪ 가 된다 — 조용히 틀린 판단을 내는 것보다 낫지만, 그래도 사용자는
 // 아무것도 못 본다. 사이트를 늘릴 때마다 깨질 자리가 하나씩 는다.
+import { TEST_FIXTURES_ON, isFixtureArticle } from './fixture'
 import { splitSentences } from './sentences'
 
 export interface Article {
@@ -166,7 +167,7 @@ export function extractArticle(): Article | null {
   // 아는 사이트를 먼저 본다. 거기 없고 **개발 빌드**이면 테스트 자료인지 모양으로 본다.
   const rule =
     RULES.find((r) => r.host.test(location.hostname)) ??
-    (import.meta.env.DEV && document.querySelector('article#article h1#headline')
+    (TEST_FIXTURES_ON && isFixtureArticle(document)
       ? FIXTURE_RULE
       : undefined)
   if (!rule) return null

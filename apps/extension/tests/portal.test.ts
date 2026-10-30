@@ -442,8 +442,11 @@ describe('범례 — 아이콘이 무슨 뜻인지 말한다', () => {
     expect(속(l.box).every((e) => e.hidden), '제목 줄 말고는 전부 감춘다').toBe(true)
     expect(l.box.querySelector('.title')?.textContent).toBe(COPY.title)
     // 접고 펼 때마다 상자가 커졌다 작아지면 눈에 거슬린다. 자리를 지킨다.
+    //
+    // **폭을 적은 규칙이 하나뿐인지 본다.** 전에는 `collapsed` 클래스를 찾았는데
+    // 그 클래스는 이제 아예 만들지 않아서 **그 검사는 깨질 수가 없었다.**
     const css = (l.box.getRootNode() as ShadowRoot).querySelector('style')?.textContent ?? ''
-    expect(css, '접힘에 따라 폭을 바꾸지 않는다').not.toMatch(/collapsed[^}]*width/)
+    expect(css, '접힘에 따라 모양을 바꾸는 규칙이 없어야 한다').not.toContain('collapsed')
   })
 
   it('화살표는 아이콘이고, 접힘에 따라 뒤집힌다 — 접히면 ㅅ, 펴지면 V', () => {

@@ -4,7 +4,13 @@
 // 보내면 중계 서버의 IP 당 한도(분당 60)를 한 사람이 혼자 쓴다.
 //
 // **판단 호출은 여기서 하지 않는다.** background 로 보낸다 (lib/protocol.ts).
-import { PORTAL_LIST_EXCLUDE_MATCHES, PORTAL_LIST_MATCHES, TEST_FIXTURE_MATCHES } from '../match-patterns'
+import { TEST_FIXTURES_ON, isFixtureArticle, isFixturePage } from '../lib/fixture'
+import {
+  PORTAL_LIST_EXCLUDE_MATCHES,
+  PORTAL_LIST_MATCHES,
+  TEST_FIXTURE_MATCHES,
+  matchPatternToRegExp,
+} from '../match-patterns'
 import content from '../../../packages/content/ui.ko.json'
 import {
   LEGEND_CLASS,
@@ -74,17 +80,26 @@ const 표시설명 = (level: DisplayLevel): string =>
 
 export default defineContentScript({
   // 개발 빌드에서는 수동 테스트 자료의 목록 페이지도 받는다 (match-patterns.ts).
-  matches: [...PORTAL_LIST_MATCHES, ...(import.meta.env.DEV ? TEST_FIXTURE_MATCHES : [])],
+  matches: [...PORTAL_LIST_MATCHES, ...(TEST_FIXTURES_ON ? TEST_FIXTURE_MATCHES : [])],
   // 기사 본문 페이지에서는 ①이 배지를 띄운다. ②까지 돌면 관련 기사 링크마다
   // 표시가 붙어 읽는 중에 끼어든다 (match-patterns.ts).
   excludeMatches: [...PORTAL_LIST_EXCLUDE_MATCHES],
 
   main(ctx) {
-    // **기사 페이지에서는 돌지 않는다.** 테스트 자료는 목록과 기사가 같은 곳에 산다
-    // (`file://`·localhost). 기사에서는 ①이 배지를 띄우는데 ②까지 돌면 "다음 →"
-    // 링크에 표시가 붙어 읽는 중에 끼어든다 — 인사이트·위키트리에서 기사 본문을
-    // 뺀 것과 같은 이유다. 주소가 아니라 모양으로 가른다 (lib/extract.ts 와 같은 잣대).
-    if (import.meta.env.DEV && document.querySelector('article#article h1#headline')) return
+    // 배포본이 받는 목록 사이트인가. 자료 판별은 그 밖에서만 한다.
+    const 아는목록 = PORTAL_LIST_MATCHES.some((m) => matchPatternToRegExp(m).test(`${location.origin}${location.pathname}`))
+
+    // **테스트 자료에서는 목록 페이지에만 돈다.**
+    //
+    // 기사에서는 ①이 배지를 띄우는데 ②까지 돌면 "다음 →" 링크에 표시가 붙어 읽는
+    // 중에 끼어든다 — 인사이트·위키트리에서 기사 본문을 뺀 것과 같은 이유다.
+    //
+    // **자료가 아닌 곳에서도 돌지 않는다.** 전에는 "기사 페이지면 멈춘다" 만 보아서,
+    // 개발 빌드에서 개발자 자신의 앱(localhost)에도 표시가 붙고 판정 요청이 나갔다
+    // (리뷰에서 발견). 자료인지부터 본다.
+    if (TEST_FIXTURES_ON && !아는목록) {
+      if (!isFixturePage() || isFixtureArticle()) return
+    }
 
     const enqueue = runner(MAX_CONCURRENT)
 

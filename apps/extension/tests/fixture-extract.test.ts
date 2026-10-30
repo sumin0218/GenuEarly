@@ -10,8 +10,6 @@
 import { readFileSync, readdirSync } from 'node:fs'
 import { resolve } from 'node:path'
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import { extractArticle } from '../lib/extract'
-import { isArticleUrl } from '../match-patterns'
 
 const 자료방 = resolve(__dirname, '../../../eval/fixtures/manual-news')
 const 기사파일 = readdirSync(자료방)
@@ -20,9 +18,20 @@ const 기사파일 = readdirSync(자료방)
   .filter((f) => /^[a-z]-\d+\.html$/.test(f))
   .sort()
 
-/** 개발 빌드인 척한다. 자료용 규칙은 `import.meta.env.DEV` 로 가려져 있다. */
-function 개발빌드로() {
-  vi.stubEnv('DEV', true)
+/**
+ * 개발 빌드인 척하고 **모듈을 새로 불러온다.**
+ *
+ * `TEST_FIXTURES_ON` 은 모듈을 불러올 때 한 번 정해지는 상수다 (그래야 배포 빌드에서
+ * 가지째 접힌다). 그래서 `stubEnv` 만으로는 이미 불러온 모듈에 닿지 않는다.
+ */
+async function 불러온다(mode: string) {
+  vi.stubEnv('MODE', mode)
+  vi.resetModules()
+  const [extract, patterns] = await Promise.all([
+    import('../lib/extract'),
+    import('../match-patterns'),
+  ])
+  return { extractArticle: extract.extractArticle, isArticleUrl: patterns.isArticleUrl }
 }
 
 function 연다(file: string): void {
@@ -39,8 +48,8 @@ describe('테스트 자료에서 기사를 읽는다', () => {
     expect(기사파일.length, 'eval/fixtures/manual-news 에 기사 파일이 없다').toBeGreaterThan(40)
   })
 
-  it.each(기사파일)('%s — 제목과 본문을 읽는다', (file) => {
-    개발빌드로()
+  it.each(기사파일)('%s — 제목과 본문을 읽는다', async (file) => {
+    const { extractArticle } = await 불러온다('development')
     연다(file)
     const got = extractArticle()
 
@@ -50,8 +59,8 @@ describe('테스트 자료에서 기사를 읽는다', () => {
     expect(got?.sentences.length, '문장을 못 나눴다').toBeGreaterThan(2)
   })
 
-  it('안내문과 선택 버튼은 본문에 섞이지 않는다', () => {
-    개발빌드로()
+  it('안내문과 선택 버튼은 본문에 섞이지 않는다', async () => {
+    const { extractArticle } = await 불러온다('development')
     연다(기사파일[0] as string)
     const body = extractArticle()?.body ?? ''
 
@@ -60,10 +69,16 @@ describe('테스트 자료에서 기사를 읽는다', () => {
     }
   })
 
-  it('**배포본에서는 읽지 않는다** — 자료용 규칙은 개발 빌드 전용이다', () => {
-    vi.stubEnv('DEV', false)
+  it('**배포본에서는 읽지 않는다** — 자료용 규칙은 개발 빌드 전용이다', async () => {
+    const { extractArticle } = await 불러온다('production')
     연다(기사파일[0] as string)
     expect(extractArticle(), '배포본이 아무 페이지나 기사로 읽으면 안 된다').toBeNull()
+  })
+
+  it('**staging 같은 다른 모드에서도 읽지 않는다** — DEV 는 그때도 참이다', async () => {
+    const { extractArticle } = await 불러온다('staging')
+    연다(기사파일[0] as string)
+    expect(extractArticle(), "'development' 가 아니면 꺼져 있어야 한다").toBeNull()
   })
 })
 
@@ -88,25 +103,25 @@ describe('테스트 자료의 기사 주소를 알아본다 — ②가 목록에
     'http://localhost:4173/',
   ]
 
-  it.each(기사주소)('%s 는 기사다', (url) => {
-    vi.stubEnv('DEV', true)
+  it.each(기사주소)('%s 는 기사다', async (url) => {
+    const { isArticleUrl } = await 불러온다('development')
     expect(isArticleUrl(url)).toBe(true)
   })
 
-  it.each(목록주소)('%s 는 기사가 아니다 — 목록 페이지다', (url) => {
-    vi.stubEnv('DEV', true)
+  it.each(목록주소)('%s 는 기사가 아니다 — 목록 페이지다', async (url) => {
+    const { isArticleUrl } = await 불러온다('development')
     expect(isArticleUrl(url), '목록 페이지에 표시를 달면 안 된다').toBe(false)
   })
 
-  it('**배포본에서는 하나도 받지 않는다**', () => {
-    vi.stubEnv('DEV', false)
+  it('**배포본에서는 하나도 받지 않는다**', async () => {
+    const { isArticleUrl } = await 불러온다('production')
     for (const url of [...기사주소, ...목록주소]) {
       expect(isArticleUrl(url), `${url} 를 배포본이 기사로 보면 안 된다`).toBe(false)
     }
   })
 
-  it('배포본의 https 기사 판단은 그대로다', () => {
-    vi.stubEnv('DEV', false)
+  it('배포본의 https 기사 판단은 그대로다', async () => {
+    const { isArticleUrl } = await 불러온다('production')
     expect(isArticleUrl('https://n.news.naver.com/article/001/0001')).toBe(true)
     expect(isArticleUrl('https://news.naver.com/section/100')).toBe(false)
   })

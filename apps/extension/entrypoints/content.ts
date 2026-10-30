@@ -5,6 +5,7 @@
 //
 // **판단 호출은 여기서 하지 않는다.** background 로 보낸다 (lib/protocol.ts 참고).
 import '../assets/content.css'
+import { TEST_FIXTURES_ON, isFixtureArticle, isFixturePage } from '../lib/fixture'
 import { ARTICLE_EXCLUDE_MATCHES, ARTICLE_MATCHES, TEST_FIXTURE_MATCHES } from '../match-patterns'
 import content from '../../../packages/content/ui.ko.json'
 import { findEvidence } from '@genuearly/shared'
@@ -83,9 +84,9 @@ function createBadge() {
 export default defineContentScript({
   // 대상 페이지의 원본은 match-patterns.ts 다. host_permissions 와 같은 값을 쓴다.
   //
-  // 개발 빌드에서는 수동 테스트 자료도 받는다. `import.meta.env.DEV` 는 빌드 때
-  // 상수로 접히므로 **배포본 번들에는 이 주소들이 남지 않는다.**
-  matches: [...ARTICLE_MATCHES, ...(import.meta.env.DEV ? TEST_FIXTURE_MATCHES : [])],
+  // 개발 빌드에서는 수동 테스트 자료도 받는다. `TEST_FIXTURES_ON` 은 빌드 때
+  // 상수로 접히므로 **배포본 번들에는 이 주소들이 남지 않는다** (lib/fixture.ts).
+  matches: [...ARTICLE_MATCHES, ...(TEST_FIXTURES_ON ? TEST_FIXTURE_MATCHES : [])],
 
 // **댓글 화면에서는 아예 돌지 않는다.** 주소에 `article` 이 들어 있지만 본문이 없어
   // 지금까지 ⚪ 배지가 떴다 — 판단해 보고 실패한 것처럼 보이지만 기사 페이지가 아니다.
@@ -96,19 +97,15 @@ export default defineContentScript({
   cssInjectionMode: 'ui',
 
   async main(ctx) {
-    // **테스트 자료의 목록 페이지에서는 아무것도 띄우지 않는다.**
+    // **테스트 자료에서는 기사 페이지에만 뜬다.**
     //
-    // 실제 사이트에서 ①은 기사 주소에만 붙는다. 그런데 테스트 자료는 목록과 기사가
-    // 같은 곳에 살아서(`file://`·localhost) 호스트째 받을 수밖에 없고, 그러면 목록
-    // 페이지에서도 이 스크립트가 돈다. 거기서는 기사를 못 읽으니 "판단하지 못함"
-    // 배지가 뜨는데, **그 자리가 하필 ② 범례 자리다** (둘 다 오른쪽 아래 고정).
-    // 범례를 덮어 버려서 아이콘 설명을 볼 수가 없었다.
+    // 실제 사이트에서 ①은 기사 주소에만 붙는다. 그런데 자료는 목록과 기사가 같은
+    // 곳에 살아서(`file://`·localhost) 호스트째 받을 수밖에 없다. 목록 페이지에서는
+    // 기사를 못 읽어 "판단하지 못함" 배지가 떴고, **그 자리가 하필 ② 범례 자리였다**
+    // (둘 다 오른쪽 아래 고정). 범례를 덮어 아이콘 설명을 볼 수가 없었다.
     //
-    // 주소가 아니라 모양으로 가른다 — lib/extract.ts·portal.content.ts 와 같은 잣대다.
-    if (import.meta.env.DEV && !document.querySelector('article#article h1#headline')) {
-      const 아는사이트 = /naver.com|daum.net|insight.co.kr|wikitree.co.kr/.test(location.hostname)
-      if (!아는사이트) return
-    }
+    // 자료가 아닌 `file://`·localhost 페이지 — 개발자 자신의 앱 — 에서도 돌지 않는다.
+    if (TEST_FIXTURES_ON && isFixturePage() && !isFixtureArticle()) return
 
     const article = extractArticle()
     const badge = createBadge()
