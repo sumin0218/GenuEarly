@@ -57,7 +57,7 @@ describe('말풍선', () => {
   it('닫기 단추에 이름이 붙는다 — 글자가 ✕ 뿐이다', () => {
     const x = createToast(document).el.querySelector('button')
     expect(x?.getAttribute('aria-label')).toBe(C.close)
-    expect(C.close, '같은 제품의 다른 닫기와 겹치면 안 된다').not.toBe(content.portal.legend.close)
+    expect(C.close, '같은 제품의 다른 단추와 겹치면 안 된다').not.toBe(content.portal.legend.collapse)
   })
 
   it('두 번 띄워도 타이머가 겹치지 않는다', () => {

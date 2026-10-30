@@ -24,9 +24,9 @@ function 링크를놓는다(...urls: string[]): void {
 }
 
 /** 저장소와 판단을 흉내 낸다. 판단은 늘 SAFE 로 돌려준다. */
-function stub(닫은적있나 = false): void {
+function stub(접어뒀나 = false): void {
   const local = new Map<string, unknown>()
-  if (닫은적있나) local.set('portalLegendSeen', true)
+  if (접어뒀나) local.set('portalLegendCollapsed', true)
   vi.stubGlobal('browser', {
     storage: {
       local: {
@@ -95,14 +95,15 @@ describe('범례가 뜨는 때', () => {
     expect(범례(), '아이콘만 붙고 범례가 안 뜨던 자리다 (리뷰 #39)').not.toBeNull()
   })
 
-  it('한 번 닫은 사람에게는 나중에도 뜨지 않는다', async () => {
+  it('**접어 둔 사람에게도 상자는 뜬다** — 접힌 채로다. 없애지 않는다', async () => {
     stub(true)
     await 띄운다()
     링크를놓는다(기사(4))
     await 쉰다(RESCAN_DEBOUNCE_MS + 150)
 
     expect(표시()).toBeGreaterThan(0)
-    expect(범례()).toBeNull()
+    const box = 범례()
+    expect(box, '닫아 버리면 설명으로 돌아올 길이 없다').not.toBeNull()
   })
 
   it('여러 번 다시 그려도 범례는 하나다', async () => {

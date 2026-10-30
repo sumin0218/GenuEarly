@@ -179,33 +179,39 @@ export function createMark(doc: Document) {
 /** 범례 요소를 알아보는 이름. 표시와 마찬가지로 페이지와 겹치지 않는 이름을 쓴다. */
 export const LEGEND_CLASS = 'genuearly-portal-legend'
 
-/** 닫았다는 것을 적어 두는 칸. **`local` 이다** — 브라우저를 닫아도 다시 뜨지 않는다. */
-export const LEGEND_SEEN_KEY = 'portalLegendSeen'
+/**
+ * 접어 뒀다는 것을 적어 두는 칸. **`local` 이다** — 브라우저를 닫아도 접힌 채다.
+ *
+ * 전에는 `portalLegendSeen` 이었고 "한 번 닫았으면 다시 띄우지 않는다" 는 뜻이었다.
+ * **그것이 잘못이었다** — 제목 옆 아이콘은 영원히 뜨는데 설명은 한 번 닫으면 볼 길이
+ * 없었다. 이제 없애지 않고 접는다. 접혀 있어도 제목 줄은 남아 있어 언제든 펼 수 있다.
+ */
+export const LEGEND_COLLAPSED_KEY = 'portalLegendCollapsed'
 
 /** 범례에 줄을 세우는 차례. 걸린 것이 위다 — 사용자가 먼저 묻는 것이 그쪽이다. */
 export const LEGEND_LEVELS = ['CAUTION', 'CHECK', 'SAFE', 'UNDETERMINED', 'PENDING'] as const
 
 /**
- * 범례를 한 번이라도 닫았는가.
+ * 지난번에 접어 뒀는가.
  *
- * **못 읽으면 "닫았다" 로 친다.** 읽기에 실패했을 때 띄우는 쪽으로 기울면, 저장소가
- * 막힌 사용자에게는 페이지마다 같은 상자가 계속 뜬다. 안 뜨는 쪽이 덜 해롭다.
+ * **못 읽으면 "접혀 있다" 로 친다.** 저장소가 막힌 사용자에게 페이지마다 펼쳐진
+ * 상자가 뜨는 것보다, 접힌 줄 하나가 뜨는 편이 덜 성가시다. 펴는 길은 남아 있다.
  */
-export async function legendDismissed(): Promise<boolean> {
+export async function legendCollapsed(): Promise<boolean> {
   try {
-    const got = (await browser.storage.local.get(LEGEND_SEEN_KEY)) as Record<string, unknown>
-    return got[LEGEND_SEEN_KEY] === true
+    const got = (await browser.storage.local.get(LEGEND_COLLAPSED_KEY)) as Record<string, unknown>
+    return got[LEGEND_COLLAPSED_KEY] === true
   } catch {
     return true
   }
 }
 
-/** 닫았다고 적어 둔다. 못 적어도 화면은 닫는다 — 이번 페이지에서는 사라진다. */
-export async function dismissLegend(): Promise<void> {
+/** 접었는지 펼쳤는지 적어 둔다. 못 적어도 이번 페이지에서는 접힌다. */
+export async function setLegendCollapsed(collapsed: boolean): Promise<void> {
   try {
-    await browser.storage.local.set({ [LEGEND_SEEN_KEY]: true })
+    await browser.storage.local.set({ [LEGEND_COLLAPSED_KEY]: collapsed })
   } catch {
-    /* 다음에 또 뜬다. 성가실 뿐 해롭지 않다 */
+    /* 다음에 펼쳐진 채로 뜬다. 성가실 뿐 해롭지 않다 */
   }
 }
 
@@ -223,9 +229,12 @@ export function createLegend(
     lede: string
     levels: Record<string, string>
     solid: string
-    close: string
+    collapse: string
+    expand: string
   },
-  onClose: () => void,
+  /** 접거나 편 뒤에 불린다. 적어 두는 일은 부르는 쪽이 한다 */
+  onToggle: (collapsed: boolean) => void,
+  시작할때접힘 = false,
 ) {
   const host = doc.createElement('div')
   host.className = LEGEND_CLASS
@@ -285,8 +294,19 @@ export function createLegend(
   x.className = 'x'
   x.type = 'button'
   x.textContent = '✕'
-  x.setAttribute('aria-label', copy.close)
-  x.addEventListener('click', onClose)
+  // **없애지 않고 접는다.** 제목 줄은 늘 남아 있어 언제든 펼 수 있다.
+  let 접힘 = 시작할때접힘
+  const 그린다 = (): void => {
+    x.textContent = 접힘 ? '▸' : '▾'
+    x.setAttribute('aria-label', 접힘 ? copy.expand : copy.collapse)
+    x.setAttribute('aria-expanded', String(!접힘))
+    for (const el of [lede, rows, solid]) el.hidden = 접힘
+  }
+  x.addEventListener('click', () => {
+    접힘 = !접힘
+    그린다()
+    onToggle(접힘)
+  })
   head.append(h, x)
   box.append(head)
 
@@ -318,9 +338,10 @@ export function createLegend(
   solid.textContent = copy.solid
   box.append(solid)
 
+  그린다()
   shadow.append(style, box)
   // `box` 를 함께 돌려준다. Shadow 가 닫혀 있어 바깥에서는 안이 보이지 않는데,
   // **이 상자는 글이 전부라 그리는 내용을 검사로 지켜야 한다** — `createMark` 는
   // 아이콘 하나뿐이라 그럴 것이 없었다. 부르는 쪽은 `host` 와 `close` 만 쓴다.
-  return { host, box, close: () => host.remove() }
+  return { host, box, remove: () => host.remove() }
 }

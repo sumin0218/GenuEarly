@@ -12,8 +12,8 @@ import {
   collectTitles,
   createLegend,
   createMark,
-  dismissLegend,
-  legendDismissed,
+  legendCollapsed,
+  setLegendCollapsed,
 } from '../lib/portal'
 import type { DisplayLevel, HeadlineVerdict, JudgeHeadlineMessage } from '../lib/protocol'
 
@@ -174,24 +174,21 @@ export default defineContentScript({
     //
     // **표시가 하나라도 붙은 뒤에 띄운다.** 기사 목록이 아닌 페이지(설정, 검색 결과)
     // 에서도 이 스크립트가 돌 수 있는데, 거기서 설명할 표시가 없으면 상자만 뜬다.
-    let legend: { host: HTMLElement; close: () => void } | undefined
-    // **한 번 닫으면 이 페이지에서 다시 묻지 않는다.** `scan()` 이 돌 때마다 부르므로
-    // 저장소를 매번 읽지 않게 기억해 둔다.
-    let 닫았음 = false
+    // **늘 띄운다. 없애지 않는다.** 지난번에 접어 뒀으면 접힌 채로 뜬다 —
+    // 제목 줄은 남아 있어 언제든 펼 수 있다. 전에는 닫으면 영영 못 봤는데,
+    // 제목 옆 아이콘은 영원히 뜨므로 설명으로 돌아올 길이 있어야 한다.
+    let legend: { host: HTMLElement } | undefined
     async function maybeShowLegend(): Promise<void> {
-      if (legend || 닫았음) return
+      if (legend) return
       if (document.querySelector(`.${MARK_CLASS}`) === null) return
-      if (await legendDismissed()) {
-        닫았음 = true
-        return
-      }
-      if (legend || 닫았음) return // 기다리는 사이에 다른 호출이 띄웠거나 닫았다
-      legend = createLegend(document, content.portal.legend, () => {
-        legend?.close()
-        legend = undefined
-        닫았음 = true
-        void dismissLegend()
-      })
+      const 접힘 = await legendCollapsed()
+      if (legend) return // 기다리는 사이에 다른 호출이 띄웠다
+      legend = createLegend(
+        document,
+        content.portal.legend,
+        (collapsed) => void setLegendCollapsed(collapsed),
+        접힘,
+      )
       document.body.append(legend.host)
     }
 

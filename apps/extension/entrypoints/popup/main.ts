@@ -19,7 +19,6 @@ import {
   type SelectionRecord,
 } from '../../lib/selection'
 import { normalizeUrl } from '../../lib/cache'
-import { LEGEND_SEEN_KEY } from '../../lib/portal'
 import { findArchived } from '../../lib/archive'
 import { REPORT_KEY, restoreReport, type Report } from '../../lib/report'
 import type {
@@ -516,7 +515,6 @@ function render(state: TabState, root: Document = document, kind: 'page' | 'sele
   // 틀이 통째로 안 그려진다. 기사가 아닌 페이지에서 로고가 깨져 보이던 원인이다.
   drawFrame(state, root, kind)
   drawWrongButton(root)
-  drawLegendAgain(root)
 
   items.replaceChildren()
   const rows = toRows(state.verdict)
@@ -619,28 +617,6 @@ function drawFrame(state: TabState, root: Document, kind: 'page' | 'selection'):
  * 화면은 지금까지 그 둘을 같은 말로 보여 줬다 (PR #20 리뷰).
  */
 /** 제보 자리. **아직 아무것도 보내지 않는다** (GE-26). */
-/**
- * 목록 표시 설명(범례)을 **다시 띄우게 한다.**
- *
- * 범례는 ✕ 로 닫으면 `storage.local` 에 적혀 다시 뜨지 않는다. 그런데 **제목 옆
- * 아이콘은 영원히 뜬다** — 두 달 뒤에 "이 동그라미 뭐였지?" 싶어도 되돌릴 길이
- * 없었다. 닫는 길만 만들고 돌아올 길을 안 만든 것이다.
- *
- * 여기서 지우개만 쥐여 준다. **지금 띄우지는 않는다** — 팝업은 목록 페이지가 아닐
- * 수도 있고, 띄울 자리는 그 페이지의 콘텐츠 스크립트다. 다음에 목록을 열면 뜬다.
- */
-function drawLegendAgain(root: Document): void {
-  const btn = root.getElementById('legend-again')
-  if (!btn) return
-  btn.textContent = content.portal.legend.again
-  btn.onclick = () => {
-    void browser.storage.local.remove(LEGEND_SEEN_KEY).catch(() => {
-      /* 못 지워도 알린다 — 다음에 목록을 열면 안 뜰 뿐이다 */
-    })
-    btn.textContent = content.portal.legend.againDone
-  }
-}
-
 function drawWrongButton(root: Document): void {
   const btn = root.getElementById('report-wrong')
   if (!btn) return
