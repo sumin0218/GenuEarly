@@ -1,0 +1,28 @@
+name: PR Assignee
+
+# 담당자 검사만 따로 둔다. `Lint PR` 에 붙이면 담당자를 넣고 뺄 때마다
+# 확장·중계·공용 테스트까지 다시 돌아 빌드가 통째로 낭비된다.
+#
+# `assigned` 와 `unassigned` 가 트리거에 들어 있어야 한다. 담당자를 넣은 뒤에
+# 이 검사가 저절로 다시 돌아 초록으로 바뀐다 — 없으면 사람이 빈 커밋을 밀어야 한다.
+
+on:
+  pull_request:
+    types: [opened, reopened, ready_for_review, assigned, unassigned]
+
+permissions:
+  contents: read
+
+jobs:
+  assignee:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - name: 담당자 규칙 테스트
+        run: bash .github/scripts/test-validate-assignee.sh
+      # 아이디를 env 로 넘긴다. 식을 run 안에 바로 펼치면 아이디가 셸 코드로 읽힌다.
+      # GitHub 식에는 length() 가 없어서 개수를 세지 않고 목록을 그대로 본다.
+      - name: 담당자 검사
+        env:
+          ASSIGNEES: ${{ join(github.event.pull_request.assignees.*.login, ' ') }}
+        run: bash .github/scripts/validate-assignee.sh "$ASSIGNEES"
