@@ -1,0 +1,297 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>GenuEarly — 기사를 읽는 이른 순간에</title>
+<meta name="description" content="뉴스 기사를 연 그 순간에 출처와 제목과 표현을 살펴, 확인해 볼 점을 짚어 주는 크롬 확장 프로그램. 진위를 단정하지 않습니다.">
+
+<meta property="og:type" content="website">
+<meta property="og:title" content="GenuEarly — 기사를 읽는 이른 순간에">
+<meta property="og:description" content="확인해 볼 점을 짚어 줍니다. 진위를 단정하지 않습니다.">
+<meta property="og:image" content="https://sumin0218.github.io/GenuEarly/assets/icon.png">
+<meta property="og:url" content="https://sumin0218.github.io/GenuEarly/">
+
+<link rel="icon" href="./assets/icon-128.png">
+<link rel="stylesheet" href="./landing.css">
+</head>
+<body>
+
+<a class="skip" href="#main">본문으로 건너뛰기</a>
+
+<header class="nav">
+  <div class="wrap nav__in">
+    <a class="brand" href="#top">
+      <img src="./assets/icon-128.png" alt="" width="28" height="28">
+      <b>GenuEarly</b>
+    </a>
+    <nav class="nav__links" aria-label="페이지 안내">
+      <a href="#features">기능</a>
+      <a href="#how">쓰는 법</a>
+      <a href="#limits">하지 않는 것</a>
+      <a href="#ai">AI 역할</a>
+      <a href="#privacy">개인정보</a>
+      <a href="https://github.com/sumin0218/GenuEarly">GitHub</a>
+    </nav>
+    <a class="btn btn--sm" href="#install">설치</a>
+  </div>
+</header>
+
+<main id="main">
+
+<!-- ─────────────────────────────── 히어로 ─────────────────────────────── -->
+<section class="hero" id="top">
+  <div class="wrap hero__in">
+    <div class="hero__text">
+      <p class="eyebrow">크롬 확장 프로그램</p>
+      <h1>
+        다 읽고 의심하면<br>
+        <span class="mark-y">늦습니다</span>
+      </h1>
+      <p class="lede">
+        기사를 연 <b>그 순간</b>에 출처와 제목과 표현을 살펴
+        확인해 볼 점을 짚어 드립니다. 제목 하나 판정에 <b>0.5~1.5초</b>.
+      </p>
+      <div class="cta">
+        <a class="btn" href="#install">설치하기</a>
+        <a class="btn btn--ghost" href="https://github.com/sumin0218/GenuEarly">GitHub에서 보기</a>
+      </div>
+      <p class="note">
+        참·거짓을 말하지 않습니다. 확인해 볼 점만 보여 드리고 판단은 사용자가 합니다.
+      </p>
+    </div>
+
+    <figure class="shot shot--hero">
+      <div class="shot__frame" data-shot="hero-article.png">
+        <span class="shot__hint">기사 페이지 — 배지와 본문 형광펜</span>
+      </div>
+    </figure>
+  </div>
+</section>
+
+<!-- ─────────────────────────────── 숫자 ─────────────────────────────── -->
+<section class="stats">
+  <div class="wrap stats__in">
+    <div class="stat"><b>0.5~1.5<em>초</em></b><span>제목 하나 판정 (실측)</span></div>
+    <div class="stat"><b>7<em>가지</em></b><span>글에서 보는 항목</span></div>
+    <div class="stat"><b>841<em>건</em></b><span>자동 검사</span></div>
+    <div class="stat"><b>2<em>개</em></b><span>받는 브라우저 권한</span></div>
+    <div class="stat"><b>0<em>건</em></b><span>동의 없이 보내는 것</span></div>
+  </div>
+</section>
+
+<!-- ─────────────────────────────── 기능 ─────────────────────────────── -->
+<section class="band" id="features">
+  <div class="wrap">
+    <h2 class="h2">읽는 동안, 넘기기 직전에</h2>
+    <p class="sub">다섯 자리에서 끼어듭니다. 어느 자리에서도 막지 않습니다.</p>
+
+    <div class="feat">
+      <div class="feat__text">
+        <p class="num">01</p>
+        <h3>기사를 열면 바로 배지</h3>
+        <p>
+          오른쪽 아래에 네 단계로 뜹니다.
+          <b>판단 보류는 실패가 아니라 결과의 한 종류</b>입니다 —
+          확신이 서지 않으면 서지 않는다고 말합니다.
+        </p>
+        <div class="levels">
+          <p class="level" data-lv="SAFE"><i></i><b>안심</b><span>눈에 띄는 신호가 없습니다</span></p>
+          <p class="level" data-lv="CHECK"><i></i><b>확인 권장</b><span>확인해 볼 점이 있습니다</span></p>
+          <p class="level" data-lv="CAUTION"><i></i><b>주의</b><span>신호가 여럿 겹칩니다</span></p>
+          <p class="level" data-lv="UNDETERMINED"><i></i><b>판단 보류</b><span>판단할 만큼 분명하지 않습니다</span></p>
+        </div>
+      </div>
+      <figure class="shot">
+        <div class="shot__frame" data-shot="feature-badge.png">
+          <span class="shot__hint">배지 네 단계</span>
+        </div>
+      </figure>
+    </div>
+
+    <div class="feat feat--flip">
+      <div class="feat__text">
+        <p class="num">02</p>
+        <h3>걸린 대목에 형광펜</h3>
+        <p>
+          항목이 걸리면 <b>본문의 그 문장</b>에 칠합니다. 올려놓으면 왜 칠했는지 뜹니다.
+          기사 화면을 건드리지 않고 자리만 덮어 그립니다.
+        </p>
+      </div>
+      <figure class="shot">
+        <div class="shot__frame" data-shot="feature-highlight.png">
+          <span class="shot__hint">본문 형광펜과 사유 말풍선</span>
+        </div>
+      </figure>
+    </div>
+
+    <div class="feat">
+      <div class="feat__text">
+        <p class="num">03</p>
+        <h3>목록에서는 낚시성 제목만</h3>
+        <p>
+          네이버·인사이트·위키트리 목록에서 제목 옆에 작은 표시가 붙습니다.
+          <b>제목이 내용을 감추거나 부풀리는지</b> 하나만 봅니다 — 기사 전체를 판단하지 않습니다.
+        </p>
+      </div>
+      <figure class="shot">
+        <div class="shot__frame" data-shot="feature-portal.png">
+          <span class="shot__hint">뉴스 목록 — 제목 옆 표시와 범례</span>
+        </div>
+      </figure>
+    </div>
+
+    <div class="feat feat--flip">
+      <div class="feat__text">
+        <p class="num">04</p>
+        <h3>드래그한 글도, 공유 직전에도</h3>
+        <p>
+          뉴스 사이트 밖에서도 글을 드래그해 오른쪽 클릭으로 검사합니다.
+          주의 기사를 복사·공유하려 할 때 한 번 알려 드립니다 —
+          <b>버튼을 가리거나 동작을 취소하지 않습니다.</b>
+        </p>
+      </div>
+      <figure class="shot">
+        <div class="shot__frame" data-shot="feature-selection.png">
+          <span class="shot__hint">선택 검사 · 공유 직전 알림</span>
+        </div>
+      </figure>
+    </div>
+
+    <div class="feat">
+      <div class="feat__text">
+        <p class="num">05</p>
+        <h3>한 기사가 전하지 못하는 것</h3>
+        <p>
+          리포트를 누르면 같은 사안의 <b>주변 보도</b>를 모아 견주어 드립니다.
+          뒷받침하는 기록과 어긋나는 기록을 함께 찾습니다. 지난 리포트는 보관함에 남습니다.
+        </p>
+      </div>
+      <figure class="shot">
+        <div class="shot__frame" data-shot="feature-report.png">
+          <span class="shot__hint">리포트 — 주변 보도 비교</span>
+        </div>
+      </figure>
+    </div>
+  </div>
+</section>
+
+<!-- ─────────────────────────────── 쓰는 법 ─────────────────────────────── -->
+<section class="band band--tint" id="how">
+  <div class="wrap">
+    <h2 class="h2">세 번이면 끝납니다</h2>
+    <ol class="steps">
+      <li><b>1</b><h3>기사를 엽니다</h3><p>네이버·다음·인사이트·위키트리. 따로 누를 것이 없습니다.</p></li>
+      <li><b>2</b><h3>배지를 봅니다</h3><p>몇 초 안에 오른쪽 아래에 뜹니다. 걸린 대목은 본문에 칠해집니다.</p></li>
+      <li><b>3</b><h3>직접 판단합니다</h3><p>자세히 보려면 확장 아이콘을, 주변 보도까지 보려면 리포트를.</p></li>
+    </ol>
+  </div>
+</section>
+
+<!-- ─────────────────────────────── 하지 않는 것 ─────────────────────────────── -->
+<section class="band" id="limits">
+  <div class="wrap">
+    <h2 class="h2">하지 않기로 한 것</h2>
+    <p class="sub">제품의 전제입니다. 어기면 만들 이유가 없어집니다.</p>
+    <div class="nots">
+      <div class="not"><p class="not__x">진위를 단정한다</p><p class="not__o">확인해 볼 신호가 있는지를 알려 드립니다</p></div>
+      <div class="not"><p class="not__x">공유를 막는다</p><p class="not__o">알림만 띄웁니다. 공유는 사용자가 합니다</p></div>
+      <div class="not"><p class="not__x">모르는데 아는 척한다</p><p class="not__o">확신이 낮으면 판단 보류라고 말합니다</p></div>
+      <div class="not"><p class="not__x">언론사를 평가한다</p><p class="not__o">그 기사의 글에서 보이는 것만 봅니다</p></div>
+      <div class="not"><p class="not__x">동의 없이 데이터를 보낸다</p><p class="not__o">보내는 것이 없습니다</p></div>
+    </div>
+  </div>
+</section>
+
+<!-- ─────────────────────────────── AI ─────────────────────────────── -->
+<section class="band band--tint" id="ai">
+  <div class="wrap">
+    <h2 class="h2">AI는 역할을 나눠 씁니다</h2>
+    <p class="sub">
+      판정은 하나가 합니다. 넷이 각자 판정하면 서로 어긋나고,
+      사용자는 <b>판정과 설명이 다른 화면</b>을 보게 됩니다.
+    </p>
+    <div class="roles">
+      <div class="role">
+        <h3>Jev</h3>
+        <p class="role__does">기사·제목·문장을 <b>판단합니다</b></p>
+        <p class="role__not">글을 한 글자도 쓰지 않습니다</p>
+      </div>
+      <div class="role">
+        <h3>ChatKHU</h3>
+        <p class="role__does">사용자가 읽는 <b>모든 문구</b>와 아이콘</p>
+        <p class="role__not">판정하지 않습니다</p>
+      </div>
+      <div class="role">
+        <h3>sonar-pro</h3>
+        <p class="role__does">리포트의 주변 기록을 <b>찾아옵니다</b></p>
+        <p class="role__not">참·거짓을 선언하지 않습니다</p>
+      </div>
+      <div class="role">
+        <h3>코드</h3>
+        <p class="role__does">점수 합산과 단계 결정, <b>생성물 거르기</b></p>
+        <p class="role__not">모델에 맡기지 않습니다</p>
+      </div>
+    </div>
+    <p class="note">
+      모델은 모두 ChatKHU API 게이트웨이를 거쳐 부릅니다.
+      실행 중 생성되는 한국어는 리포트 요약 한 문단뿐이고, 그것도 코드가 그 자리에서 거릅니다.
+    </p>
+  </div>
+</section>
+
+<!-- ─────────────────────────────── 개인정보 ─────────────────────────────── -->
+<section class="band" id="privacy">
+  <div class="wrap">
+    <h2 class="h2">브라우저에 남는 것은 셋뿐입니다</h2>
+    <div class="keeps">
+      <div class="keep"><h3>판단 캐시</h3><p>주소의 <b>해시</b>와 점수만</p><span>6시간</span></div>
+      <div class="keep"><h3>보고 있는 리포트</h3><p>브라우저를 닫으면</p><span>사라짐</span></div>
+      <div class="keep"><h3>리포트 보관함</h3><p>제목과 주소. 20건까지</p><span>30일</span></div>
+    </div>
+    <p class="note">
+      API 키는 중계 서버 환경변수에만 둡니다. 확장 프로그램 번들에는 어떤 형태로도 넣지 않습니다.
+      <a href="https://github.com/sumin0218/GenuEarly/blob/main/docs/security/secure-coding.md">보안 설계 보기</a>
+    </p>
+  </div>
+</section>
+
+<!-- ─────────────────────────────── 설치 ─────────────────────────────── -->
+<section class="band band--cta" id="install">
+  <div class="wrap">
+    <h2 class="h2">설치하기</h2>
+    <p class="sub">아직 웹스토어 심사 전입니다. 압축해제된 확장 프로그램으로 바로 쓰실 수 있습니다.</p>
+    <ol class="install">
+      <li><a href="https://github.com/sumin0218/GenuEarly/releases/latest">최신 릴리스</a>에서 zip을 내려받아 압축을 풉니다.</li>
+      <li>크롬 주소창에 <code>chrome://extensions</code> 를 입력합니다.</li>
+      <li>우측 상단 <b>개발자 모드</b>를 켭니다.</li>
+      <li><b>압축해제된 확장 프로그램을 로드합니다</b> 를 눌러 푼 폴더를 고릅니다.</li>
+    </ol>
+    <div class="cta">
+      <a class="btn" href="https://github.com/sumin0218/GenuEarly/releases/latest">zip 내려받기</a>
+      <a class="btn btn--ghost" href="https://github.com/sumin0218/GenuEarly">저장소</a>
+    </div>
+  </div>
+</section>
+
+</main>
+
+<footer class="foot">
+  <div class="wrap foot__in">
+    <div class="foot__brand">
+      <img src="./assets/icon-128.png" alt="" width="24" height="24">
+      <b>GenuEarly</b>
+      <p>2026 KHU AI Challenge 출품작</p>
+    </div>
+    <nav class="foot__links" aria-label="바닥 안내">
+      <a href="https://github.com/sumin0218/GenuEarly">GitHub</a>
+      <a href="https://github.com/sumin0218/GenuEarly/issues/new?template=bug-report.yml">버그 제보</a>
+      <a href="https://github.com/sumin0218/GenuEarly/issues/new?template=judgment-dispute.yml">판단 결과 이의</a>
+      <a href="https://github.com/sumin0218/GenuEarly/blob/main/LICENSE">MIT License</a>
+    </nav>
+  </div>
+  <p class="foot__copy">© 2026 GenuEarly contributors</p>
+</footer>
+
+</body>
+</html>

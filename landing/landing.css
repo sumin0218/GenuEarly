@@ -1,0 +1,483 @@
+/* GenuEarly 랜딩 페이지.
+
+   **색은 제품에서 가져온다.** 팝업(apps/extension/entrypoints/popup/style.css)과 같은
+   이름, 같은 값이다. 여기서 새 색을 만들지 않는다 — 랜딩에서 본 색과 설치하고 본 색이
+   다르면 같은 제품으로 보이지 않는다.
+
+   **판정 색(초록·노랑·빨강)을 장식에 쓰지 않는다.** 그 넷은 단계를 뜻한다. 버튼이나
+   머리글에 쓰면 아무 뜻 없는 자리에서 판정처럼 읽힌다
+   (apps/extension/tests/design.test.ts "제품의 색이 판정의 색과 부딪히지 않는다"). */
+
+:root {
+  /* 면 */
+  --ground: #f4f5f7;
+  --bg: #ffffff;
+  --surface: #f4f5f7;
+  --ink: #111111;
+  --muted: #5f6368;
+  --rule: #e8e8e8;
+
+  /* 제품 색 */
+  --brand: #162636;
+  --brand-ink: #ffffff;
+  --action: #02b67f;
+  --action-ink: #0d0d0d;
+
+  /* 단계 색 — 설명하는 자리에서만 쓴다 */
+  --lv-safe: #247b50;
+  --lv-check: #9a5b00;
+  --lv-caution: #c4242a;
+
+  /* 여백은 4px 배수 */
+  --s4: 4px; --s8: 8px; --s12: 12px; --s16: 16px;
+  --s24: 24px; --s32: 32px; --s48: 48px; --s64: 64px; --s96: 96px;
+
+  --r8: 8px; --r12: 12px; --r16: 16px;
+  --shadow-lg: 0 16px 48px rgba(22, 38, 54, 0.14);
+  --wrap: 1080px;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --ground: #0d0d0d;
+    --bg: #111111;
+    --surface: #1a1a1c;
+    --ink: #ffffff;
+    --muted: #b4b4b4;
+    --rule: #272727;
+
+    --brand: #e7edf3;
+    --brand-ink: #0d0d0d;
+
+    --lv-safe: #3fc07a;
+    --lv-check: #f0b429;
+    --lv-caution: #f87171;
+
+    --shadow-lg: 0 16px 48px rgba(0, 0, 0, 0.5);
+  }
+}
+
+* { box-sizing: border-box; }
+
+html { scroll-behavior: smooth; }
+@media (prefers-reduced-motion: reduce) { html { scroll-behavior: auto; } }
+
+body {
+  margin: 0;
+  background: var(--ground);
+  color: var(--ink);
+  font: 16px/1.7 "Pretendard", "Noto Sans KR", -apple-system, BlinkMacSystemFont,
+    "Segoe UI", "Malgun Gothic", sans-serif;
+  -webkit-font-smoothing: antialiased;
+  word-break: keep-all;          /* 한국어는 낱말 중간에서 끊지 않는다 */
+}
+
+a { color: inherit; }
+
+.wrap {
+  width: 100%;
+  max-width: var(--wrap);
+  margin: 0 auto;
+  padding: 0 var(--s16);         /* 휴대폰에서 글이 가장자리에 붙지 않게 */
+}
+
+.skip {
+  position: absolute;
+  left: -9999px;
+}
+.skip:focus {
+  left: var(--s16);
+  top: var(--s16);
+  z-index: 10;
+  padding: var(--s8) var(--s12);
+  background: var(--brand);
+  color: var(--brand-ink);
+  border-radius: var(--r8);
+}
+
+/* ── 상단 ─────────────────────────────────────────────────────────── */
+
+.nav {
+  position: sticky;
+  top: 0;
+  z-index: 5;
+  background: color-mix(in srgb, var(--bg) 88%, transparent);
+  backdrop-filter: blur(10px);
+  border-bottom: 1px solid var(--rule);
+}
+.nav__in {
+  display: flex;
+  align-items: center;
+  gap: var(--s16);
+  height: 60px;
+}
+.brand {
+  display: flex;
+  align-items: center;
+  gap: var(--s8);
+  font-size: 17px;
+  text-decoration: none;
+}
+.nav__links {
+  display: flex;
+  gap: var(--s16);
+  margin-left: auto;
+  font-size: 14px;
+  color: var(--muted);
+}
+.nav__links a { text-decoration: none; }
+.nav__links a:hover { color: var(--ink); }
+
+@media (max-width: 860px) {
+  .nav__links { display: none; }     /* 좁은 화면에서는 설치 단추만 남긴다 */
+  .nav__in .btn { margin-left: auto; }
+}
+
+/* ── 단추 ─────────────────────────────────────────────────────────── */
+
+.btn {
+  display: inline-block;
+  padding: var(--s12) var(--s24);
+  border-radius: var(--r8);
+  background: var(--action);
+  color: var(--action-ink);
+  font-weight: 700;
+  text-decoration: none;
+  border: 1px solid transparent;
+}
+.btn:hover { filter: brightness(1.06); }
+.btn:focus-visible { outline: 0; box-shadow: 0 0 0 3px rgba(2, 182, 127, 0.4); }
+.btn--sm { padding: var(--s8) var(--s16); font-size: 14px; }
+.btn--ghost {
+  background: transparent;
+  color: var(--ink);
+  border-color: var(--rule);
+}
+.btn--ghost:hover { background: var(--surface); filter: none; }
+
+/* ── 히어로 ───────────────────────────────────────────────────────── */
+
+.hero {
+  background: var(--bg);
+  border-bottom: 1px solid var(--rule);
+  padding: var(--s96) 0;
+}
+.hero__in {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: var(--s64);
+  align-items: center;
+}
+.eyebrow {
+  margin: 0 0 var(--s12);
+  font-size: 13px;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  color: var(--muted);
+}
+h1 {
+  margin: 0 0 var(--s24);
+  font-size: clamp(36px, 5.5vw, 60px);
+  line-height: 1.15;
+  letter-spacing: -0.02em;
+}
+/* 제목의 한 낱말에만 칠한다 — 제품이 본문에 하는 일을 제목에서 한 번 보여 준다 */
+.mark-y {
+  background: linear-gradient(transparent 62%, rgba(255, 214, 0, 0.5) 62%);
+  padding: 0 var(--s4);
+}
+.lede {
+  margin: 0 0 var(--s32);
+  font-size: 18px;
+  color: var(--muted);
+  max-width: 44ch;
+}
+.lede b { color: var(--ink); }
+.cta { display: flex; flex-wrap: wrap; gap: var(--s12); }
+.note {
+  margin: var(--s24) 0 0;
+  font-size: 14px;
+  color: var(--muted);
+}
+
+/* ── 스크린샷 자리 ───────────────────────────────────────────────────
+   **아직 사진이 없다.** 자리만 파 두고, `data-shot` 에 넣을 파일 이름을 적어 둔다.
+   사진이 오면 이 틀을 <img> 로 바꾼다 — 비율은 그대로 두는 것이 좋다. */
+
+.shot { margin: 0; }
+.shot__frame {
+  position: relative;
+  aspect-ratio: 16 / 10;
+  display: grid;
+  place-items: center;
+  gap: var(--s8);
+  padding: var(--s16);
+  border: 2px dashed var(--rule);
+  border-radius: var(--r16);
+  background: var(--surface);
+  color: var(--muted);
+  text-align: center;
+}
+.shot--hero .shot__frame { box-shadow: var(--shadow-lg); border-style: solid; }
+.shot__hint { font-size: 14px; }
+.shot__frame::after {
+  content: attr(data-shot);
+  font-size: 12px;
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  opacity: 0.7;
+}
+
+/* ── 숫자 띠 ─────────────────────────────────────────────────────── */
+
+.stats {
+  background: var(--brand);
+  color: var(--brand-ink);
+}
+.stats__in {
+  display: grid;
+  grid-template-columns: repeat(5, 1fr);
+  gap: var(--s24);
+  padding: var(--s48) var(--s16);
+  text-align: center;
+}
+.stat b {
+  display: block;
+  font-size: clamp(22px, 3vw, 32px);
+  letter-spacing: -0.01em;
+}
+.stat em { font-style: normal; font-size: 0.55em; margin-left: 2px; opacity: 0.8; }
+.stat span { font-size: 13px; opacity: 0.75; }
+
+/* ── 띠 공통 ─────────────────────────────────────────────────────── */
+
+.band { padding: var(--s96) 0; background: var(--bg); }
+.band--tint { background: var(--ground); }
+.band--cta { background: var(--bg); border-top: 1px solid var(--rule); }
+
+.h2 {
+  margin: 0 0 var(--s12);
+  font-size: clamp(26px, 3.6vw, 38px);
+  line-height: 1.25;
+  letter-spacing: -0.02em;
+}
+.sub {
+  margin: 0 0 var(--s64);
+  color: var(--muted);
+  font-size: 17px;
+  max-width: 60ch;
+}
+
+/* ── 기능 ────────────────────────────────────────────────────────── */
+
+.feat {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: var(--s64);
+  align-items: center;
+  margin-bottom: var(--s96);
+}
+.feat:last-child { margin-bottom: 0; }
+.feat--flip .feat__text { order: 2; }   /* 좌우를 번갈아 — 눈이 한쪽으로 쏠리지 않는다 */
+.num {
+  margin: 0 0 var(--s8);
+  font-size: 13px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  color: var(--action);
+}
+.feat h3 {
+  margin: 0 0 var(--s12);
+  font-size: 24px;
+  letter-spacing: -0.01em;
+}
+.feat p { margin: 0; color: var(--muted); }
+.feat p b { color: var(--ink); }
+
+/* ── 배지 단계 설명 ───────────────────────────────────────────────────
+   **단계 색을 쓰는 유일한 자리다.** 여기서는 색이 실제로 단계를 뜻한다.
+   장식으로는 쓰지 않는다 (맨 위 머리말). */
+
+.levels { display: grid; gap: var(--s8); margin-top: var(--s24); }
+.level {
+  display: grid;
+  grid-template-columns: auto auto 1fr;
+  gap: var(--s12);
+  align-items: baseline;
+  font-size: 15px;
+  color: var(--muted);
+}
+.level i {
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  background: var(--dot);
+  align-self: center;
+}
+.level b { color: var(--ink); font-weight: 600; }
+.level[data-lv='SAFE']        { --dot: var(--lv-safe); }
+.level[data-lv='CHECK']       { --dot: var(--lv-check); }
+.level[data-lv='CAUTION']     { --dot: var(--lv-caution); }
+.level[data-lv='UNDETERMINED']{ --dot: var(--muted); }
+
+/* ── 단계 ────────────────────────────────────────────────────────── */
+
+.steps {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: var(--s24);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  counter-reset: none;
+}
+.steps li {
+  padding: var(--s32);
+  background: var(--bg);
+  border: 1px solid var(--rule);
+  border-radius: var(--r16);
+}
+.steps b {
+  display: grid;
+  place-items: center;
+  width: 32px;
+  height: 32px;
+  margin-bottom: var(--s16);
+  border-radius: 50%;
+  background: var(--brand);
+  color: var(--brand-ink);
+  font-size: 15px;
+}
+.steps h3 { margin: 0 0 var(--s8); font-size: 18px; }
+.steps p { margin: 0; color: var(--muted); font-size: 15px; }
+
+/* ── 하지 않는 것 ─────────────────────────────────────────────────── */
+
+.nots { display: grid; gap: var(--s12); }
+.not {
+  display: grid;
+  grid-template-columns: 1fr 1.4fr;
+  gap: var(--s24);
+  align-items: center;
+  padding: var(--s16) var(--s24);
+  background: var(--surface);
+  border-radius: var(--r12);
+}
+.not__x, .not__o { margin: 0; }
+.not__x {
+  color: var(--muted);
+  text-decoration: line-through;
+  text-decoration-thickness: 1px;
+}
+.not__o { font-weight: 600; }
+.not__o::before { content: '→ '; color: var(--action); }
+
+/* ── AI 역할 ─────────────────────────────────────────────────────── */
+
+.roles {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: var(--s16);
+}
+.role {
+  padding: var(--s24);
+  background: var(--bg);
+  border: 1px solid var(--rule);
+  border-radius: var(--r16);
+}
+.role h3 { margin: 0 0 var(--s12); font-size: 17px; }
+.role__does { margin: 0 0 var(--s8); font-size: 15px; color: var(--muted); }
+.role__does b { color: var(--ink); }
+.role__not {
+  margin: 0;
+  padding-top: var(--s8);
+  border-top: 1px solid var(--rule);
+  font-size: 13px;
+  color: var(--muted);
+}
+.role__not::before { content: '✕ '; color: var(--muted); }
+
+/* ── 남는 것 ─────────────────────────────────────────────────────── */
+
+.keeps {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: var(--s16);
+}
+.keep {
+  padding: var(--s24);
+  background: var(--surface);
+  border-radius: var(--r16);
+}
+.keep h3 { margin: 0 0 var(--s8); font-size: 17px; }
+.keep p { margin: 0 0 var(--s16); color: var(--muted); font-size: 15px; }
+.keep p b { color: var(--ink); }
+.keep span {
+  display: inline-block;
+  padding: var(--s4) var(--s12);
+  border-radius: 999px;
+  background: var(--brand);
+  color: var(--brand-ink);
+  font-size: 13px;
+  font-weight: 700;
+}
+
+/* ── 설치 ────────────────────────────────────────────────────────── */
+
+.install {
+  margin: 0 0 var(--s32);
+  padding-left: var(--s24);
+  max-width: 60ch;
+  color: var(--muted);
+}
+.install li { margin-bottom: var(--s8); }
+.install b, .install a { color: var(--ink); }
+code {
+  padding: 2px var(--s8);
+  border-radius: var(--r8);
+  background: var(--surface);
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 0.9em;
+}
+
+/* ── 바닥 ────────────────────────────────────────────────────────── */
+
+.foot {
+  padding: var(--s48) 0 var(--s32);
+  background: var(--brand);
+  color: var(--brand-ink);
+}
+.foot__in {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--s32);
+  justify-content: space-between;
+  align-items: flex-start;
+}
+.foot__brand { display: grid; grid-template-columns: auto auto; gap: var(--s8); align-items: center; }
+.foot__brand p { grid-column: 1 / -1; margin: var(--s4) 0 0; font-size: 13px; opacity: 0.7; }
+.foot__links { display: grid; gap: var(--s8); font-size: 14px; }
+.foot__links a { opacity: 0.85; }
+.foot__links a:hover { opacity: 1; }
+.foot__copy {
+  max-width: var(--wrap);
+  margin: var(--s32) auto 0;
+  padding: var(--s16) var(--s16) 0;
+  border-top: 1px solid rgba(255, 255, 255, 0.14);
+  font-size: 13px;
+  opacity: 0.6;
+}
+@media (prefers-color-scheme: dark) {
+  .foot__copy { border-top-color: rgba(0, 0, 0, 0.18); }
+}
+
+/* ── 좁은 화면 ───────────────────────────────────────────────────── */
+
+@media (max-width: 860px) {
+  .band, .hero { padding: var(--s64) 0; }
+  .hero__in, .feat { grid-template-columns: 1fr; gap: var(--s32); }
+  .feat--flip .feat__text { order: 0; }   /* 한 칸이 되면 글이 늘 위다 */
+  .stats__in { grid-template-columns: repeat(2, 1fr); }
+  .steps, .roles, .keeps { grid-template-columns: 1fr; }
+  .not { grid-template-columns: 1fr; gap: var(--s4); }
+  .sub { margin-bottom: var(--s48); }
+}
