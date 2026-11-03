@@ -205,6 +205,18 @@ h1 {
    사진이 오면 이 틀을 <img> 로 바꾼다 — 비율은 그대로 두는 것이 좋다. */
 
 .shot { margin: 0; }
+
+/* 사진. 자리틀과 **같은 비율**이라 사진이 들어가도 글의 자리가 밀리지 않는다. */
+.shot__img {
+  display: block;
+  width: 100%;
+  aspect-ratio: 16 / 10;
+  object-fit: cover;
+  border-radius: var(--r16);
+  background: var(--surface);
+}
+.shot--hero .shot__img { box-shadow: var(--shadow-lg); }
+.shot__frame[hidden] { display: none; }
 .shot__frame {
   position: relative;
   aspect-ratio: 16 / 10;
