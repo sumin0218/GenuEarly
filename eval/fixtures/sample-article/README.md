@@ -41,6 +41,26 @@ npx --yes serve eval/fixtures/sample-article
 기사 페이지의 **공유·주소 복사 단추**가 ④ 공유 직전 알림을 띄운다
 (`feature-selection.png` 에 함께 담을 수 있다).
 
+## 사진
+
+`photos/` 의 사진은 **Wikimedia Commons 의 CC0 또는 퍼블릭 도메인**이다.
+출처와 라이선스는 [photos.json](photos.json) 에 적혀 있고, 기사 사진 아래에도
+"원본 CC0 · Wikimedia Commons" 로 한 줄 뜬다.
+
+```bash
+node eval/fixtures/sample-article/fetch-photos.mjs
+```
+
+**아무 사진이나 쓰지 않는다.** 이 사진은 랜딩 페이지 스크린샷에 실려 공개된다.
+그래서 받는 스크립트가 **내려받기 직전에 라이선스를 API 로 다시 확인하고**,
+CC0·퍼블릭 도메인이 아니면 받지 않는다. 검색 결과를 믿지 않는다.
+
+Commons 가 줄여 준 900px 판을 받는다. 원본은 4,000px 이 넘어 저장소에 무겁다.
+사진 자리가 930px 라 그보다 클 필요가 없다.
+
+> 캡션의 `ⓒ testJournal` 은 **가짜 언론사의 것이라 출처 표기가 아니다.**
+> 진짜 출처는 그 아래 회색 줄이다. 지우지 않는다.
+
 ## 고칠 때 지켜야 하는 것 셋
 
 어기면 확장 프로그램이 이 자료를 못 읽는다.

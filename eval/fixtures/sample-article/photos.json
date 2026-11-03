@@ -1,0 +1,59 @@
+{
+  "$comment": "Wikimedia Commons 에서 받은 사진의 출처. CC0 와 퍼블릭 도메인만 쓴다.",
+  "photos": [
+    {
+      "id": "c-101",
+      "file": "photos/c-101.jpg",
+      "commons": "https://commons.wikimedia.org/wiki/File%3ADG%20%E5%BB%A3%E6%9D%B1%20Guangdong%20Dongguan%20night%20bus%20stop%20visitors%20December%202024%20R12S.jpg",
+      "license": "CC0",
+      "author": "SpotsDGZooa 662",
+      "credit": "Own work",
+      "title": "DG 廣東 Guangdong Dongguan night bus stop visitors December 2024 R12S"
+    },
+    {
+      "id": "c-102",
+      "file": "photos/c-102.jpg",
+      "commons": "https://commons.wikimedia.org/wiki/File%3AEdward%20Street%20Stop%20142%2C%20City%20by%20Night%20tour%20Brisbane%20City%20L1130866.jpg",
+      "license": "CC0",
+      "author": "John Robert McPherson",
+      "credit": "Own work",
+      "title": "Edward Street Stop 142, City by Night tour Brisbane City L1130866"
+    },
+    {
+      "id": "c-103",
+      "file": "photos/c-103.jpg",
+      "commons": "https://commons.wikimedia.org/wiki/File%3AMan%20taking%20shelter%20from%20rain%20in%20Colombo.jpg",
+      "license": "CC0",
+      "author": "Chilawprawn",
+      "credit": "Own work",
+      "title": "Man taking shelter from rain in Colombo"
+    },
+    {
+      "id": "c-104",
+      "file": "photos/c-104.jpg",
+      "commons": "https://commons.wikimedia.org/wiki/File%3AFEL%20CVUT%20Katedra%2013137%20Patro%205%20E.jpg",
+      "license": "CC0",
+      "author": "Mojmir Churavy",
+      "credit": "Own work",
+      "title": "FEL CVUT Katedra 13137 Patro 5 E"
+    },
+    {
+      "id": "c-105",
+      "file": "photos/c-105.jpg",
+      "commons": "https://commons.wikimedia.org/wiki/File%3A2016%20USDA%20Farmers%20Market%20(20161021-AMS-LSC-0133).jpg",
+      "license": "Public domain",
+      "author": "USDAgov",
+      "credit": "20161021-AMS-LSC-0133",
+      "title": "2016 USDA Farmers Market (20161021-AMS-LSC-0133)"
+    },
+    {
+      "id": "c-106",
+      "file": "photos/c-106.jpg",
+      "commons": "https://commons.wikimedia.org/wiki/File%3ATown%20Hall%20station%20Melbourne%20City%20Square%20entrance%20canopy%20under%20construction%202024.jpg",
+      "license": "CC0",
+      "author": "Gracchus250",
+      "credit": "Own work",
+      "title": "Town Hall station Melbourne City Square entrance canopy under construction 2024"
+    }
+  ]
+}

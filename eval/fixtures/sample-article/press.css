@@ -129,14 +129,19 @@ h1#headline {
 #body p { margin: 0 0 20px; }
 
 figure.photo { margin: 28px 0; }
-figure.photo .ph {
+figure.photo .ph,
+figure.photo img {
   display: grid;
   place-items: center;
+  width: 100%;
   aspect-ratio: 16 / 9;
+  object-fit: cover;
   background: #dde1e7;
   color: #8b93a1;
   font-size: 14px;
 }
+/* 원본 라이선스. 캡션의 ⓒ testJournal 은 가짜 언론사의 것이라 출처 표기가 아니다 */
+figure.photo .credit { display: block; margin-top: 3px; font-size: 12px; color: #a3a9b4; }
 figure.photo figcaption { margin-top: 8px; font-size: 14px; color: var(--muted); }
 
 .reporter { margin: 32px 0 0; padding-top: 18px; border-top: 1px solid var(--rule); font-size: 14px; color: var(--muted); }
@@ -174,7 +179,9 @@ aside.related a:hover { text-decoration: underline; }
   color: #8b93a1;
   font-size: 13px;
   text-decoration: none;
+  overflow: hidden;
 }
+.feed__thumb img { width: 100%; height: 100%; object-fit: cover; }
 /* **제목 링크.** ② 가 이 글자 옆에 동그라미를 붙인다 */
 .feed__head {
   display: inline-block;

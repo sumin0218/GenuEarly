@@ -14,12 +14,26 @@
 //      (apps/extension/lib/extract.ts 의 `FIXTURE_RULE`)
 //   3. 제목(`<title>`)은 `[테스트용]` 으로 시작. 목록 페이지에서 ② 가 그것을 보고
 //      "자료 페이지" 로 판단한다 (apps/extension/lib/fixture.ts)
-import { writeFileSync } from 'node:fs'
+import { readFileSync, writeFileSync } from 'node:fs'
 import { dirname, join } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { ARTICLES } from './articles.mjs'
 
 const 여기 = dirname(fileURLToPath(import.meta.url))
+
+/**
+ * 사진과 그 출처. [fetch-photos.mjs](fetch-photos.mjs) 가 받으면서 적어 둔 것이다.
+ *
+ * **없어도 돈다.** 사진을 받지 않은 사람도 틀은 볼 수 있어야 한다 — 그때는
+ * 회색 자리만 남는다.
+ */
+let PHOTOS = {}
+try {
+  const j = JSON.parse(readFileSync(join(여기, 'photos.json'), 'utf8'))
+  PHOTOS = Object.fromEntries(j.photos.map((x) => [x.id, x]))
+} catch {
+  console.warn('photos.json 이 없다. 사진 자리를 비워 둔다 — node fetch-photos.mjs')
+}
 const PRESS = 'testJournal'
 const DATE = '2026-10-28'
 
@@ -73,9 +87,18 @@ function 기사(a) {
   const 섹션 = a.section.split(' · ')[0]
   const 본문 = a.body.map((p) => `      <p>${esc(p)}</p>`)
   // 사진은 둘째 문단 뒤에 넣는다. 맨 위에 두면 제목과 본문이 멀어진다.
+  const 사진 = PHOTOS[a.id]
+  const 그림 = 사진
+    ? `<img src="./${사진.file}" alt="${esc(a.photo)}" loading="lazy" decoding="async">`
+    : '<div class="ph">사진 자리</div>'
+  // **원본 라이선스를 사진 밑에 적는다.** 캡션의 "ⓒ testJournal" 은 가짜 언론사의
+  // 것이라 출처 표기가 아니다 — 진짜 출처는 이 줄이다.
+  const 출처 = 사진
+    ? `<span class="credit">원본 ${esc(사진.license)} · Wikimedia Commons</span>`
+    : ''
   본문.splice(2, 0, `      <figure class="photo">
-        <div class="ph">사진 자리</div>
-        <figcaption>${esc(a.photo)} ⓒ ${PRESS}</figcaption>
+        ${그림}
+        <figcaption>${esc(a.photo)} ⓒ ${PRESS}${출처}</figcaption>
       </figure>`)
 
   return 틀({
@@ -137,7 +160,9 @@ const 목록 = 틀({
   <ol class="feed">
     ${ARTICLES.map(
       (a) => `<li class="feed__item">
-      <a class="feed__thumb" href="./${a.id}.html" aria-hidden="true" tabindex="-1"><span>사진</span></a>
+      <a class="feed__thumb" href="./${a.id}.html" aria-hidden="true" tabindex="-1">${
+        PHOTOS[a.id] ? `<img src="./${PHOTOS[a.id].file}" alt="" loading="lazy">` : '<span>사진</span>'
+      }</a>
       <div class="feed__text">
         <a class="feed__head" href="./${a.id}.html">${esc(a.headline)}</a>
         <p class="feed__lede">${esc(a.standfirst)}</p>
