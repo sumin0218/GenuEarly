@@ -68,6 +68,15 @@ const NAMED_BASIS = (schema.items as unknown as { id: string; combine?: { b?: st
   .find((i) => i.id === 'unverifiable_claim')?.combine?.b ?? 'named_basis'
 
 /**
+ * 문장마다 **감정을 끌어올리는 표현인가** 를 묻는 질문의 id.
+ *
+ * **점수에 들어가지 않는다.** 배지의 감정 등급은 기사 단위 질문이 그대로 내고, 이것은
+ * 그 등급의 대목이 어느 문장인지만 알려 준다. 문장 요청에 끼워 넣어서 **요청 수가
+ * 늘지 않는다** — 따로 물으면 문장마다 하나씩 더 붙는다.
+ */
+const EMOTION_Q = 'emotional_sentence'
+
+/**
  * **모델이 내린 판단만 캐시한다.**
  *
  * `scoreArticle` 은 답이 안 온 항목도 ⚪ 로 돌려준다 — 중계가 끊겼을 때와 모델이 "모르겠다" 고
@@ -259,12 +268,14 @@ export async function judgeArticle(msg: Extract<Message, { kind: 'judge-article'
   // 같은 기사를 두 번째 열 때 배지는 그대로인데 **형광펜만 사라진다.** 적는 것은
   // 숫자 배열과 지문뿐이라 기사 글이 들어가지 않는다 (lib/cache.ts).
   const 지문 = await textFingerprint(sentences.join('\n'))
-  let sent: { s: (number | null)[]; b: (number | null)[] } | null = null
+  let sent: { s: (number | null)[]; b: (number | null)[]; e?: (number | null)[] } | null = null
   if (sentenceItem && perSentence.length === sentences.length && sentences.length > 0) {
     sent = {
       s: perSentence.map((a) => sentenceScore(a, sentenceItem)),
       // 합친 점수만으로는 출처 항목의 사유를 붙일 수 없다. 원답을 함께 둔다.
       b: perSentence.map((a) => noulValue(a, NAMED_BASIS)),
+      // **자리 찾기 전용.** 점수에 들어가지 않는다 — 감정 등급은 기사 단위 질문이 낸다.
+      e: perSentence.map((a) => noulValue(a, EMOTION_Q)),
     }
     if (!sentenceFailed) await writeSentences(msg.url, { fp: 지문, ...sent })
   } else {
@@ -275,7 +286,7 @@ export async function judgeArticle(msg: Extract<Message, { kind: 'judge-article'
   return {
     ...verdict,
     ...(capped ? { capped } : {}),
-    ...(sent ? { sentenceScores: sent.s, sentenceBasis: sent.b } : {}),
+    ...(sent ? { sentenceScores: sent.s, sentenceBasis: sent.b, sentenceEmotion: sent.e ?? [] } : {}),
   }
 }
 

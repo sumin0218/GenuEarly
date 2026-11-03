@@ -110,6 +110,8 @@ export interface CachedSentences {
   s: (number | null)[]
   /** `named_basis` 원답 */
   b: (number | null)[]
+  /** `emotional_sentence` 원답. **자리 찾기 전용이라 점수와 무관하다** */
+  e?: (number | null)[]
 }
 
 /**

@@ -310,4 +310,13 @@ export type ArticleVerdict = Verdict & {
    * 이것도 **캐시에는 담지 않는다** (`sentenceScores` 와 같은 이유).
    */
   sentenceBasis?: (number | null)[]
+  /**
+   * 문장마다 **감정을 끌어올리는 표현을 쓰는가** 에 대한 Jev 의 답.
+   * `sentenceScores` 와 같은 순서·길이. 높을수록 그렇다.
+   *
+   * **점수에 들어가지 않는다.** 배지의 감정 등급은 기사 단위 질문이 그대로 내고,
+   * 이것은 **어느 문장인지 찾는 데만** 쓴다 (judgment-items.json 의
+   * `emotional_sentence`). 문장 요청에 끼워 넣은 질문이라 요청 수가 늘지 않는다.
+   */
+  sentenceEmotion?: (number | null)[]
 }

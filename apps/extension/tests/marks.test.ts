@@ -312,3 +312,84 @@ describe('노랑도 제 자리를 얻는다', () => {
     expect(got.map((m) => m.text)).toEqual(셋)
   })
 })
+
+describe('감정적 표현도 문장 단위로 칠한다', () => {
+  const 감정문장 = '충격적인 그의 행태에 모두가 경악했다.'
+  const 담담한문장 = '정부가 대책을 내놓았다.'
+  const 셋 = [담담한문장, 감정문장, '그 뒤 회의가 열렸다.']
+
+  it('**Jev 가 그렇다고 답한 문장을 칠한다** — 코드가 못 찾는 것도 덮인다', () => {
+    const got = gatherMarks({
+      ...기본,
+      sentences: 셋,
+      verdict: 판정([{ id: 'emotional_language', score: 0.8, isConfident: true }], {
+        sentenceScores: [0, 0, 0],
+        sentenceEmotion: [0.1, 0.9, 0.2],
+      }),
+    })
+    const 감정 = got.filter((m) => m.whys.some((w) => w.item === '감정적 표현'))
+    expect(감정).toHaveLength(1)
+    expect(감정[0]?.text).toBe(감정문장)
+  })
+
+  it('아니라고 답한 문장은 칠하지 않는다', () => {
+    const got = gatherMarks({
+      ...기본,
+      sentences: 셋,
+      verdict: 판정([{ id: 'emotional_language', score: 0.8, isConfident: true }], {
+        sentenceScores: [0, 0, 0],
+        sentenceEmotion: [0.1, 0.2, 0.3],
+      }),
+    })
+    expect(got.filter((m) => m.whys.some((w) => w.item === '감정적 표현'))).toEqual([])
+  })
+
+  it('**단정 점수를 문턱으로 쓰지 않는다** — 담담한 문장도 그 점수는 높을 수 있다', () => {
+    const got = gatherMarks({
+      ...기본,
+      sentences: 셋,
+      verdict: 판정([{ id: 'emotional_language', score: 0.8, isConfident: true }], {
+        // 담담한 문장(0번)이 단정 점수는 가장 높지만 감정은 아니다
+        sentenceScores: [0.95, 0, 0],
+        sentenceEmotion: [0.1, 0.9, 0.1],
+      }),
+    })
+    const 감정 = got.filter((m) => m.whys.some((w) => w.item === '감정적 표현'))
+    expect(감정[0]?.text).toBe(감정문장)
+  })
+
+  it('항목이 안 걸렸으면 칠하지 않는다', () => {
+    const got = gatherMarks({
+      ...기본,
+      sentences: 셋,
+      verdict: 판정([{ id: 'spread_inducement', score: 0.8, isConfident: true }], {
+        sentenceScores: [0, 0, 0],
+        sentenceEmotion: [0.9, 0.9, 0.9],
+      }),
+    })
+    expect(got.filter((m) => m.whys.some((w) => w.item === '감정적 표현'))).toEqual([])
+  })
+
+  it('둘까지만 칠한다', () => {
+    const 넷 = ['가 문장이다.', '나 문장이다.', '다 문장이다.', '라 문장이다.']
+    const got = gatherMarks({
+      ...기본,
+      sentences: 넷,
+      verdict: 판정([{ id: 'emotional_language', score: 0.8, isConfident: true }], {
+        sentenceScores: [0, 0, 0, 0],
+        sentenceEmotion: [0.9, 0.9, 0.9, 0.9],
+      }),
+    })
+    expect(got.filter((m) => m.whys.some((w) => w.item === '감정적 표현'))).toHaveLength(2)
+  })
+
+  it('문장 답이 없으면 코드가 찾은 것만 남는다 — 캐시에서 온 옛 판정이다', () => {
+    const got = gatherMarks({
+      ...기본,
+      sentences: 셋,
+      verdict: 판정([{ id: 'emotional_language', score: 0.8, isConfident: true }]),
+    })
+    // 본문에 "충격" 같은 낱말이 없으므로 빈손이다. 터지지 않는 것이 중요하다.
+    expect(Array.isArray(got)).toBe(true)
+  })
+})

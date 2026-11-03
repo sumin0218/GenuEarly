@@ -63,6 +63,17 @@ export const whereOf = (itemId: string): Where => (HEADLINE_ITEMS.has(itemId) ? 
 const SENTENCE_ITEM = 'unverifiable_claim'
 /** 문장 점수를 같이 쓰는 기사 단위 항목. 둘 다 "근거가 그 문장에 있나" 를 본다. */
 const SOURCE_ITEM = 'source_citation'
+/**
+ * 문장마다 받은 **자리 찾기 답**으로 칠하는 기사 단위 항목.
+ *
+ * 감정적 표현은 Jev 가 기사 전체에 등급 하나로만 답해서 어느 문장인지 모른다. 코드
+ * 정규식이 셋(느낌표·감정 낱말·공포 조성)을 찾지만 **비하·조롱하는 호칭과 "감정이
+ * 실린 서술" 은 목록으로 담을 수 없다.** 그래서 문장 요청에 질문 하나를 끼워 넣어
+ * (`emotional_sentence`, judgment-items.json) 자리를 얻는다. **요청 수는 늘지 않는다.**
+ */
+const EMOTION_ITEM = 'emotional_language'
+/** 이 아래면 "아니오" 로 본다. noul 의 가운데다. */
+const YES_AT = 0.5
 
 /**
  * 누구인지 밝히지 않은 출처 표현.
@@ -171,7 +182,7 @@ export function sentenceMarks(
   const srcName = itemName(SOURCE_ITEM)
   const uvcFlagged = flags.has(SENTENCE_ITEM)
   const srcFlagged = flags.has(SOURCE_ITEM)
-  if (!uvcFlagged && !srcFlagged) return []
+  if (!uvcFlagged && !srcFlagged && !flags.has(EMOTION_ITEM)) return []
 
   const basis = verdict.sentenceBasis
   const out: Raw[] = []
@@ -188,12 +199,33 @@ export function sentenceMarks(
     }
   }
 
+  // 감정적 표현도 기사 단위 판정이지만, **어느 문장인지는 Jev 가 문장마다 답했다**
+  // (`emotional_sentence`). 그 답이 "그렇다" 인 문장을 칠한다.
+  //
+  // **여기는 점수 문턱을 쓰지 않는다.** `unverifiable_claim` 점수는 "단정했는데 근거가
+  // 없나" 라서 감정과 상관이 없다 — 담담하게 쓰인 문장이 그 점수는 높을 수 있다.
+  const emoLevel = flags.get(EMOTION_ITEM)
+  const emoName = itemName(EMOTION_ITEM)
+  if (emoLevel && emoName) {
+    const emo = verdict.sentenceEmotion
+    const 걸린것: { text: string; at: number }[] = []
+    for (const [i, text] of sentences.entries()) {
+      const v = emo?.[i]
+      if (v === null || v === undefined || v < YES_AT) continue
+      걸린것.push({ text, at: i })
+    }
+    // 점수가 없으니 **기사에 나온 차례로** 앞에서부터 둘이다.
+    for (const { text } of 걸린것.slice(0, MAX_PER_ITEM)) {
+      out.push({ text, where: 'body', why: { item: emoName, level: emoLevel } })
+    }
+  }
+
   // 출처 항목은 기사 단위 판정이지만, **그 문장에 근거가 없다는 것은 Jev 가 문장마다
   // 답한 것**이다. 그 답이 있는 문장에만 붙인다.
   if (srcFlagged && srcName) {
     const 없는것 = 센문장(sentences, verdict, (i) => {
       const b = basis?.[i]
-      return b !== null && b !== undefined && b < 0.5
+      return b !== null && b !== undefined && b < YES_AT
     })
     for (const { text, score } of 없는것) {
       const reason = reasonText(SOURCE_ITEM, GROUP_ONLY.test(text) ? 'src_group_only' : 'src_none')
