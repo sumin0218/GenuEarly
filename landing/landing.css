@@ -444,25 +444,16 @@ h1 {
 
 .install-box {
   position: relative;
-  padding: var(--s64) var(--s48) var(--s48);
+  /* **내용에 맞춰 좁힌다.** 띠 전체 폭으로 두면 1,080px 틀 안에 글이 550px 만
+     들어가 네모가 허전해지고 축이 안 잡혀 보인다. 카드처럼 모아 둔다. */
+  max-width: 720px;
+  margin: 0 auto;
+  padding: var(--s48);
   border: 2px solid var(--action);
   border-radius: var(--r16);
   background: var(--bg);
   box-shadow: 0 0 0 6px rgba(2, 182, 127, 0.1);
   text-align: center;          /* 네모 안은 가운데로 모은다 */
-}
-/* 머리의 띠도 가운데. 글이 가운데인데 띠만 왼쪽이면 축이 둘이 된다 */
-.install-box__tag {
-  position: absolute;
-  top: calc(-1 * var(--s12));
-  left: 50%;
-  transform: translateX(-50%);
-  padding: var(--s4) var(--s12);
-  border-radius: 999px;
-  background: var(--action);
-  color: var(--action-ink);
-  font-size: 13px;
-  font-weight: 700;
 }
 /* `.sub` 는 읽기 폭(60ch)이 걸려 있어 그대로 두면 왼쪽으로 치우친다 */
 .install-box .sub {
@@ -494,7 +485,7 @@ code {
 }
 
 @media (max-width: 860px) {
-  .install-box { padding: var(--s48) var(--s24) var(--s32); }
+  .install-box { padding: var(--s32) var(--s24); }
 }
 
 /* ── 바닥 ────────────────────────────────────────────────────────── */
