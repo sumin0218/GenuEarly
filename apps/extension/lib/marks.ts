@@ -332,8 +332,13 @@ export interface GatherInput {
  */
 export function gatherMarks(input: GatherInput): Mark[] {
   const { body, headline, sentences, level, verdict } = input
-  // 🟢·⚪ 에서는 칠하지 않는다. 걸린 것이 없거나 판단하지 못한 것이다.
-  if (level !== 'CHECK' && level !== 'CAUTION') return []
+  // **🟢 에서도 칠한다.** 배지가 "안심" 이어도 항목 하나쯤은 걸려 있을 수 있고,
+  // 그 자리를 보여 주지 않으면 사용자는 무엇을 보고 안심이라 했는지 알 수 없다.
+  // 배지는 **기사 전체를 묶은 한 마디**이고, 칠은 **그 안의 자리**다. 둘은 층이 다르다.
+  //
+  // **⚪ 에서는 칠하지 않는다.** 거기서는 판단 자체가 서지 않았다 — 자리를 짚으면
+  // 판단하지 못했다고 말해 놓고 짚는 꼴이 된다.
+  if (level === 'UNDETERMINED' || level === 'PENDING') return []
 
   const flags = flagged(verdict)
   if (flags.size === 0) return []

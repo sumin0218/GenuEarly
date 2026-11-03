@@ -232,8 +232,8 @@
      않는다 — 0.22 에서 밝기가 8.7% 내려가는데 빨강은 0.20 에서 20.8% 내려간다.
      눈에 같은 세기로 닿도록 노랑만 올린다. */
   --ge-hl-check: 255, 214, 0;
-  --ge-hl-check-a: 0.55;
-  --ge-hl-check-hover-a: 0.75;
+  --ge-hl-check-a: 0.34;
+  --ge-hl-check-hover-a: 0.55;
   --ge-hl-check-line: 154, 91, 0;
   --ge-hl-caution: 255, 94, 94;
   --ge-hl-caution-a: 0.22;
@@ -270,7 +270,7 @@
    한 자리에 빨강과 노랑이 겹치면 빨강으로 칠한다. */
 .ge-hl__box[data-level='CHECK'] {
   --ge-hl-fill: rgba(var(--ge-hl-check), var(--ge-hl-check-a));
-  --ge-hl-line: rgba(var(--ge-hl-check-line), 0.75);
+  --ge-hl-line: rgba(var(--ge-hl-check-line), 0.5);
 }
 .ge-hl__box[data-level='CAUTION'] {
   --ge-hl-fill: rgba(var(--ge-hl-caution), var(--ge-hl-caution-a));

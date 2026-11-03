@@ -142,10 +142,10 @@ describe('단계', () => {
     expect(got).toEqual([])
   })
 
-  it.each([['SAFE'], ['UNDETERMINED']] as const)('%s 에서는 아무것도 하지 않는다', (level) => {
+  it('⚪ 에서는 아무것도 하지 않는다 — 판단 자체가 서지 않았다', () => {
     const got = gatherMarks({
       ...기본,
-      level,
+      level: 'UNDETERMINED',
       verdict: 판정([{ id: 'unverifiable_claim', score: 0.9, isConfident: true }], {
         sentenceScores: [0, 0.9, 0],
       }),
@@ -391,5 +391,30 @@ describe('감정적 표현도 문장 단위로 칠한다', () => {
     })
     // 본문에 "충격" 같은 낱말이 없으므로 빈손이다. 터지지 않는 것이 중요하다.
     expect(Array.isArray(got)).toBe(true)
+  })
+})
+
+describe('🟢 에서도 칠한다', () => {
+  it('**배지가 안심이어도 걸린 자리는 보여 준다**', () => {
+    const got = gatherMarks({
+      ...기본,
+      level: 'SAFE',
+      verdict: 판정([{ id: 'unverifiable_claim', score: 0.3, isConfident: true }], {
+        sentenceScores: [0, 0.3, 0],
+      }),
+    })
+    expect(got).toHaveLength(1)
+    expect(got[0]?.level).toBe('CHECK')
+  })
+
+  it('🟢 에서도 걸린 것이 없으면 빈손이다', () => {
+    const got = gatherMarks({
+      ...기본,
+      level: 'SAFE',
+      verdict: 판정([{ id: 'unverifiable_claim', score: 0, isConfident: true }], {
+        sentenceScores: [0, 0, 0],
+      }),
+    })
+    expect(got).toEqual([])
   })
 })
