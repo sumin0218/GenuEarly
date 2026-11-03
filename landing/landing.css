@@ -264,7 +264,6 @@ h1 {
 
 .band { padding: var(--s96) 0; background: var(--bg); }
 .band--tint { background: var(--ground); }
-.band--cta { background: var(--bg); border-top: 1px solid var(--rule); }
 
 .h2 {
   margin: 0 0 var(--s12);
@@ -433,7 +432,37 @@ h1 {
   font-weight: 700;
 }
 
-/* ── 설치 ────────────────────────────────────────────────────────── */
+/* ── 설치 ────────────────────────────────────────────────────────────
+   **여기만 초록으로 감싼다.** 페이지에서 가장 중요한 자리이고, 랜딩의 목적이다.
+
+   다만 **면을 채도 높은 초록으로 채우지 않는다.** 액션 초록(#02b67f)은 🟢 안심
+   단계(#247b50)와 색상각이 11° 뿐이다 — 넓은 면을 채우면 판정 배너처럼 읽힌다
+   (apps/extension/tests/design.test.ts "제품의 색이 판정의 색과 부딪히지 않는다").
+   그래서 **테두리와 단추에만** 쓰고 면은 옅게 깐다. */
+
+.band--cta { background: var(--ground); border-top: 1px solid var(--rule); }
+
+.install-box {
+  position: relative;
+  padding: var(--s48);
+  border: 2px solid var(--action);
+  border-radius: var(--r16);
+  background: var(--bg);
+  box-shadow: 0 0 0 6px rgba(2, 182, 127, 0.1);
+}
+/* 왼쪽 위에 작은 띠. 무엇을 감싼 것인지 글로도 말한다 — 색만으로 말하지 않는다 */
+.install-box__tag {
+  position: absolute;
+  top: calc(-1 * var(--s12));
+  left: var(--s32);
+  padding: var(--s4) var(--s12);
+  border-radius: 999px;
+  background: var(--action);
+  color: var(--action-ink);
+  font-size: 13px;
+  font-weight: 700;
+}
+.install-box .h2 { margin-top: var(--s8); }
 
 .install {
   margin: 0 0 var(--s32);
@@ -449,6 +478,11 @@ code {
   background: var(--surface);
   font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
   font-size: 0.9em;
+}
+
+@media (max-width: 860px) {
+  .install-box { padding: var(--s32) var(--s24); }
+  .install-box__tag { left: var(--s16); }
 }
 
 /* ── 바닥 ────────────────────────────────────────────────────────── */
