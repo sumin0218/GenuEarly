@@ -211,11 +211,13 @@ h1 {
 .shot { margin: 0; }
 
 /* 사진. 자리틀과 **같은 비율**이라 사진이 들어가도 글의 자리가 밀리지 않는다. */
+/* **제 비율을 지킨다.** 16:10 에 맞춰 잘라 내면 화면 모서리가 날아가는데,
+   배지도 형광펜 말풍선도 하필 모서리에 뜬다. 자리틀만 16:10 이고 사진은 자유다. */
 .shot__img {
   display: block;
   width: 100%;
-  aspect-ratio: 16 / 10;
-  object-fit: cover;
+  height: auto;
+  border: 1px solid var(--rule);
   border-radius: var(--r24);
   background: var(--surface);
 }
@@ -326,23 +328,34 @@ h1 {
    **단계 색을 쓰는 유일한 자리다.** 여기서는 색이 실제로 단계를 뜻한다.
    장식으로는 쓰지 않는다 (맨 위 머리말). */
 
-.levels { display: grid; gap: var(--s8); margin-top: var(--s24); }
+/* **사진 칸 자리에 들어간다.** 배지 넉 장을 사진으로 붙이면 작아서 읽히지 않고
+   색만 남는다. 글로 보여 주는 편이 낫다. */
+.levels {
+  display: grid;
+  gap: var(--s4);
+  padding: var(--s32);
+  background: var(--surface);
+  border-radius: var(--r24);
+}
 .level {
   display: grid;
-  grid-template-columns: auto auto 1fr;
-  gap: var(--s12);
-  align-items: baseline;
+  grid-template-columns: auto 1fr;
+  gap: var(--s4) var(--s12);
+  align-items: center;
+  padding: var(--s12) 0;
   font-size: 16px;
   color: var(--muted);
 }
+.level + .level { border-top: 1px solid var(--rule); }
+.level span { grid-column: 2; font-size: 15px; }
 .level i {
-  width: 10px;
-  height: 10px;
+  grid-row: span 2;
+  width: 14px;
+  height: 14px;
   border-radius: 50%;
   background: var(--dot);
-  align-self: center;
 }
-.level b { color: var(--ink); font-weight: 600; }
+.level b { color: var(--ink); font-size: 17px; font-weight: 700; }
 .level[data-lv='SAFE']        { --dot: var(--lv-safe); }
 .level[data-lv='CHECK']       { --dot: var(--lv-check); }
 .level[data-lv='CAUTION']     { --dot: var(--lv-caution); }

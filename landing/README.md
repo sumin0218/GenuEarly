@@ -1,4 +1,4 @@
-# 랜딩 페이지
+|  | | ||  | | ||  | | |# 랜딩 페이지
 
 <https://sumin0218.github.io/GenuEarly/>
 
@@ -40,21 +40,23 @@ npx --yes serve landing
 **파일을 `assets/shots/` 에 넣으면 끝이다.** HTML 을 고치지 않는다 — 자리틀은 사진이
 없을 때만 뜨고, 사진이 들어오면 저절로 자리를 비킨다 ([shots.js](shots.js)).
 
-| 파일 이름 | 무엇을 찍나 |
-| --- | --- |
-| `hero-article.png` | 기사 페이지 — 배지와 본문 형광펜이 **함께** 보이게 |
-| `feature-badge.png` | 배지 네 단계 (한 장에 모으거나 대표 하나) |
-| `feature-highlight.png` | 본문 형광펜과 올려놓았을 때 뜨는 사유 |
-| `feature-portal.png` | 뉴스 목록 — 제목 옆 표시와 오른쪽 아래 범례 |
-| `feature-selection.png` | 선택 검사 결과, 또는 공유 직전 알림 |
-| `feature-report.png` | 리포트 — 주변 보도를 견준 화면 |
+| 파일 이름 | 무엇을 찍나 | |
+| --- | --- | --- |
+| `hero-article.png` | 기사 페이지 — 배지와 본문 형광펜이 **함께** 보이게 | ✅ |
+| `feature-highlight.png` | 본문 형광펜과 올려놓았을 때 뜨는 사유 | |
+| `feature-portal.png` | 뉴스 목록 — 제목 옆 표시와 오른쪽 아래 범례 | ✅ |
+| `feature-selection.png` | 선택 검사 결과, 또는 공유 직전 알림 | |
+| `feature-report.png` | 리포트 — 주변 보도를 견준 화면 | |
 
 이름이 다르면 그 자리만 자리틀로 남는다. 화면이 깨지지 않으니 하나씩 채워도 된다.
 
+**배지 네 단계는 사진으로 두지 않는다.** 넉 장을 붙이면 작아서 읽히지 않고 색만 남는다.
+안심·확인 권장·주의·판단 보류를 **글로** 보여 주는 쪽이 낫다 (`.levels`).
+
 ### 찍을 때
 
-- **비율은 16:10 이다.** 창을 `1600×1000` 쯤으로 두면 잘리지 않는다. 다른 비율로
-  찍어도 `object-fit: cover` 가 가운데를 남기고 자른다 — 중요한 것을 가운데 두면 된다
+- **비율은 자유다. 자르지 않는다.** 화면 모서리를 잘라 내면 배지도 형광펜 말풍선도
+  날아간다 — 하필 그것들이 모서리에 뜬다. 자리틀만 16:10 이고 사진은 제 비율대로 들어간다
 - **글자가 읽히게 찍는다.** 배지나 형광펜이 화면 한구석에 작게 있으면 랜딩에서는
   보이지 않는다. 필요하면 브라우저 확대를 한 단 올려 찍는다
 - **다크 모드 사진은 따로 두지 않는다.** 한 장으로 양쪽에 쓴다
@@ -75,7 +77,7 @@ npx --yes serve landing
 
 [eval/fixtures/sample-article/](../eval/fixtures/sample-article/) 에 **스크린샷 전용
 가짜 언론사**를 만들어 두었다. 언론사도 지명도 인물도 사건도 전부 지어낸 것이고,
-실존 인물 이름을 쓰지 않는다.
+실존 인물 이름을 쓰지 않는다. 기사 사진은 Commons 의 CC0·퍼블릭 도메인만 쓴다.
 
 ```bash
 npx --yes serve eval/fixtures/sample-article
@@ -84,7 +86,7 @@ npx --yes serve eval/fixtures/sample-article
 | 주소 | 어느 사진 |
 | --- | --- |
 | `index.html` (목록) | `feature-portal.png` |
-| `c-101.html` (신호 여럿) | `hero-article.png` · `feature-highlight.png` · `feature-badge.png` |
+| `c-101.html` (신호 여럿) | `hero-article.png` · `feature-highlight.png` |
 | `c-105.html` | `feature-selection.png` — 드래그 검사와 공유 직전 알림 |
 | `c-102` `c-104` `c-106` | 🟢 가 나오는 쪽 |
 
