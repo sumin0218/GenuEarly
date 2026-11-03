@@ -24,7 +24,8 @@
 // 정해진 표현(`꼭 공유하세요`, `충격`…)은 글자 찾기라 모델이 필요 없다. 그쪽은
 // `findEvidence` 가 맡는다.
 import content from '../../../packages/content/ui.ko.json'
-import { findEvidence, isCautionScore } from '@genuearly/shared'
+import { findEvidence } from '@genuearly/shared'
+import { itemLevel } from './item-view'
 import type { Mark, MarkLevel, Why } from './highlight'
 import type { ArticleVerdict, DisplayLevel } from './protocol'
 import { squeeze } from './spans'
@@ -94,6 +95,13 @@ function reasonText(itemId: string, id: string): string | undefined {
   return copy?.reasons?.[id] ?? copy?.parts?.[id]?.present
 }
 
+/**
+ * 그 문장의 단계. **팝업이 항목 줄에 쓰는 함수를 그대로 쓴다** — 문턱을 두 곳에
+ * 적어 두면 조용히 어긋난다.
+ */
+const 문장단계 = (score: number): MarkLevel =>
+  itemLevel({ id: '', score, isConfident: true }) === 'CAUTION' ? 'CAUTION' : 'CHECK'
+
 /** 빨강이 먼저. 같은 단계면 들어온 순서 그대로다. */
 const 센것먼저 = (a: Why, b: Why): number =>
   a.level === b.level ? 0 : a.level === 'CAUTION' ? -1 : 1
@@ -135,12 +143,24 @@ function merge(raw: readonly Raw[]): Mark[] {
   return out
 }
 
-/** 걸린 항목. 확신했고 점수가 0 보다 큰 것만. */
+/**
+ * 걸린 항목과 그 단계.
+ *
+ * **팝업이 줄을 그릴 때 쓰는 `itemLevel` 을 그대로 쓴다.** 문턱을 따로 두면 둘이
+ * 어긋난다 — 실제로 어긋났다. 전에는 "점수가 0 보다 크면" 으로 골라서, 팝업은
+ * 일곱 줄이 전부 🟢 인데 본문에는 밑줄이 그어져 있었다. 사용자는 어느 쪽을 믿어야
+ * 할지 알 수 없다.
+ *
+ * `itemLevel` 머리말이 같은 것을 이미 적어 두었다 — "배지가 🟢 를 그만두는 자리와
+ * 항목이 🟢 를 그만두는 자리는 같아야 한다". 칠도 같은 자리에서 그만둔다.
+ */
 function flagged(v: ArticleVerdict): Map<string, MarkLevel> {
   const out = new Map<string, MarkLevel>()
   for (const i of v.items) {
-    if (!i.isConfident || i.score === null || i.score <= 0) continue
-    out.set(i.id, isCautionScore(i.score, i.isConfident) ? 'CAUTION' : 'CHECK')
+    if (!i.isConfident) continue
+    const lv = itemLevel(i)
+    if (lv !== 'CHECK' && lv !== 'CAUTION') continue
+    out.set(i.id, lv)
   }
   return out
 }
@@ -194,7 +214,7 @@ export function sentenceMarks(
         text,
         where: 'body',
         // **문장마다 제 단계다.** 항목 평균이 아니다.
-        why: { item: uvcName, level: isCautionScore(score) ? 'CAUTION' : 'CHECK', ...(reason ? { reason } : {}) },
+        why: { item: uvcName, level: 문장단계(score), ...(reason ? { reason } : {}) },
       })
     }
   }
@@ -234,7 +254,7 @@ export function sentenceMarks(
         where: 'body',
         why: {
           item: srcName,
-          level: flags.get(SOURCE_ITEM) ?? (isCautionScore(score) ? 'CAUTION' : 'CHECK'),
+          level: flags.get(SOURCE_ITEM) ?? (문장단계(score)),
           ...(reason ? { reason } : {}),
         },
       })
@@ -266,9 +286,13 @@ function 센문장(
   ])
   for (const [i, text] of sentences.entries()) {
     const score = scores[i]
-    if (score === null || score === undefined || score <= 0) continue
+    if (score === null || score === undefined) continue
     if (!keep(i)) continue
-    통.get(isCautionScore(score) ? 'CAUTION' : 'CHECK')?.push({ text, score, at: i })
+    // **문장도 항목과 같은 자리에서 그만둔다.** `itemLevel` 에 그 문장 점수를 그대로
+    // 넣어 묻는다 — 문턱을 여기 적어 두면 팝업이 바뀔 때 조용히 어긋난다.
+    const lv = itemLevel({ id: '', score, isConfident: true })
+    if (lv !== 'CHECK' && lv !== 'CAUTION') continue
+    통.get(lv)?.push({ text, score, at: i })
   }
   const out: { text: string; score: number; at: number }[] = []
   for (const 묶음 of 통.values()) {

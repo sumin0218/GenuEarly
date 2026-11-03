@@ -266,7 +266,7 @@ describe('노랑도 제 자리를 얻는다', () => {
       sentences: 다섯,
       // 빨강 셋, 노랑 둘
       verdict: 판정([{ id: 'unverifiable_claim', score: 0.8, isConfident: true }], {
-        sentenceScores: [0.9, 0.85, 0.8, 0.3, 0.2],
+        sentenceScores: [0.9, 0.85, 0.8, 0.45, 0.35],
       }),
     })
     const levels = got.map((m) => m.level)
@@ -280,7 +280,7 @@ describe('노랑도 제 자리를 얻는다', () => {
       ...기본,
       sentences: 여섯,
       verdict: 판정([{ id: 'unverifiable_claim', score: 0.8, isConfident: true }], {
-        sentenceScores: [0.9, 0.85, 0.8, 0.3, 0.25, 0.2],
+        sentenceScores: [0.9, 0.85, 0.8, 0.5, 0.45, 0.4],
       }),
     })
     expect(got.filter((m) => m.level === 'CAUTION')).toHaveLength(2)
@@ -293,10 +293,10 @@ describe('노랑도 제 자리를 얻는다', () => {
       ...기본,
       sentences: 넷,
       verdict: 판정([{ id: 'unverifiable_claim', score: 0.8, isConfident: true }], {
-        sentenceScores: [0.1, 0.5, 0.7, 0.95],
+        sentenceScores: [0.35, 0.5, 0.7, 0.95],
       }),
     })
-    // 노랑 둘(0.5, 0.1 중 센 것 둘 = 0.5, 0.1), 빨강 둘(0.95, 0.7)
+    // 노랑 둘(0.5, 0.35), 빨강 둘(0.95, 0.7)
     expect(got.map((m) => m.text)).toEqual(넷)
   })
 
@@ -306,7 +306,7 @@ describe('노랑도 제 자리를 얻는다', () => {
       ...기본,
       sentences: 셋,
       verdict: 판정([{ id: 'unverifiable_claim', score: 0.8, isConfident: true }], {
-        sentenceScores: [0.3, 0.9, 0.4],
+        sentenceScores: [0.35, 0.9, 0.45],
       }),
     })
     expect(got.map((m) => m.text)).toEqual(셋)
@@ -416,5 +416,49 @@ describe('🟢 에서도 칠한다', () => {
       }),
     })
     expect(got).toEqual([])
+  })
+})
+
+describe('칠과 팝업은 같은 자리에서 그만둔다', () => {
+  // 실제로 어긋났다 — 팝업은 일곱 줄이 전부 🟢 인데 본문에는 밑줄이 그어져 있었다.
+  // 문턱을 두 곳에 적어 둔 탓이다. 이제 둘 다 `itemLevel` 하나를 본다.
+
+  it('**팝업이 🟢 라고 하는 항목은 칠하지 않는다**', () => {
+    const got = gatherMarks({
+      ...기본,
+      // SAFE_BELOW(0.3) 아래다. 팝업은 이 항목을 🟢 로 그린다.
+      verdict: 판정([{ id: 'unverifiable_claim', score: 0.1, isConfident: true }], {
+        sentenceScores: [0, 0.1, 0],
+      }),
+    })
+    expect(got).toEqual([])
+  })
+
+  it('**팝업이 🟢 라고 하는 문장은 칠하지 않는다** — 항목이 걸려 있어도', () => {
+    const 넷 = ['가 문장이다.', '나 문장이다.', '다 문장이다.', '라 문장이다.']
+    const got = gatherMarks({
+      ...기본,
+      sentences: 넷,
+      verdict: 판정([{ id: 'unverifiable_claim', score: 0.8, isConfident: true }], {
+        // 하나만 문턱 위다
+        sentenceScores: [0.9, 0.2, 0.1, 0.05],
+      }),
+    })
+    expect(got).toHaveLength(1)
+    expect(got[0]?.text).toBe('가 문장이다.')
+  })
+
+  it('항목 단계가 팝업의 itemLevel 과 같다', async () => {
+    const { itemLevel } = await import('../lib/item-view')
+    for (const score of [0.29, 0.3, 0.64, 0.65, 0.9]) {
+      const r = { id: 'unverifiable_claim', score, isConfident: true }
+      const got = gatherMarks({
+        ...기본,
+        verdict: 판정([r], { sentenceScores: [0, score, 0] }),
+      })
+      const 팝업 = itemLevel(r)
+      if (팝업 === 'SAFE') expect(got).toEqual([])
+      else expect(got[0]?.level).toBe(팝업)
+    }
   })
 })
