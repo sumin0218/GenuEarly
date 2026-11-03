@@ -71,8 +71,25 @@ npx --yes serve landing
    같은 이유다
 3. **재현되지 않는다.** 기사는 고쳐지고 내려간다
 
-[수동 테스트 자료](../eval/fixtures/manual-news/)로 찍는다. 그 글은 우리가 지어낸 것이고
-공개하기로 한 것이며, **제목에 `[테스트용]` 이 붙어 있어** 사진에도 그대로 나온다.
+### 무엇으로 찍나 — testJournal
+
+[eval/fixtures/sample-article/](../eval/fixtures/sample-article/) 에 **스크린샷 전용
+가짜 언론사**를 만들어 두었다. 언론사도 지명도 인물도 사건도 전부 지어낸 것이고,
+실존 인물 이름을 쓰지 않는다.
+
+```bash
+npx --yes serve eval/fixtures/sample-article
+```
+
+| 주소 | 어느 사진 |
+| --- | --- |
+| `index.html` (목록) | `feature-portal.png` |
+| `c-101.html` (신호 여럿) | `hero-article.png` · `feature-highlight.png` · `feature-badge.png` |
+| `c-105.html` | `feature-selection.png` — 드래그 검사와 공유 직전 알림 |
+| `c-102` `c-104` `c-106` | 🟢 가 나오는 쪽 |
+
+기사 페이지의 **공유·주소 복사 단추**가 ④ 알림을 띄운다. 자세한 것은
+[그쪽 README](../eval/fixtures/sample-article/README.md).
 
 사진 아래에는 "화면은 시험용으로 지어낸 기사입니다" 가 늘 붙는다
 ([index.html](index.html) 의 `.shot__cap`). **지우지 않는다.**
