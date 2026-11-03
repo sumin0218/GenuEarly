@@ -444,17 +444,19 @@ h1 {
 
 .install-box {
   position: relative;
-  padding: var(--s48);
+  padding: var(--s64) var(--s48) var(--s48);
   border: 2px solid var(--action);
   border-radius: var(--r16);
   background: var(--bg);
   box-shadow: 0 0 0 6px rgba(2, 182, 127, 0.1);
+  text-align: center;          /* 네모 안은 가운데로 모은다 */
 }
-/* 왼쪽 위에 작은 띠. 무엇을 감싼 것인지 글로도 말한다 — 색만으로 말하지 않는다 */
+/* 머리의 띠도 가운데. 글이 가운데인데 띠만 왼쪽이면 축이 둘이 된다 */
 .install-box__tag {
   position: absolute;
   top: calc(-1 * var(--s12));
-  left: var(--s32);
+  left: 50%;
+  transform: translateX(-50%);
   padding: var(--s4) var(--s12);
   border-radius: 999px;
   background: var(--action);
@@ -462,16 +464,27 @@ h1 {
   font-size: 13px;
   font-weight: 700;
 }
-.install-box .h2 { margin-top: var(--s8); }
+/* `.sub` 는 읽기 폭(60ch)이 걸려 있어 그대로 두면 왼쪽으로 치우친다 */
+.install-box .sub {
+  margin-inline: auto;
+  margin-bottom: var(--s32);
+}
 
+/* **번호 목록만 왼쪽 정렬이다.** 가운데로 맞추면 번호가 들쭉날쭉해서 차례로 읽히지
+   않는다. 덩이째 가운데에 두고 글은 왼쪽에서 시작하게 한다. */
 .install {
-  margin: 0 0 var(--s32);
-  padding-left: var(--s24);
+  width: fit-content;
   max-width: 60ch;
+  margin: 0 auto var(--s32);
+  padding-left: var(--s24);
+  text-align: left;
   color: var(--muted);
 }
 .install li { margin-bottom: var(--s8); }
 .install b, .install a { color: var(--ink); }
+
+.install-box .cta { justify-content: center; }
+
 code {
   padding: 2px var(--s8);
   border-radius: var(--r8);
@@ -481,8 +494,7 @@ code {
 }
 
 @media (max-width: 860px) {
-  .install-box { padding: var(--s32) var(--s24); }
-  .install-box__tag { left: var(--s16); }
+  .install-box { padding: var(--s48) var(--s24) var(--s32); }
 }
 
 /* ── 바닥 ────────────────────────────────────────────────────────── */
