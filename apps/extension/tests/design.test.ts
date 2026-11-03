@@ -140,7 +140,7 @@ function outsideTokenBlocks(css: string): string {
   // 어두운 모드 블록도 토큰을 다시 적는 자리다.
   return strip(css)
     .replace(/@media \(prefers-color-scheme: dark\)\s*\{[\s\S]*?\n\}\n\}/g, '')
-    .replace(/(:root|\.ge-badge|\.ge-toast|\.ge-share)\s*\{[\s\S]*?\n\}/g, '')
+    .replace(/(:root|\.ge-badge|\.ge-toast|\.ge-share|\.ge-hl__tip)\s*\{[\s\S]*?\n\}/g, '')
 }
 
 describe('값을 토큰에서 고른다', () => {

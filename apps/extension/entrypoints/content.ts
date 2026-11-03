@@ -10,7 +10,9 @@ import { ARTICLE_EXCLUDE_MATCHES, ARTICLE_MATCHES, TEST_FIXTURE_MATCHES } from '
 import content from '../../../packages/content/ui.ko.json'
 import { findEvidence } from '@genuearly/shared'
 import { packPicks, readExplain, unpackPicks, writeExplain } from '../lib/cache'
-import { extractArticle } from '../lib/extract'
+import { articleBodyElement, extractArticle } from '../lib/extract'
+import { createHighlighter } from '../lib/highlight'
+import { gatherMarks } from '../lib/marks'
 import { TOAST_MS, createToast } from '../lib/toast'
 import { createShareNotice, listenForShare } from '../lib/share'
 import { createIcon } from '../lib/icon'
@@ -112,6 +114,7 @@ export default defineContentScript({
     const badge = createBadge()
     const toast = createToast()
     const share = createShareNotice()
+    const highlighter = createHighlighter()
 
     // ④ 공유 직전 알림. **🔴 에만, 기사당 한 번만.**
     //
@@ -138,7 +141,7 @@ export default defineContentScript({
       // docs/security/secure-coding.md 4절이 'closed' 를 기본으로 정하고 있다.
       mode: 'closed',
 
-      onMount: (container) => { container.append(badge.el, toast.el, share.el) },
+      onMount: (container) => { container.append(badge.el, toast.el, share.el, highlighter.el) },
     })
     ui.mount()
 
@@ -267,6 +270,25 @@ export default defineContentScript({
       if (verdict && verdict.level !== 'UNDETERMINED') toast.show(TOAST_MS)
       // 🔴 이 아니면 ④ 는 영영 뜰 일이 없다. 판정은 한 번 나면 바뀌지 않는다.
       if (verdict?.level !== 'CAUTION') stopListening()
+
+      // **걸린 대목을 미리 찾아 기사에 칠한다.** 팝업에서 항목을 펼칠 때까지
+      // 기다리지 않는다 — 기다리면 칠할 자리를 알 수 없고, 펼친 뒤에도 모델을
+      // 기다려야 한다. 찾은 것은 캐시에 들어가므로 팝업은 읽기만 한다 (lib/marks.ts).
+      //
+      // 기다리지 않는다. 코드 몫이 먼저 칠해지고 LLM 몫이 뒤따라 덧칠된다.
+      const bodyEl = articleBodyElement()
+      if (verdict && bodyEl) {
+        void gatherMarks({
+          url: location.href,
+          body: article.body,
+          level: verdict.level,
+          verdict,
+          onMarks: (marks) => highlighter.paint(bodyEl, marks),
+        }).catch((e) => {
+          // 칠하지 못해도 배지와 팝업은 그대로다.
+          console.warn('[GenuEarly] 대목을 칠하지 못했다', e)
+        })
+      }
     } catch (e) {
       // service worker 가 죽었거나 확장이 다시 로드됐다. ⚪ 는 실패가 아니라 결과다.
       console.warn('[GenuEarly] 판단을 받지 못했다', e)

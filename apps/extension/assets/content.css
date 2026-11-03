@@ -218,3 +218,65 @@
   outline: 0;
   box-shadow: 0 0 0 3px rgba(2, 182, 127, 0.4);
 }
+
+/* 기사 본문에 칠하는 형광펜. **기사 DOM 을 건드리지 않는다** — Range 로 받은 자리
+   위에 상자를 덮는다 (lib/highlight.ts).
+
+   레이어는 마우스를 받지 않는다. 받으면 기사를 덮은 채로 링크를 막는다.
+   상자 하나하나만 켠다. */
+.ge-hl {
+  position: fixed;
+  inset: 0;
+  z-index: 2147482000;
+  pointer-events: none;
+}
+
+.ge-hl__box {
+  position: fixed;
+  pointer-events: auto;
+  cursor: help;
+  border-radius: 2px;
+  /* 형광펜. 글자가 우리 상자 **아래**에 있으므로 반투명이어야 읽힌다.
+     `mix-blend-mode: multiply` 로 글자 색을 살린다 — 불투명하게 덮으면 글자가 사라진다. */
+  background: rgba(255, 214, 0, 0.42);
+  mix-blend-mode: multiply;
+  box-shadow: inset 0 -1px 0 rgba(161, 118, 0, 0.5);
+}
+.ge-hl__box:hover { background: rgba(255, 196, 0, 0.6); }
+
+/* 왜 칠했는지. 배지·말풍선과 같은 토큰을 쓴다. */
+.ge-hl__tip {
+  --ge-bg: #ffffff;
+  --ge-ink: #111111;
+  --ge-muted: #5f6368;
+
+  --ge-space-4: 4px;
+  --ge-space-8: 8px;
+  --ge-space-12: 12px;
+  --ge-radius-8: 8px;
+  --ge-shadow-float: 0 4px 16px rgba(0, 0, 0, 0.14);
+
+  position: fixed;
+  z-index: 2147483000;
+  box-sizing: border-box;
+  max-width: 300px;
+  padding: var(--ge-space-8) var(--ge-space-12);
+  border-radius: var(--ge-radius-8);
+  background: var(--ge-bg);
+  color: var(--ge-ink);
+  font: 13px/1.45 "Noto Sans KR", -apple-system, BlinkMacSystemFont,
+    "Segoe UI", "Malgun Gothic", sans-serif;
+  box-shadow: var(--ge-shadow-float);
+  pointer-events: none;
+}
+.ge-hl__tip[hidden] { display: none; }
+/* 위에 띄울 때는 상자 위로 올려 놓는다 — top 이 상자의 윗변이다. */
+.ge-hl__tip[data-place='above'] { transform: translateY(-100%); }
+
+.ge-hl__tip-item { font-weight: 600; }
+.ge-hl__tip-why {
+  margin-top: var(--ge-space-4);
+  color: var(--ge-muted);
+  font-size: 12px;
+}
+.ge-hl__tip-why[hidden] { display: none; }
