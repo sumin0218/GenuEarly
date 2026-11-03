@@ -12,7 +12,7 @@ import { findEvidence } from '@genuearly/shared'
 import { packPicks, readExplain, unpackPicks, writeExplain } from '../lib/cache'
 import { articleBodyElement, articleHeadlineElement, extractArticle } from '../lib/extract'
 import { createHighlighter } from '../lib/highlight'
-import { gatherMarks } from '../lib/marks'
+import { gatherMarks, hasSentenceAnswer, sentencePicks } from '../lib/marks'
 import { TOAST_MS, createToast } from '../lib/toast'
 import { createShareNotice, listenForShare } from '../lib/share'
 import { createIcon } from '../lib/icon'
@@ -187,6 +187,15 @@ export default defineContentScript({
         if (!article) return Promise.resolve(null)
         const itemId = raw.itemId
 
+        // **Jev 가 문장마다 답한 항목은 바깥에 묻지 않는다.** 배지를 만들 때 이미
+        // 받아 둔 답이 곧 "어느 문장이 걸렸나" 다. 형광펜과 **같은 곳**에서 나오므로
+        // 화면 두 곳이 다른 문장을 가리킬 수 없다 (lib/marks.ts).
+        const state = badge.state()
+        if (hasSentenceAnswer(itemId) && state.verdict?.sentenceScores) {
+          const picks = sentencePicks(article.sentences, state.verdict, itemId)
+          return Promise.resolve({ itemId, found: {}, spans: {}, ...(picks.length ? { picks } : {}) })
+        }
+
         // **코드가 찾는 것은 여기서 끝난다.** 바깥에 묻지 않는다 — 글자가 거기 있는지는
         // 문자열 찾기지 판단이 아니다 (docs/jev.md 3절 "피해야 할 것").
         const spans: Record<string, string[]> = {}
@@ -276,20 +285,17 @@ export default defineContentScript({
       // 기다려야 한다. 찾은 것은 캐시에 들어가므로 팝업은 읽기만 한다 (lib/marks.ts).
       //
       // 기다리지 않는다. 코드 몫이 먼저 칠해지고 LLM 몫이 뒤따라 덧칠된다.
+      // **걸린 대목을 기사에 칠한다.** 모델을 다시 부르지 않는다 — 판정과 함께 온
+      // 문장 점수가 곧 "어느 문장이 걸렸나" 다 (lib/marks.ts). 그래서 기다림이 없다.
       const roots = { body: articleBodyElement(), headline: articleHeadlineElement() }
       if (verdict && (roots.body || roots.headline)) {
-        void gatherMarks({
-          url: location.href,
+        highlighter.paint(roots, gatherMarks({
           body: article.body,
           headline: article.headline,
           sentences: article.sentences,
           level: verdict.level,
           verdict,
-          onMarks: (marks) => highlighter.paint(roots, marks),
-        }).catch((e) => {
-          // 칠하지 못해도 배지와 팝업은 그대로다.
-          console.warn('[GenuEarly] 대목을 칠하지 못했다', e)
-        })
+        }))
       }
     } catch (e) {
       // service worker 가 죽었거나 확장이 다시 로드됐다. ⚪ 는 실패가 아니라 결과다.

@@ -1,32 +1,32 @@
-// 걸린 항목마다 **글의 어느 대목인지** 미리 모아 둔다.
+// 걸린 항목마다 **글의 어느 대목인지** 모은다.
 //
-// ## 왜 미리 하나
+// ## 물어보지 않는다. 이미 받아 둔 답을 쓴다
 //
-// 전에는 팝업에서 항목 옆 `V` 를 눌렀을 때 비로소 찾았다. 그러면 두 가지가 생긴다.
+// 배지를 만들 때 Jev 에게 **문장마다** 두 가지를 물었다 (judgment-items.json 의
+// `unverifiable_claim`).
 //
-//   1. **글에 칠할 수가 없다.** 누르기 전에는 어디를 칠할지 모른다
-//   2. 누른 뒤 LLM 을 기다린다. 펼쳤는데 한동안 빈 칸이다
+//   1. 이 문장이 일·수치·인과를 **확정된 사실로** 서술하는가 (`factual_assertion`)
+//   2. 그 문장 **안에** 근거가 적혀 있는가 (`named_basis`)
 //
-// 그래서 판정이 나오면 바로 모은다. 모은 것은 `writeExplain` 으로 캐시에 들어가므로
-// **팝업이 펼쳐질 때는 읽기만 한다** (lib/cache.ts — 캐시가 곧 재현성이다).
+// 즉 **어느 문장이 걸렸는지 Jev 가 이미 문장 단위로 알려줬다.** 전에는 그것을 평균 내어
+// 항목 하나로 뭉갠 다음, 칠할 자리를 찾으려고 `gpt-5.6-luna` 에게 "어느 문장이냐" 를
+// 다시 물었다. 두 가지가 잘못이었다.
 //
-// ## 두 갈래로 모은다
+//   - **같은 것을 두 번 묻는다.** 호출도, 기다림도 두 배다
+//   - **두 답이 어긋날 수 있다.** Jev 가 0점 준 문장을 gpt 가 집어 오면 배지의 근거와
+//     화면의 형광펜이 서로 다른 말을 한다
 //
-// | | 누가 | 비용 |
-// | --- | --- | --- |
-// | 정해진 표현 | 코드 (`findEvidence`) | 없다. 글자 찾기다 |
-// | 목록에 담을 수 없는 것 | `gpt-5.6-luna` | 호출 하나. 코드가 빈손일 때만 |
+// 그래서 **여기서는 모델을 부르지 않는다.** 판정과 함께 온 문장 점수를 그대로 쓴다
+// (eval/results/2026-11-03-badge-with-search.md).
 //
-// ## 단계는 Jev 가 낸 것을 그대로 쓴다
+// ## 코드가 찾는 몫은 그대로 둔다
 //
-// 우리가 다시 정하지 않는다. 문장 단위 항목은 **그 문장의 점수**를, 나머지는
-// **그 항목의 점수**를 보고 `isCautionScore` 로 가른다 — 배지가 주의 신호를 세는
-// 기준과 같은 함수다. 기준이 둘이 되면 배지는 🟡 인데 본문은 빨갛게 칠해진다.
+// 정해진 표현(`꼭 공유하세요`, `충격`…)은 글자 찾기라 모델이 필요 없다. 그쪽은
+// `findEvidence` 가 맡는다.
 import content from '../../../packages/content/ui.ko.json'
 import { findEvidence, isCautionScore } from '@genuearly/shared'
 import type { Mark, MarkLevel, Why } from './highlight'
-import type { ArticleVerdict, DisplayLevel, Message } from './protocol'
-import { packPicks, readExplain, unpackPicks, writeExplain } from './cache'
+import type { ArticleVerdict, DisplayLevel } from './protocol'
 import { squeeze } from './spans'
 
 /** 항목 이름과 사유 문구를 꺼내는 곳. 없는 항목은 조용히 건너뛴다. */
@@ -38,7 +38,7 @@ type ExplainCopy = Record<
 /** 한 기사에서 칠할 대목 수 상한. 넘으면 글이 온통 칠해져 짚는 뜻이 사라진다. */
 const MAX_MARKS = 24
 
-/** 칠할 글이 어디에 있나. 제목 항목은 제목 요소에, 나머지는 본문에 칠한다. */
+/** 칠할 글이 어디에 있나. */
 export type Where = 'headline' | 'body'
 
 /** 제목을 보는 항목. 이 항목의 대목은 제목 요소에 칠한다. */
@@ -46,8 +46,19 @@ const HEADLINE_ITEMS = new Set(['clickbait_headline', 'headline_body_match'])
 
 export const whereOf = (itemId: string): Where => (HEADLINE_ITEMS.has(itemId) ? 'headline' : 'body')
 
-/** 문장 단위 항목. 이 항목만 문장마다 단계가 갈린다 (judgment-items.json 의 `unit`). */
+/** 문장 단위 항목. 이 항목만 Jev 가 문장마다 답을 준다. */
 const SENTENCE_ITEM = 'unverifiable_claim'
+/** 문장 점수를 같이 쓰는 기사 단위 항목. 둘 다 "근거가 그 문장에 있나" 를 본다. */
+const SOURCE_ITEM = 'source_citation'
+
+/**
+ * 누구인지 밝히지 않은 출처 표현.
+ *
+ * Jev 는 `named_basis` 를 **예/아니오로만** 답한다 — "집단으로만 가리켰다" 와
+ * "아예 없다" 를 가르지 않는다. 화면 문구는 그 둘이 다르므로 여기서 가른다.
+ * **글자 찾기지 판단이 아니다** (docs/jev.md 3절, evidence.ts 와 같은 성격).
+ */
+const GROUP_ONLY = /관계자|전문가|업계에서는|소식통|당국자|한 교수|일각에서는/
 
 /** 항목 이름. 문구가 없으면 비운다 — 화면에 id 가 뜨면 안 된다. */
 function itemName(itemId: string): string | undefined {
@@ -63,17 +74,19 @@ function reasonText(itemId: string, id: string): string | undefined {
 const 센것먼저 = (a: Why, b: Why): number =>
   a.level === b.level ? 0 : a.level === 'CAUTION' ? -1 : 1
 
+interface Raw { text: string; why: Why; where: Where }
+
 /**
  * 같은 글자에 붙은 사유를 하나로 묶는다.
  *
- * 한 문장이 여러 항목에 걸리는 일이 흔하다 — "체육계의 한 관계자는…" 은
- * `unverifiable_claim` 과 `source_citation` 에 함께 걸린다. 상자를 두 겹으로
- * 칠하면 색이 짙어지고 어느 쪽을 가리키는지 알 수 없다.
+ * 한 문장이 여러 항목에 걸리는 일이 흔하다 — 근거 없이 단정한 문장은
+ * `unverifiable_claim` 과 `source_citation` 에 함께 걸린다. 상자를 두 겹으로 칠하면
+ * 색이 짙어지고 어느 쪽을 가리키는지 알 수 없다.
  *
  * **단계는 가장 센 것을 쓴다.** 빨강과 노랑이 함께 나오면 빨강이다.
  */
-function merge(raw: readonly { text: string; why: Why; where: Where }[]): Mark[] {
-  const by = new Map<string, Mark & { where: Where }>()
+function merge(raw: readonly Raw[]): Mark[] {
+  const by = new Map<string, Mark>()
   const order: string[] = []
   for (const r of raw) {
     const key = `${r.where}\u0000${squeeze(r.text)}`
@@ -83,7 +96,6 @@ function merge(raw: readonly { text: string; why: Why; where: Where }[]): Mark[]
       order.push(key)
       continue
     }
-    // 같은 항목이 같은 글자에 두 번 오면 한 번만 적는다.
     if (got.whys.some((w) => w.item === r.why.item && w.reason === r.why.reason)) continue
     got.whys.push(r.why)
     if (r.why.level === 'CAUTION') got.level = 'CAUTION'
@@ -100,59 +112,16 @@ function merge(raw: readonly { text: string; why: Why; where: Where }[]): Mark[]
 }
 
 /** 걸린 항목. 확신했고 점수가 0 보다 큰 것만. */
-function flagged(v: ArticleVerdict): { id: string; level: MarkLevel }[] {
-  return v.items
-    .filter((i) => i.isConfident && i.score !== null && i.score > 0)
-    .map((i) => ({
-      id: i.id,
-      level: isCautionScore(i.score, i.isConfident) ? ('CAUTION' as const) : ('CHECK' as const),
-    }))
-}
-
-/**
- * 문장마다의 단계. 공백을 지운 글자로 찾는다.
- *
- * **없으면 빈 지도다.** 캐시에서 읽은 판정에는 문장 점수가 없어서
- * (lib/protocol.ts 의 `sentenceScores`) 그때는 항목 단계로 칠한다.
- */
-export function sentenceLevels(
-  sentences: readonly string[],
-  scores: readonly (number | null)[] | undefined,
-): Map<string, MarkLevel> {
+function flagged(v: ArticleVerdict): Map<string, MarkLevel> {
   const out = new Map<string, MarkLevel>()
-  if (!scores) return out
-  for (const [i, s] of sentences.entries()) {
-    const score = scores[i]
-    if (score === null || score === undefined || score <= 0) continue
-    out.set(squeeze(s), isCautionScore(score) ? 'CAUTION' : 'CHECK')
+  for (const i of v.items) {
+    if (!i.isConfident || i.score === null || i.score <= 0) continue
+    out.set(i.id, isCautionScore(i.score, i.isConfident) ? 'CAUTION' : 'CHECK')
   }
   return out
 }
 
-/**
- * 이 글자의 단계. **문장 단위 항목은 그 문장의 단계를 쓴다.**
- *
- * 집어 온 글자가 문장과 글자까지 같지 않을 수 있어(앞뒤가 조금 잘린다) 품는 쪽도 본다.
- */
-function levelFor(
-  itemId: string,
-  text: string,
-  itemLevel: MarkLevel,
-  perSentence: Map<string, MarkLevel>,
-): MarkLevel {
-  if (itemId !== SENTENCE_ITEM || perSentence.size === 0) return itemLevel
-  const want = squeeze(text)
-  const hit = perSentence.get(want)
-  if (hit) return hit
-  for (const [s, lv] of perSentence) {
-    if (s.includes(want) || want.includes(s)) return lv
-  }
-  return itemLevel
-}
-
-interface Raw { text: string; why: Why; where: Where }
-
-/** 코드가 찾은 것. 비용이 없으므로 가장 먼저 한다. */
+/** 코드가 찾은 것. 비용이 없다 — 글자 찾기다. */
 export function codeMarks(
   itemId: string,
   level: MarkLevel,
@@ -174,102 +143,115 @@ export function codeMarks(
   return out
 }
 
+/**
+ * **Jev 가 문장마다 낸 답을 그대로 대목으로 바꾼다.** 모델을 부르지 않는다.
+ *
+ * 점수가 0 보다 큰 문장은 "확정해서 말하는데 그 문장 안에 근거가 없다" 는 뜻이다.
+ * 그 문장이 곧 칠할 자리다.
+ */
+export function sentenceMarks(
+  sentences: readonly string[],
+  verdict: ArticleVerdict,
+  flags: Map<string, MarkLevel>,
+): Raw[] {
+  const scores = verdict.sentenceScores
+  if (!scores) return []
+
+  const uvcName = itemName(SENTENCE_ITEM)
+  const srcName = itemName(SOURCE_ITEM)
+  const uvcFlagged = flags.has(SENTENCE_ITEM)
+  const srcFlagged = flags.has(SOURCE_ITEM)
+  if (!uvcFlagged && !srcFlagged) return []
+
+  const basis = verdict.sentenceBasis
+  const out: Raw[] = []
+  for (const [i, text] of sentences.entries()) {
+    const score = scores[i]
+    if (score === null || score === undefined || score <= 0) continue
+    // **문장마다 제 단계다.** 항목 평균이 아니다.
+    const level: MarkLevel = isCautionScore(score) ? 'CAUTION' : 'CHECK'
+    // 누구인지 밝히지 않은 출처가 있나. 화면 문구가 그 둘을 가른다.
+    const group = GROUP_ONLY.test(text)
+
+    if (uvcFlagged && uvcName) {
+      const reason = reasonText(SENTENCE_ITEM, group ? 'uvc_group_only' : 'uvc_no_basis')
+      out.push({ text, where: 'body', why: { item: uvcName, level, ...(reason ? { reason } : {}) } })
+    }
+    // 출처 항목은 기사 단위 판정이지만, **그 문장에 근거가 없다는 것은 Jev 가 문장마다
+    // 답한 것**이다. 그 답이 있을 때만 붙인다.
+    if (srcFlagged && srcName) {
+      const b = basis?.[i]
+      if (b === null || b === undefined || b >= 0.5) continue
+      const reason = reasonText(SOURCE_ITEM, group ? 'src_group_only' : 'src_none')
+      out.push({
+        text,
+        where: 'body',
+        why: { item: srcName, level: flags.get(SOURCE_ITEM) ?? level, ...(reason ? { reason } : {}) },
+      })
+    }
+  }
+  return out
+}
+
+/** 이 항목은 Jev 의 문장 답만으로 설명할 수 있나. 그렇다면 모델을 부르지 않는다. */
+export const hasSentenceAnswer = (itemId: string): boolean =>
+  itemId === SENTENCE_ITEM || itemId === SOURCE_ITEM
+
+/**
+ * 팝업이 쓰는 모양(`{ text, why }`)으로 돌려준다. `why` 는 `explain.*.reasons` 의 id 다.
+ *
+ * **형광펜과 같은 곳에서 나온다.** 팝업이 따로 모델에 물으면 화면 두 곳이 다른 문장을
+ * 가리키게 된다.
+ */
+export function sentencePicks(
+  sentences: readonly string[],
+  verdict: ArticleVerdict,
+  itemId: string,
+): { text: string; why: string }[] {
+  const scores = verdict.sentenceScores
+  if (!scores || !hasSentenceAnswer(itemId)) return []
+  const basis = verdict.sentenceBasis
+  const out: { text: string; why: string }[] = []
+  for (const [i, text] of sentences.entries()) {
+    const score = scores[i]
+    if (score === null || score === undefined || score <= 0) continue
+    const group = GROUP_ONLY.test(text)
+    if (itemId === SENTENCE_ITEM) {
+      out.push({ text, why: group ? 'uvc_group_only' : 'uvc_no_basis' })
+      continue
+    }
+    const b = basis?.[i]
+    if (b === null || b === undefined || b >= 0.5) continue
+    out.push({ text, why: group ? 'src_group_only' : 'src_none' })
+  }
+  return out
+}
+
 export interface GatherInput {
-  url: string
   body: string
   headline: string
   /** 보낸 문장. `sentenceScores` 와 같은 순서다 */
   sentences: readonly string[]
   level: DisplayLevel
   verdict: ArticleVerdict
-  /** 대목이 더 모이면 부른다. 코드 몫을 먼저 칠하고 LLM 몫을 덧칠하기 위해서다 */
-  onMarks: (marks: Mark[]) => void
-  /** 테스트에서 갈아 끼운다 */
-  ask?: (msg: Message) => Promise<unknown>
 }
 
 /**
- * 걸린 항목의 대목을 모은다.
+ * 걸린 항목의 대목을 모은다. **모델을 부르지 않으므로 기다림이 없다.**
  *
- * **코드 몫을 먼저 내놓는다.** LLM 몫은 뒤에서 하나씩 받아 덧칠한다 — 한꺼번에
- * 던지면 판단 예산을 밀어낸다 (apps/proxy/wrangler.jsonc 의 레이트 리밋 주석:
- * 기사 하나가 이미 최대 42건을 쓴다).
+ * 전에는 비동기였다 — gpt 를 불러 가며 덧칠했기 때문이다. 이제는 판정이 손에 들어온
+ * 순간 다 알 수 있다.
  */
-export async function gatherMarks(input: GatherInput): Promise<void> {
-  const { url, body, headline, sentences, level, verdict, onMarks } = input
+export function gatherMarks(input: GatherInput): Mark[] {
+  const { body, headline, sentences, level, verdict } = input
   // 🟢·⚪ 에서는 칠하지 않는다. 걸린 것이 없거나 판단하지 못한 것이다.
-  if (level !== 'CHECK' && level !== 'CAUTION') return
+  if (level !== 'CHECK' && level !== 'CAUTION') return []
 
-  const items = flagged(verdict)
-  if (items.length === 0) return
+  const flags = flagged(verdict)
+  if (flags.size === 0) return []
 
-  const perSentence = sentenceLevels(sentences, verdict.sentenceScores)
   const raw: Raw[] = []
-  /** 코드가 뭔가 찾은 항목. 이 항목은 모델에 묻지 않는다 */
-  const covered = new Set<string>()
-
-  for (const { id, level: lv } of items) {
-    const found = codeMarks(id, lv, { headline, body })
-    if (found.length) {
-      covered.add(id)
-      raw.push(...found)
-    }
-  }
-  if (raw.length) onMarks(merge(raw))
-
-  const ask = input.ask ?? ((m: Message) => browser.runtime.sendMessage(m))
-
-  for (const { id, level: itemLevel } of items) {
-    if (covered.has(id)) continue
-    if (raw.length >= MAX_MARKS) break
-    const item = itemName(id)
-    if (!item) continue
-
-    const add = (picks: readonly { text: string; why: string }[]): void => {
-      for (const p of picks) {
-        const reason = reasonText(id, p.why)
-        raw.push({
-          text: p.text,
-          where: whereOf(id),
-          why: {
-            item,
-            level: levelFor(id, p.text, itemLevel, perSentence),
-            ...(reason ? { reason } : {}),
-          },
-        })
-      }
-      if (picks.length) onMarks(merge(raw))
-    }
-
-    // 받아 둔 답이 있으면 그것을 쓴다. 팝업과 **같은 캐시**다.
-    const hit = await readExplain(url, id, level)
-    if (hit) {
-      add(await unpackPicks(body, hit.p))
-      continue
-    }
-
-    const msg: Message = {
-      kind: 'judge-explain',
-      url,
-      body,
-      itemId: id,
-      level,
-      // 코드가 빈손이라 여기까지 왔다.
-      noEvidence: true,
-    }
-    const res = await ask(msg).catch((e) => {
-      // 못 받아도 칠한 것은 남는다. 빈손이 실패는 아니다.
-      console.warn('[GenuEarly] 대목을 받지 못했다', id, e)
-      return null
-    })
-    const out = res as
-      | { found?: Record<string, boolean>; picks?: { text: string; why: string }[] }
-      | null
-    if (!out) continue
-
-    // **집어 온 글자를 여기서 또 대조한다.** 본문을 들고 있는 것은 우리뿐이다.
-    const picks = (out.picks ?? []).filter((p) => body.includes(p.text))
-    await writeExplain(url, id, { lv: level, f: out.found ?? {}, p: await packPicks(body, picks) })
-    add(picks)
-  }
+  for (const [id, lv] of flags) raw.push(...codeMarks(id, lv, { headline, body }))
+  raw.push(...sentenceMarks(sentences, verdict, flags))
+  return merge(raw)
 }

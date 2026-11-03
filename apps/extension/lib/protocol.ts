@@ -294,4 +294,12 @@ export type ArticleVerdict = Verdict & {
    * 항목 단계로 칠한다.
    */
   sentenceScores?: (number | null)[]
+  /**
+   * 문장마다 **그 문장 안에 근거(기관명·실명·자료명)가 적혀 있나** 에 대한 Jev 의 답.
+   * `sentenceScores` 와 같은 순서·길이. 높을수록 "적혀 있다".
+   *
+   * 합친 점수만으로는 출처 항목의 사유를 붙일 수 없어서 원답을 함께 보낸다.
+   * 이것도 **캐시에는 담지 않는다** (`sentenceScores` 와 같은 이유).
+   */
+  sentenceBasis?: (number | null)[]
 }

@@ -195,6 +195,18 @@ export function sentenceScore(answers: unknown, id = 'unverifiable_claim'): numb
 }
 
 /**
+ * 문장 하나에 대한 **질문 하나의 원답**. 모름이거나 모양이 틀렸으면 `null`.
+ *
+ * 합친 점수(`sentenceScore`)만으로는 "왜 걸렸는지" 를 가릴 수 없다. `named_basis` 가
+ * 아니라고 한 문장은 **출처가 그 문장에 없는 문장**이기도 해서, 형광펜이 출처 항목의
+ * 사유를 붙일 때 이 값을 본다 (apps/extension/lib/marks.ts).
+ */
+export function noulValue(answers: unknown, questionId: string): number | null {
+  if (!isPlainObject(answers)) return null
+  return noulOf(answers[questionId])
+}
+
+/**
  * 이 점수가 **주의(🔴) 신호**인가.
  *
  * `decideBadge` 가 주의 신호를 세는 기준과 **같은 것을 쓴다** — 기준이 둘이 되면

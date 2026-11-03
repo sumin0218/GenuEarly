@@ -8,7 +8,7 @@
 // 엔트리포인트는 WXT 의 defineBackground 로 감싸여 있어 그대로는 불러올 수 없다.
 // **점수 규칙은 여기 없다.** `@genuearly/shared` 하나가 원본이고 중계 서버와 함께 쓴다 (GE-15).
 // 두 벌을 두면 조용히 갈라진다.
-import { decideBadge, hasCodeEvidence, resolveBand, scoreArticle, sentenceScore, type ItemResult } from '@genuearly/shared'
+import { decideBadge, hasCodeEvidence, noulValue, resolveBand, scoreArticle, sentenceScore, type ItemResult } from '@genuearly/shared'
 import schema from '@genuearly/shared/judgment-items.json'
 import {
   headlineFingerprint,
@@ -55,6 +55,14 @@ import {
  * 폭주 차단기가 실제로 걸리는 것도 보기 전이었다 (docs/requirements.md 8-1절).
  */
 const MAX_SENTENCES = 15
+
+/**
+ * 문장 항목의 두 질문 가운데 **근거를 묻는 쪽**의 id.
+ * `judgment-items.json` 의 `unverifiable_claim.combine.b` 를 그대로 읽는다 —
+ * 여기에 글자로 적어 두면 스키마를 고쳤을 때 조용히 어긋난다.
+ */
+const NAMED_BASIS = (schema.items as unknown as { id: string; combine?: { b?: string } }[])
+  .find((i) => i.id === 'unverifiable_claim')?.combine?.b ?? 'named_basis'
 
 /**
  * **모델이 내린 판단만 캐시한다.**
@@ -244,14 +252,16 @@ export async function judgeArticle(msg: Extract<Message, { kind: 'judge-article'
   // **문장 점수를 평균 전에 실어 보낸다.** 형광펜이 문장마다 노랑·빨강을 가른다
   // (lib/marks.ts). 캐시에서 온 판정에는 이것이 없다 — 캐시에 문장 점수를 담으면
   // 거기에 기사 내용이 묻어 들어간다.
-  const sentenceScores = sentenceItem && perSentence.length === sentences.length
-    ? perSentence.map((a) => sentenceScore(a, sentenceItem))
-    : undefined
+  const 문장답 = sentenceItem && perSentence.length === sentences.length ? perSentence : undefined
+  const sentenceScores = 문장답?.map((a) => sentenceScore(a, sentenceItem ?? undefined))
+  // 합친 점수만으로는 출처 항목의 사유를 붙일 수 없다. 원답을 함께 보낸다.
+  const sentenceBasis = 문장답?.map((a) => noulValue(a, NAMED_BASIS))
 
   return {
     ...verdict,
     ...(capped ? { capped } : {}),
     ...(sentenceScores ? { sentenceScores } : {}),
+    ...(sentenceBasis ? { sentenceBasis } : {}),
   }
 }
 
