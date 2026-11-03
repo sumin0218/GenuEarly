@@ -95,13 +95,6 @@ function reasonText(itemId: string, id: string): string | undefined {
   return copy?.reasons?.[id] ?? copy?.parts?.[id]?.present
 }
 
-/**
- * 그 문장의 단계. **팝업이 항목 줄에 쓰는 함수를 그대로 쓴다** — 문턱을 두 곳에
- * 적어 두면 조용히 어긋난다.
- */
-const 문장단계 = (score: number): MarkLevel =>
-  itemLevel({ id: '', score, isConfident: true }) === 'CAUTION' ? 'CAUTION' : 'CHECK'
-
 /** 빨강이 먼저. 같은 단계면 들어온 순서 그대로다. */
 const 센것먼저 = (a: Why, b: Why): number =>
   a.level === b.level ? 0 : a.level === 'CAUTION' ? -1 : 1
@@ -207,15 +200,14 @@ export function sentenceMarks(
   const basis = verdict.sentenceBasis
   const out: Raw[] = []
 
-  if (uvcFlagged && uvcName) {
-    for (const { text, score } of 센문장(sentences, verdict)) {
+  const uvcLevel = flags.get(SENTENCE_ITEM)
+  if (uvcLevel && uvcName) {
+    for (const { text } of 센문장(sentences, verdict)) {
       const reason = reasonText(SENTENCE_ITEM, GROUP_ONLY.test(text) ? 'uvc_group_only' : 'uvc_no_basis')
-      out.push({
-        text,
-        where: 'body',
-        // **문장마다 제 단계다.** 항목 평균이 아니다.
-        why: { item: uvcName, level: 문장단계(score), ...(reason ? { reason } : {}) },
-      })
+      // **색은 팝업의 그 줄과 같다.** 문장 점수로 색을 정하면 항목은 🟡 인데 그 안의
+      // 문장만 빨개진다 — 팝업과 본문이 다른 색으로 같은 것을 가리킨다.
+      // 문장 점수는 **어느 문장을 고를지**에만 쓴다.
+      out.push({ text, where: 'body', why: { item: uvcName, level: uvcLevel, ...(reason ? { reason } : {}) } })
     }
   }
 
@@ -247,17 +239,10 @@ export function sentenceMarks(
       const b = basis?.[i]
       return b !== null && b !== undefined && b < YES_AT
     })
-    for (const { text, score } of 없는것) {
+    const srcLevel = flags.get(SOURCE_ITEM) ?? 'CHECK'
+    for (const { text } of 없는것) {
       const reason = reasonText(SOURCE_ITEM, GROUP_ONLY.test(text) ? 'src_group_only' : 'src_none')
-      out.push({
-        text,
-        where: 'body',
-        why: {
-          item: srcName,
-          level: flags.get(SOURCE_ITEM) ?? (문장단계(score)),
-          ...(reason ? { reason } : {}),
-        },
-      })
+      out.push({ text, where: 'body', why: { item: srcName, level: srcLevel, ...(reason ? { reason } : {}) } })
     }
   }
   return out
@@ -280,10 +265,7 @@ function 센문장(
 ): { text: string; score: number }[] {
   const scores = verdict.sentenceScores
   if (!scores) return []
-  const 통 = new Map<MarkLevel, { text: string; score: number; at: number }[]>([
-    ['CAUTION', []],
-    ['CHECK', []],
-  ])
+  const got: { text: string; score: number; at: number }[] = []
   for (const [i, text] of sentences.entries()) {
     const score = scores[i]
     if (score === null || score === undefined) continue
@@ -292,17 +274,12 @@ function 센문장(
     // 넣어 묻는다 — 문턱을 여기 적어 두면 팝업이 바뀔 때 조용히 어긋난다.
     const lv = itemLevel({ id: '', score, isConfident: true })
     if (lv !== 'CHECK' && lv !== 'CAUTION') continue
-    통.get(lv)?.push({ text, score, at: i })
+    got.push({ text, score, at: i })
   }
-  const out: { text: string; score: number; at: number }[] = []
-  for (const 묶음 of 통.values()) {
-    묶음.sort((a, b) => (b.score - a.score) || (a.at - b.at))
-    out.push(...묶음.slice(0, MAX_PER_ITEM))
-  }
-  // 기사에 나온 차례로 되돌린다. 빨강이 먼저 칠해지고 노랑이 나중에 칠해지면
-  // 겹친 자리에서 어느 색이 위인지가 뽑은 순서에 끌려다닌다.
-  out.sort((a, b) => a.at - b.at)
-  return out.map(({ text, score }) => ({ text, score }))
+  got.sort((a, b) => (b.score - a.score) || (a.at - b.at))
+  // 기사에 나온 차례로 되돌린다. 고른 순서가 화면 순서가 되면 안 된다.
+  const 고름 = got.slice(0, MAX_PER_ITEM).sort((a, b) => a.at - b.at)
+  return 고름.map(({ text, score }) => ({ text, score }))
 }
 
 /** 이 항목은 Jev 의 문장 답만으로 설명할 수 있나. 그렇다면 모델을 부르지 않는다. */

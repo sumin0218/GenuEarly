@@ -103,26 +103,7 @@ describe('Jev 의 문장 답을 그대로 쓴다', () => {
 })
 
 describe('단계', () => {
-  it('**문장마다 제 단계다** — 항목 평균이 아니다', () => {
-    const got = gatherMarks({
-      ...기본,
-      // 항목 평균은 0.3(노랑)인데 그 문장은 0.9(빨강)다.
-      verdict: 판정([{ id: 'unverifiable_claim', score: 0.3, isConfident: true }], {
-        sentenceScores: [0, 0.9, 0],
-      }),
-    })
-    expect(got[0]?.level).toBe('CAUTION')
-  })
 
-  it('0.65 아래면 노랑이다', () => {
-    const got = gatherMarks({
-      ...기본,
-      verdict: 판정([{ id: 'unverifiable_claim', score: 0.9, isConfident: true }], {
-        sentenceScores: [0, 0.3, 0],
-      }),
-    })
-    expect(got[0]?.level).toBe('CHECK')
-  })
 
   it('코드가 찾은 몫은 항목 단계를 쓴다', () => {
     const got = gatherMarks({
@@ -258,60 +239,6 @@ describe('팝업과 형광펜이 같은 문장을 가리킨다', () => {
   })
 })
 
-describe('노랑도 제 자리를 얻는다', () => {
-  it('**빨강이 자리를 다 가져가지 않는다** — 둘 다 칠해진다', () => {
-    const 다섯 = ['가', '나', '다', '라', '마'].map((x) => `${x} 문장이 여기 있다.`)
-    const got = gatherMarks({
-      ...기본,
-      sentences: 다섯,
-      // 빨강 셋, 노랑 둘
-      verdict: 판정([{ id: 'unverifiable_claim', score: 0.8, isConfident: true }], {
-        sentenceScores: [0.9, 0.85, 0.8, 0.45, 0.35],
-      }),
-    })
-    const levels = got.map((m) => m.level)
-    expect(levels).toContain('CAUTION')
-    expect(levels).toContain('CHECK')
-  })
-
-  it('단계마다 둘까지다', () => {
-    const 여섯 = ['가', '나', '다', '라', '마', '바'].map((x) => `${x} 문장이 여기 있다.`)
-    const got = gatherMarks({
-      ...기본,
-      sentences: 여섯,
-      verdict: 판정([{ id: 'unverifiable_claim', score: 0.8, isConfident: true }], {
-        sentenceScores: [0.9, 0.85, 0.8, 0.5, 0.45, 0.4],
-      }),
-    })
-    expect(got.filter((m) => m.level === 'CAUTION')).toHaveLength(2)
-    expect(got.filter((m) => m.level === 'CHECK')).toHaveLength(2)
-  })
-
-  it('각 단계에서 센 것을 고른다', () => {
-    const 넷 = ['가', '나', '다', '라'].map((x) => `${x} 문장이 여기 있다.`)
-    const got = gatherMarks({
-      ...기본,
-      sentences: 넷,
-      verdict: 판정([{ id: 'unverifiable_claim', score: 0.8, isConfident: true }], {
-        sentenceScores: [0.35, 0.5, 0.7, 0.95],
-      }),
-    })
-    // 노랑 둘(0.5, 0.35), 빨강 둘(0.95, 0.7)
-    expect(got.map((m) => m.text)).toEqual(넷)
-  })
-
-  it('기사에 나온 차례로 돌려준다 — 뽑은 순서에 끌려다니지 않는다', () => {
-    const 셋 = ['가', '나', '다'].map((x) => `${x} 문장이 여기 있다.`)
-    const got = gatherMarks({
-      ...기본,
-      sentences: 셋,
-      verdict: 판정([{ id: 'unverifiable_claim', score: 0.8, isConfident: true }], {
-        sentenceScores: [0.35, 0.9, 0.45],
-      }),
-    })
-    expect(got.map((m) => m.text)).toEqual(셋)
-  })
-})
 
 describe('감정적 표현도 문장 단위로 칠한다', () => {
   const 감정문장 = '충격적인 그의 행태에 모두가 경악했다.'
@@ -460,5 +387,85 @@ describe('칠과 팝업은 같은 자리에서 그만둔다', () => {
       if (팝업 === 'SAFE') expect(got).toEqual([])
       else expect(got[0]?.level).toBe(팝업)
     }
+  })
+})
+
+describe('색은 팝업의 그 줄과 같다', () => {
+  // 전에는 문장 점수로 색을 정했다. 그래서 항목은 🟡 인데 그 안의 문장만 빨갰다 —
+  // 팝업과 본문이 다른 색으로 같은 것을 가리켰다. 문장 점수는 이제 **어느 문장을
+  // 고를지**에만 쓴다.
+
+  it('**항목이 🟡 면 그 대목도 노랑이다** — 문장 점수가 높아도', () => {
+    const got = gatherMarks({
+      ...기본,
+      verdict: 판정([{ id: 'unverifiable_claim', score: 0.5, isConfident: true }], {
+        sentenceScores: [0, 0.95, 0],
+      }),
+    })
+    expect(got[0]?.level).toBe('CHECK')
+  })
+
+  it('**항목이 🔴 면 그 대목도 빨강이다** — 문장 점수가 낮아도', () => {
+    const got = gatherMarks({
+      ...기본,
+      verdict: 판정([{ id: 'unverifiable_claim', score: 0.9, isConfident: true }], {
+        sentenceScores: [0, 0.35, 0],
+      }),
+    })
+    expect(got[0]?.level).toBe('CAUTION')
+  })
+
+  it('한 항목의 대목은 모두 같은 색이다', () => {
+    const 넷 = ['가 문장이다.', '나 문장이다.', '다 문장이다.', '라 문장이다.']
+    const got = gatherMarks({
+      ...기본,
+      sentences: 넷,
+      verdict: 판정([{ id: 'unverifiable_claim', score: 0.5, isConfident: true }], {
+        sentenceScores: [0.95, 0.9, 0.4, 0.35],
+      }),
+    })
+    expect(got.length).toBeGreaterThan(0)
+    expect(new Set(got.map((m) => m.level)).size).toBe(1)
+  })
+
+  it('항목이 둘이고 단계가 다르면 색도 둘이다', () => {
+    const got = gatherMarks({
+      ...기본,
+      verdict: 판정([
+        { id: 'unverifiable_claim', score: 0.9, isConfident: true },
+        { id: 'emotional_language', score: 0.4, isConfident: true },
+      ], {
+        sentenceScores: [0, 0.9, 0],
+        sentenceEmotion: [0.9, 0, 0],
+      }),
+    })
+    const levels = got.map((m) => m.level)
+    expect(levels).toContain('CAUTION')
+    expect(levels).toContain('CHECK')
+  })
+
+  it('항목마다 둘까지다', () => {
+    const 다섯 = ['가 문장이다.', '나 문장이다.', '다 문장이다.', '라 문장이다.', '마 문장이다.']
+    const got = gatherMarks({
+      ...기본,
+      sentences: 다섯,
+      verdict: 판정([{ id: 'unverifiable_claim', score: 0.9, isConfident: true }], {
+        sentenceScores: [0.95, 0.9, 0.85, 0.8, 0.75],
+      }),
+    })
+    expect(got).toHaveLength(2)
+  })
+
+  it('점수가 센 문장을 고르되 기사에 나온 차례로 돌려준다', () => {
+    const 셋 = ['가 문장이다.', '나 문장이다.', '다 문장이다.']
+    const got = gatherMarks({
+      ...기본,
+      sentences: 셋,
+      // 센 것은 3번과 1번. 돌려줄 때는 1번이 먼저다.
+      verdict: 판정([{ id: 'unverifiable_claim', score: 0.9, isConfident: true }], {
+        sentenceScores: [0.8, 0.35, 0.9],
+      }),
+    })
+    expect(got.map((m) => m.text)).toEqual(['가 문장이다.', '다 문장이다.'])
   })
 })
