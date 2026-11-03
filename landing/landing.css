@@ -236,6 +236,16 @@ h1 {
 }
 .shot--hero .shot__frame { box-shadow: var(--shadow-lg); border-style: solid; }
 .shot__hint { font-size: 14px; }
+
+/* **화면이 실제 기사가 아니라고 사진 밑에 적는다.** 특정 매체의 기사에 주의 배지가
+   붙은 사진을 공개 페이지에 올리면, 그 매체를 지목해 평가하는 것이 된다 —
+   "언론사를 평가하지 않는다" 와 정면으로 부딪친다 (docs/product.md 2절). */
+.shot__cap {
+  margin-top: var(--s12);
+  font-size: 13px;
+  color: var(--muted);
+  text-align: center;
+}
 .shot__frame::after {
   content: attr(data-shot);
   font-size: 12px;
