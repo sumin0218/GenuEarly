@@ -164,6 +164,14 @@ export interface BuildReportMessage {
   body: string
   /** 일곱 항목의 판정 줄. **팝업이 이미 그리고 있는 값을 그대로 넘긴다** — 다시 판단하지 않는다 */
   rows: ReportRow[]
+  /**
+   * 걸린 대목. **콘텐츠 스크립트가 Jev 의 문장 답에서 뽑아 보낸다** (lib/marks.ts).
+   *
+   * 전에는 중계 서버가 `/v1/explain` 으로 생성 모델에 다시 물었다. 배지를 만들 때
+   * 이미 받아 둔 답이 있는데 또 묻는 것이고, **두 답이 어긋나면 리포트와 형광펜이
+   * 다른 문장을 가리킨다.** 문장 점수가 없으면(캐시에서 온 판정) 비어 있다.
+   */
+  picks?: { text: string; why: string }[]
 }
 
 /**

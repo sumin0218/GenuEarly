@@ -13,6 +13,7 @@ import { packPicks, readExplain, unpackPicks, writeExplain } from '../lib/cache'
 import { articleBodyElement, articleHeadlineElement, extractArticle } from '../lib/extract'
 import { createHighlighter } from '../lib/highlight'
 import { gatherMarks, hasSentenceAnswer, sentencePicks } from '../lib/marks'
+import { CLAIM_ITEMS } from '../lib/report'
 import { TOAST_MS, createToast } from '../lib/toast'
 import { createShareNotice, listenForShare } from '../lib/share'
 import { createIcon } from '../lib/icon'
@@ -166,6 +167,19 @@ export default defineContentScript({
         // **날짜가 없으면 만들지 않는다.** 날짜 없이 기록을 맞추면 다른 날 기록에
         // "뒷받침됨" 이 뜬다 (실측 21%, apps/proxy/src/records.ts).
         if (!article.date) return Promise.resolve({ ok: false, reason: 'no_date' } satisfies MakeReportAnswer)
+
+        // **걸린 대목은 여기서 뽑아 보낸다.** 중계 서버가 생성 모델에 다시 묻지
+        // 않도록 — 배지를 만들 때 받아 둔 Jev 의 문장 답이 곧 그 대목이다.
+        // 형광펜·팝업과 **같은 곳**에서 나온다 (lib/marks.ts).
+        const v = badge.state().verdict
+        const picks = v?.sentenceScores
+          ? CLAIM_ITEMS.flatMap((id) => {
+              const level = raw.rows.find((r) => r.id === id)?.level
+              if (level !== 'CAUTION' && level !== 'CHECK') return []
+              return sentencePicks(article.sentences, v, id)
+            })
+          : []
+
         const ask: Message = {
           kind: 'build-report',
           url: location.href,
@@ -173,6 +187,7 @@ export default defineContentScript({
           date: article.date,
           body: article.body,
           rows: raw.rows,
+          ...(picks.length ? { picks } : {}),
         }
         void browser.runtime.sendMessage(ask).catch((e) => {
           console.warn('[GenuEarly] 리포트를 만들지 못했다', e)
