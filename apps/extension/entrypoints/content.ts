@@ -12,6 +12,7 @@ import { findEvidence } from '@genuearly/shared'
 import { packPicks, readExplain, unpackPicks, writeExplain } from '../lib/cache'
 import { extractArticle } from '../lib/extract'
 import { TOAST_MS, createToast } from '../lib/toast'
+import { createShareNotice, listenForShare } from '../lib/share'
 import { createIcon } from '../lib/icon'
 import { LEVEL_ICON, LEVEL_INK, LEVEL_INK_DARK } from '../lib/item-view'
 import type {
@@ -110,6 +111,23 @@ export default defineContentScript({
     const article = extractArticle()
     const badge = createBadge()
     const toast = createToast()
+    const share = createShareNotice()
+
+    // ④ 공유 직전 알림. **🔴 에만, 기사당 한 번만.**
+    //
+    // 기사당 한 번은 이 콘텐츠 스크립트가 사는 동안으로 센다. 어디에도 적지 않는다 —
+    // "이 기사를 봤다" 를 디스크에 남기면 그것이 곧 열람 기록이다(아래 onMessage 와
+    // 같은 이유). 사용자가 페이지를 다시 부르면 한 번 더 뜨는데, 다시 부른 것은
+    // 사용자가 한 일이라 그대로 둔다.
+    let told = false
+    const stopListening = listenForShare(() => {
+      if (told) return
+      if (badge.state().level !== 'CAUTION') return
+      told = true
+      share.show()
+      stopListening()
+    })
+
     const ui = await createShadowRootUi(ctx, {
       name: 'genuearly-badge',
       position: 'inline',
@@ -120,7 +138,7 @@ export default defineContentScript({
       // docs/security/secure-coding.md 4절이 'closed' 를 기본으로 정하고 있다.
       mode: 'closed',
 
-      onMount: (container) => { container.append(badge.el, toast.el) },
+      onMount: (container) => { container.append(badge.el, toast.el, share.el) },
     })
     ui.mount()
 
@@ -228,6 +246,8 @@ export default defineContentScript({
       // ⚪ 는 실패가 아니라 결과다.
       console.warn('[GenuEarly] 기사 구조를 읽지 못했다')
       badge.render('UNDETERMINED')
+      // ⚪ 에서는 ④ 가 뜰 일이 없다. 듣고 있을 이유도 없다.
+      stopListening()
       return
     }
 
@@ -245,11 +265,14 @@ export default defineContentScript({
       // **판단이 나왔을 때만 알린다.** ⚪ 는 결과이긴 하지만, "결과를 보려면 누르세요"
       // 하고 불러 놓고 "판단하지 못했습니다" 를 보여 주는 것은 헛걸음을 시키는 일이다.
       if (verdict && verdict.level !== 'UNDETERMINED') toast.show(TOAST_MS)
+      // 🔴 이 아니면 ④ 는 영영 뜰 일이 없다. 판정은 한 번 나면 바뀌지 않는다.
+      if (verdict?.level !== 'CAUTION') stopListening()
     } catch (e) {
       // service worker 가 죽었거나 확장이 다시 로드됐다. ⚪ 는 실패가 아니라 결과다.
       console.warn('[GenuEarly] 판단을 받지 못했다', e)
       badge.render('UNDETERMINED')
       toast.hide()
+      stopListening()
     }
   },
 })

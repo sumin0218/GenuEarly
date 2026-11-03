@@ -162,3 +162,59 @@
     border-left: 1px solid #2e2e2e;
   }
 }
+
+/* ④ 공유 직전 알림. **가운데 아래** — 오른쪽 위는 말풍선, 오른쪽 아래는 배지가 쓴다.
+   배지·말풍선과 같은 토큰을 쓴다. Shadow DOM 안이라 `:root` 가 닿지 않으므로
+   여기서도 요소에 직접 둔다 (.ge-badge 와 같은 이유). */
+.ge-share {
+  --ge-bg: #ffffff;
+  --ge-ink: #111111;
+  --ge-muted: #5f6368;
+
+  --ge-space-8: 8px;
+  --ge-space-12: 12px;
+  --ge-space-16: 16px;
+  --ge-radius-8: 8px;
+  --ge-shadow-float: 0 4px 16px rgba(0, 0, 0, 0.14);
+
+  position: fixed;
+  bottom: var(--ge-space-16);
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 2147483000;
+  box-sizing: border-box;
+  display: flex;
+  align-items: center;
+  gap: var(--ge-space-12);
+  max-width: min(420px, calc(100vw - 32px));
+  padding: var(--ge-space-12) var(--ge-space-16);
+  border-radius: var(--ge-radius-8);
+  background: var(--ge-bg);
+  color: var(--ge-ink);
+  font: 13px/1.45 "Noto Sans KR", -apple-system, BlinkMacSystemFont,
+    "Segoe UI", "Malgun Gothic", sans-serif;
+  box-shadow: var(--ge-shadow-float);
+}
+
+/* **author CSS 가 UA 의 `[hidden]` 을 이긴다.** `display: flex` 를 위에 두었으므로
+   여기서 다시 감춰야 한다 (lib/portal.ts 범례에서 같은 것에 당했다). */
+.ge-share[hidden] { display: none; }
+
+.ge-share__text { flex: 1; }
+
+.ge-share__ok {
+  flex: none;
+  padding: var(--ge-space-8) var(--ge-space-12);
+  font: inherit;
+  font-weight: 600;
+  color: var(--ge-ink);
+  background: none;
+  border: 1px solid rgba(0, 0, 0, 0.16);
+  border-radius: var(--ge-radius-8);
+  cursor: pointer;
+}
+.ge-share__ok:hover { background: rgba(0, 0, 0, 0.04); }
+.ge-share__ok:focus-visible {
+  outline: 0;
+  box-shadow: 0 0 0 3px rgba(2, 182, 127, 0.4);
+}
