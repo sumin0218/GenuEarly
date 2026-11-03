@@ -183,6 +183,17 @@ export function articleBodyElement(): Element | null {
   return rule ? pick(rule.body) : null
 }
 
+/**
+ * 제목을 담고 있는 **요소.** 제목 항목(`clickbait_headline`·`headline_body_match`)의
+ * 대목을 칠하는 데 쓴다.
+ *
+ * `headlineMeta` 로 읽은 경우에는 화면에 그 글자가 있는 요소가 없으므로 없다.
+ */
+export function articleHeadlineElement(): Element | null {
+  const rule = siteRule()
+  return rule ? pick(rule.headline) : null
+}
+
 /** 지금 페이지가 우리가 아는 기사 페이지면 제목·본문·문장을 돌려준다. */
 export function extractArticle(): Article | null {
   const rule = siteRule()

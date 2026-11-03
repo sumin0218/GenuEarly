@@ -8,7 +8,7 @@
 // 엔트리포인트는 WXT 의 defineBackground 로 감싸여 있어 그대로는 불러올 수 없다.
 // **점수 규칙은 여기 없다.** `@genuearly/shared` 하나가 원본이고 중계 서버와 함께 쓴다 (GE-15).
 // 두 벌을 두면 조용히 갈라진다.
-import { decideBadge, hasCodeEvidence, resolveBand, scoreArticle, type ItemResult } from '@genuearly/shared'
+import { decideBadge, hasCodeEvidence, resolveBand, scoreArticle, sentenceScore, type ItemResult } from '@genuearly/shared'
 import schema from '@genuearly/shared/judgment-items.json'
 import {
   headlineFingerprint,
@@ -240,7 +240,19 @@ export async function judgeArticle(msg: Extract<Message, { kind: 'judge-article'
 
   const verdict = decideBadge([...toResults(cached), ...fresh])
   setIconBadge(tabId, verdict.level)
-  return { ...verdict, ...(capped ? { capped } : {}) }
+
+  // **문장 점수를 평균 전에 실어 보낸다.** 형광펜이 문장마다 노랑·빨강을 가른다
+  // (lib/marks.ts). 캐시에서 온 판정에는 이것이 없다 — 캐시에 문장 점수를 담으면
+  // 거기에 기사 내용이 묻어 들어간다.
+  const sentenceScores = sentenceItem && perSentence.length === sentences.length
+    ? perSentence.map((a) => sentenceScore(a, sentenceItem))
+    : undefined
+
+  return {
+    ...verdict,
+    ...(capped ? { capped } : {}),
+    ...(sentenceScores ? { sentenceScores } : {}),
+  }
 }
 
 /** 캐시에서 읽은 것을 `decideBadge` 가 받는 모양으로 되돌린다. */

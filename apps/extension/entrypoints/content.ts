@@ -10,7 +10,7 @@ import { ARTICLE_EXCLUDE_MATCHES, ARTICLE_MATCHES, TEST_FIXTURE_MATCHES } from '
 import content from '../../../packages/content/ui.ko.json'
 import { findEvidence } from '@genuearly/shared'
 import { packPicks, readExplain, unpackPicks, writeExplain } from '../lib/cache'
-import { articleBodyElement, extractArticle } from '../lib/extract'
+import { articleBodyElement, articleHeadlineElement, extractArticle } from '../lib/extract'
 import { createHighlighter } from '../lib/highlight'
 import { gatherMarks } from '../lib/marks'
 import { TOAST_MS, createToast } from '../lib/toast'
@@ -276,14 +276,16 @@ export default defineContentScript({
       // 기다려야 한다. 찾은 것은 캐시에 들어가므로 팝업은 읽기만 한다 (lib/marks.ts).
       //
       // 기다리지 않는다. 코드 몫이 먼저 칠해지고 LLM 몫이 뒤따라 덧칠된다.
-      const bodyEl = articleBodyElement()
-      if (verdict && bodyEl) {
+      const roots = { body: articleBodyElement(), headline: articleHeadlineElement() }
+      if (verdict && (roots.body || roots.headline)) {
         void gatherMarks({
           url: location.href,
           body: article.body,
+          headline: article.headline,
+          sentences: article.sentences,
           level: verdict.level,
           verdict,
-          onMarks: (marks) => highlighter.paint(bodyEl, marks),
+          onMarks: (marks) => highlighter.paint(roots, marks),
         }).catch((e) => {
           // 칠하지 못해도 배지와 팝업은 그대로다.
           console.warn('[GenuEarly] 대목을 칠하지 못했다', e)

@@ -225,6 +225,14 @@
    레이어는 마우스를 받지 않는다. 받으면 기사를 덮은 채로 링크를 막는다.
    상자 하나하나만 켠다. */
 .ge-hl {
+  /* 형광펜 색. **연하게 둔다** — 기사를 읽는 위에 칠하는 것이라 진하면 글자보다
+     칠이 먼저 눈에 들어온다. 밑줄이 자리를 알리고 칠은 거들기만 한다.
+     단계 색은 배지와 같은 것을 쓴다 (lib/item-view.ts 의 LEVEL_INK). */
+  --ge-hl-check: 255, 214, 0;
+  --ge-hl-check-line: 154, 91, 0;
+  --ge-hl-caution: 255, 94, 94;
+  --ge-hl-caution-line: 196, 36, 42;
+
   position: fixed;
   inset: 0;
   z-index: 2147482000;
@@ -237,18 +245,36 @@
   cursor: help;
   border-radius: 2px;
   /* 형광펜. 글자가 우리 상자 **아래**에 있으므로 반투명이어야 읽힌다.
-     `mix-blend-mode: multiply` 로 글자 색을 살린다 — 불투명하게 덮으면 글자가 사라진다. */
-  background: rgba(255, 214, 0, 0.42);
+     `mix-blend-mode: multiply` 로 글자 색을 살린다 — 불투명하게 덮으면 글자가 사라진다.
+
+     **연하게 둔다.** 기사를 읽는 위에 칠하는 것이라 진하면 글자가 먼저 눈에 들어오지
+     않는다. 밑줄로 자리를 알리고 칠은 거들기만 한다. */
   mix-blend-mode: multiply;
-  box-shadow: inset 0 -1px 0 rgba(161, 118, 0, 0.5);
+  background: var(--ge-hl-fill);
+  box-shadow: inset 0 -2px 0 var(--ge-hl-line);
 }
-.ge-hl__box:hover { background: rgba(255, 196, 0, 0.6); }
+
+/* 단계는 **Jev 가 낸 것을 그대로** 쓴다 (lib/marks.ts).
+   한 자리에 빨강과 노랑이 겹치면 빨강으로 칠한다. */
+.ge-hl__box[data-level='CHECK'] {
+  --ge-hl-fill: rgba(var(--ge-hl-check), 0.22);
+  --ge-hl-line: rgba(var(--ge-hl-check-line), 0.5);
+}
+.ge-hl__box[data-level='CAUTION'] {
+  --ge-hl-fill: rgba(var(--ge-hl-caution), 0.2);
+  --ge-hl-line: rgba(var(--ge-hl-caution-line), 0.6);
+}
+.ge-hl__box:hover { --ge-hl-fill: rgba(var(--ge-hl-check), 0.4); }
+.ge-hl__box[data-level='CAUTION']:hover { --ge-hl-fill: rgba(var(--ge-hl-caution), 0.36); }
 
 /* 왜 칠했는지. 배지·말풍선과 같은 토큰을 쓴다. */
 .ge-hl__tip {
   --ge-bg: #ffffff;
   --ge-ink: #111111;
   --ge-muted: #5f6368;
+  /* 단계 점. 배지와 같은 값이다 (lib/item-view.ts 의 LEVEL_INK) */
+  --ge-dot-check: #9a5b00;
+  --ge-dot-caution: #c4242a;
 
   --ge-space-4: 4px;
   --ge-space-8: 8px;
@@ -273,10 +299,28 @@
 /* 위에 띄울 때는 상자 위로 올려 놓는다 — top 이 상자의 윗변이다. */
 .ge-hl__tip[data-place='above'] { transform: translateY(-100%); }
 
-.ge-hl__tip-item { font-weight: 600; }
+/* 사유가 여럿이면 줄을 띄워 가른다. 한 문장이 두 항목에 걸리는 일이 흔하다. */
+.ge-hl__tip-row + .ge-hl__tip-row { margin-top: var(--ge-space-8); }
+
+/* 항목 이름 앞에 그 사유의 단계를 색 점으로 둔다. 빨강 사유와 노랑 사유가
+   함께 뜰 때 어느 쪽이 무엇인지 알 수 있어야 한다. */
+.ge-hl__tip-item {
+  font-weight: 600;
+}
+.ge-hl__tip-item::before {
+  content: '';
+  display: inline-block;
+  width: 8px;
+  height: 8px;
+  margin-right: var(--ge-space-8);
+  border-radius: 50%;
+  background: var(--ge-tip-dot, var(--ge-muted));
+}
+.ge-hl__tip-row[data-level='CHECK'] { --ge-tip-dot: var(--ge-dot-check); }
+.ge-hl__tip-row[data-level='CAUTION'] { --ge-tip-dot: var(--ge-dot-caution); }
+
 .ge-hl__tip-why {
   margin-top: var(--ge-space-4);
   color: var(--ge-muted);
   font-size: 12px;
 }
-.ge-hl__tip-why[hidden] { display: none; }

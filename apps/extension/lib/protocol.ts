@@ -280,4 +280,18 @@ export type DisplayLevel = BadgeLevel | 'PENDING'
  * 이것을 안 보내면 **조용히 덜 보는 것**이 된다. 긴 기사의 뒤쪽에 있는 단정은
  * 판단에서 빠졌는데 화면은 다 본 것처럼 보인다.
  */
-export type ArticleVerdict = Verdict & { capped?: boolean }
+export type ArticleVerdict = Verdict & {
+  capped?: boolean
+  /**
+   * 문장마다의 점수. 보낸 문장을 상한까지 자른 것과 **같은 순서, 같은 길이**다.
+   * 모름(⚪)이거나 모양이 틀린 문장은 `null`.
+   *
+   * 형광펜이 문장마다 노랑·빨강을 가르는 데 쓴다 (docs/requirements.md 3-4-1절).
+   * `Verdict.items` 는 문장들을 **평균 낸** 항목 하나라서 어느 문장이 걸렸는지 알 수 없다.
+   *
+   * **캐시에서 읽은 판정에는 없다.** 캐시는 항목 점수만 들고 있다 (lib/cache.ts) —
+   * 문장 점수까지 담으면 거기에 기사 내용이 묻어 들어간다. 없으면 형광펜은
+   * 항목 단계로 칠한다.
+   */
+  sentenceScores?: (number | null)[]
+}
