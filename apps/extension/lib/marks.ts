@@ -250,23 +250,23 @@ export function sentencePicks(
   verdict: ArticleVerdict,
   itemId: string,
 ): { text: string; why: string }[] {
-  const scores = verdict.sentenceScores
-  if (!scores || !hasSentenceAnswer(itemId)) return []
+  if (!hasSentenceAnswer(itemId)) return []
   const basis = verdict.sentenceBasis
-  const out: { text: string; why: string }[] = []
-  for (const [i, text] of sentences.entries()) {
-    const score = scores[i]
-    if (score === null || score === undefined || score <= 0) continue
+  // **형광펜과 같은 함수로 고른다.** 여기만 상한이 없으면 화면에 아홉 줄이 깔린다.
+  // 기사 대부분의 문장이 "단정하는데 그 문장 안에 출처가 없는" 모양이라 그렇게 된다.
+  const 고른것 =
+    itemId === SENTENCE_ITEM
+      ? 센문장(sentences, verdict)
+      : 센문장(sentences, verdict, (i) => {
+          const b = basis?.[i]
+          return b !== null && b !== undefined && b < 0.5
+        })
+  return 고른것.map(({ text }) => {
     const group = GROUP_ONLY.test(text)
-    if (itemId === SENTENCE_ITEM) {
-      out.push({ text, why: group ? 'uvc_group_only' : 'uvc_no_basis' })
-      continue
-    }
-    const b = basis?.[i]
-    if (b === null || b === undefined || b >= 0.5) continue
-    out.push({ text, why: group ? 'src_group_only' : 'src_none' })
-  }
-  return out
+    return itemId === SENTENCE_ITEM
+      ? { text, why: group ? 'uvc_group_only' : 'uvc_no_basis' }
+      : { text, why: group ? 'src_group_only' : 'src_none' }
+  })
 }
 
 export interface GatherInput {

@@ -245,11 +245,16 @@
   cursor: help;
   border-radius: 2px;
   /* 형광펜. 글자가 우리 상자 **아래**에 있으므로 반투명이어야 읽힌다.
-     `mix-blend-mode: multiply` 로 글자 색을 살린다 — 불투명하게 덮으면 글자가 사라진다.
+
+     **`mix-blend-mode` 를 쓰지 않는다.** 쓰면 아무것도 안 보인다 — `.ge-hl` 이
+     `position: fixed` 와 `z-index` 로 **쌓임 맥락**을 만들기 때문에, 그 안의 상자는
+     기사 글이 아니라 **비어 있는 제 부모**와 섞인다. multiply 로 투명과 섞으면 사라진다.
+     쌓임 맥락 바깥의 그림과는 어차피 섞을 수 없다.
+
+     그래서 반투명 색 하나로 덮는다. 상자가 글자 **위**에 있으므로 알파를 낮게 둔다.
 
      **연하게 둔다.** 기사를 읽는 위에 칠하는 것이라 진하면 글자가 먼저 눈에 들어오지
      않는다. 밑줄로 자리를 알리고 칠은 거들기만 한다. */
-  mix-blend-mode: multiply;
   background: var(--ge-hl-fill);
   box-shadow: inset 0 -2px 0 var(--ge-hl-line);
 }

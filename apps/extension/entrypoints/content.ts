@@ -9,7 +9,6 @@ import { TEST_FIXTURES_ON, isFixtureArticle, isFixturePage } from '../lib/fixtur
 import { ARTICLE_EXCLUDE_MATCHES, ARTICLE_MATCHES, TEST_FIXTURE_MATCHES } from '../match-patterns'
 import content from '../../../packages/content/ui.ko.json'
 import { findEvidence } from '@genuearly/shared'
-import { packPicks, readExplain, unpackPicks, writeExplain } from '../lib/cache'
 import { articleBodyElement, articleHeadlineElement, extractArticle } from '../lib/extract'
 import { createHighlighter } from '../lib/highlight'
 import { gatherMarks, hasSentenceAnswer, sentencePicks } from '../lib/marks'
@@ -211,58 +210,26 @@ export default defineContentScript({
           return Promise.resolve({ itemId, found: {}, spans: {}, ...(picks.length ? { picks } : {}) })
         }
 
-        // **코드가 찾는 것은 여기서 끝난다.** 바깥에 묻지 않는다 — 글자가 거기 있는지는
-        // 문자열 찾기지 판단이 아니다 (docs/jev.md 3절 "피해야 할 것").
+        // **여기서 끝난다. 바깥에 묻지 않는다.**
+        //
+        // 전에는 코드가 빈손이면 `gpt-5.6-luna` 에 "어느 대목이냐" 를 물었다. 두 가지를
+        // 치렀다 — 펼칠 때마다 **몇 초를 기다렸고**, 그 답이 Jev 의 판정과 어긋날 수
+        // 있었다. 지금은 세 길뿐이고 셋 다 즉시 끝난다.
+        //
+        //   1. Jev 가 문장마다 답한 항목 → 위에서 돌려줬다
+        //   2. 코드가 글자로 찾는 항목 → 아래
+        //   3. 둘 다 아니면 **"찾지 못했습니다"** — 지어낸 설명보다 빈손이 낫다
+        //
+        // 3번은 손해다. 비속어나 "감정이 실린 서술" 은 목록으로 담을 수 없어 코드가
+        // 못 찾는다. 그래도 **판정 자체는 Jev 가 이미 냈고** 팝업이 그 줄을 보여 준다 —
+        // 없는 것은 "어느 대목인지" 뿐이다.
         const spans: Record<string, string[]> = {}
         for (const e of findEvidence(itemId, { headline: article.headline, body: article.body })) {
           spans[e.id] = e.spans.map((x) => x.text)
         }
-
-        const body = article.body
-        const ask: Message = {
-          kind: 'judge-explain',
-          url: location.href,
-          body,
-          itemId,
-          // 판정은 **이미 나와 있다.** 바깥에 다시 묻는 것이 아니라 적어 보낼 뿐이다.
-          level: raw.level,
-          // 코드가 빈손이면 LLM 에 넘긴다. 찾았으면 부르지 않는다 (lib/judge.ts).
-          noEvidence: Object.values(spans).every((v) => v.length === 0),
-        }
-
-        return (async () => {
-          // **받아 둔 답이 있으면 그것을 쓴다.** 생성 모델은 같은 글에도 매번 다르게
-          // 답한다. 눌렀다 접었다 할 때마다 짚는 문장이 바뀌면 어느 쪽을 믿어야 할지
-          // 알 수 없다. 캐시가 곧 **재현성**이다 (lib/cache.ts).
-          const hit = await readExplain(location.href, itemId, raw.level)
-          if (hit) {
-            const picks = await unpackPicks(body, hit.p)
-            return { itemId, found: hit.f, spans, ...(picks.length ? { picks } : {}) }
-          }
-
-          const res = await browser.runtime.sendMessage(ask).catch((e) => {
-            // Jev 쪽이 실패해도 **코드가 찾은 것은 보여 준다.**
-            console.warn('[GenuEarly] 심층 분석을 받지 못했다', e)
-            return null
-          })
-          const out = res as
-            | { found?: Record<string, boolean>; picks?: { text: string; why: string }[] }
-            | null
-          if (!out) return Object.keys(spans).length === 0 ? null : { itemId, found: {}, spans }
-
-          // **집어 온 글자를 여기서 또 대조한다.** 중계 서버와 background 에 이어 셋째다.
-          // 본문을 들고 있는 것은 우리뿐이라, 마지막으로 거를 수 있는 자리이기도 하다.
-          const picks = (out.picks ?? []).filter((x) => body.includes(x.text))
-          const found = out.found ?? {}
-          // 받은 답만 적어 둔다. 못 받은 것을 적어 두면 6시간 동안 빈 채로 보인다.
-          await writeExplain(location.href, itemId, {
-            lv: raw.level,
-            f: found,
-            p: await packPicks(body, picks),
-          })
-          return { itemId, found, spans, ...(picks.length ? { picks } : {}) }
-        })()
+        return Promise.resolve(Object.keys(spans).length === 0 ? null : { itemId, found: {}, spans })
       }
+
       return
       },
     )
