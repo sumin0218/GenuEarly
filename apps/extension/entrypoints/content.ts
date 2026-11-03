@@ -286,10 +286,12 @@ export default defineContentScript({
           level: verdict.level,
           걸린항목: verdict.items.filter((i) => i.isConfident && (i.score ?? 0) > 0).map((i) => i.id),
           문장점수: verdict.sentenceScores ? verdict.sentenceScores.length : '없음',
+          문장: article.sentences.length,
           대목: marks.length,
           칠한상자: highlighter.count(),
-          본문요소: Boolean(roots.body),
-          제목요소: Boolean(roots.headline),
+          본문요소: roots.body?.tagName ?? null,
+          제목요소: roots.headline?.tagName ?? null,
+          못찾음: highlighter.missed(),
         }))
       }
     } catch (e) {

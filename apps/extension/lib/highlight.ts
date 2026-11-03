@@ -85,6 +85,7 @@ export function createHighlighter(doc: Document = document) {
   /** 지금 칠한 것. 다시 잴 때 쓴다 */
   let painted: { mark: Mark; ranges: Range[] }[] = []
   let roots: Roots = {}
+  let last못찾음: { text: string; where: string; 글자수: number }[] = []
   let frame = 0
 
   function showTip(b: Box): void {
@@ -183,14 +184,29 @@ export function createHighlighter(doc: Document = document) {
         if (n instanceof Element) watcher?.observe(n)
       }
       painted = []
+      /** 못 찾은 대목. **화면만 보면 "안 칠해졌다" 하나로 보이므로 적어 둔다** */
+      const 못찾음: { text: string; where: string; 글자수: number }[] = []
       for (const mark of marks) {
         const node = mark.where === 'headline' ? where.headline : where.body
-        if (!node) continue
+        if (!node) {
+          못찾음.push({ text: mark.text.slice(0, 40), where: `${mark.where ?? 'body'}(요소없음)`, 글자수: 0 })
+          continue
+        }
         const ranges = findRanges(node, mark.text, mapFor(node))
         if (ranges.length) painted.push({ mark, ranges })
+        else {
+          못찾음.push({
+            text: mark.text.slice(0, 40),
+            where: mark.where ?? 'body',
+            글자수: mapFor(node).text.length,
+          })
+        }
       }
+      last못찾음 = 못찾음
       layout()
     },
+    /** 못 찾은 대목. 왜 안 칠해졌는지 가릴 때 본다 */
+    missed: () => last못찾음,
     /** 다시 잰다. 글꼴이 늦게 와서 글자가 밀리는 경우에 부른다 */
     remeasure(): void {
       if (roots.body || roots.headline) relayout()
