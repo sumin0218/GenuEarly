@@ -228,9 +228,16 @@
   /* 형광펜 색. **연하게 둔다** — 기사를 읽는 위에 칠하는 것이라 진하면 글자보다
      칠이 먼저 눈에 들어온다. 밑줄이 자리를 알리고 칠은 거들기만 한다.
      단계 색은 배지와 같은 것을 쓴다 (lib/item-view.ts 의 LEVEL_INK). */
+  /* **알파가 둘이 다르다.** 노랑은 원래 밝아서 같은 알파로는 흰 바탕에서 보이지
+     않는다 — 0.22 에서 밝기가 8.7% 내려가는데 빨강은 0.20 에서 20.8% 내려간다.
+     눈에 같은 세기로 닿도록 노랑만 올린다. */
   --ge-hl-check: 255, 214, 0;
+  --ge-hl-check-a: 0.55;
+  --ge-hl-check-hover-a: 0.75;
   --ge-hl-check-line: 154, 91, 0;
   --ge-hl-caution: 255, 94, 94;
+  --ge-hl-caution-a: 0.22;
+  --ge-hl-caution-hover-a: 0.38;
   --ge-hl-caution-line: 196, 36, 42;
 
   position: fixed;
@@ -262,15 +269,15 @@
 /* 단계는 **Jev 가 낸 것을 그대로** 쓴다 (lib/marks.ts).
    한 자리에 빨강과 노랑이 겹치면 빨강으로 칠한다. */
 .ge-hl__box[data-level='CHECK'] {
-  --ge-hl-fill: rgba(var(--ge-hl-check), 0.22);
-  --ge-hl-line: rgba(var(--ge-hl-check-line), 0.5);
+  --ge-hl-fill: rgba(var(--ge-hl-check), var(--ge-hl-check-a));
+  --ge-hl-line: rgba(var(--ge-hl-check-line), 0.75);
 }
 .ge-hl__box[data-level='CAUTION'] {
-  --ge-hl-fill: rgba(var(--ge-hl-caution), 0.2);
+  --ge-hl-fill: rgba(var(--ge-hl-caution), var(--ge-hl-caution-a));
   --ge-hl-line: rgba(var(--ge-hl-caution-line), 0.6);
 }
-.ge-hl__box:hover { --ge-hl-fill: rgba(var(--ge-hl-check), 0.4); }
-.ge-hl__box[data-level='CAUTION']:hover { --ge-hl-fill: rgba(var(--ge-hl-caution), 0.36); }
+.ge-hl__box:hover { --ge-hl-fill: rgba(var(--ge-hl-check), var(--ge-hl-check-hover-a)); }
+.ge-hl__box[data-level='CAUTION']:hover { --ge-hl-fill: rgba(var(--ge-hl-caution), var(--ge-hl-caution-hover-a)); }
 
 /* 왜 칠했는지. 배지·말풍선과 같은 토큰을 쓴다. */
 .ge-hl__tip {

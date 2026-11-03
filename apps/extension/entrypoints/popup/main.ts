@@ -400,14 +400,19 @@ export function explainLines(
   const lines: ExplainLine[] = []
 
   // ① Jev 가 **잰** 것과 코드가 **찾은** 것. 본 것이 전부 아니오면 아래 ③ 에서 한 줄로 말한다.
-  if (본것.some((id) => 있다(id))) {
-    for (const id of 본것) {
-      const pair = parts[id]
-      if (!pair) continue
-      const yes = 있다(id)
-      const quotes = yes ? result.spans?.[id] : undefined
-      lines.push({ text: yes ? pair.present : pair.absent, ...(quotes?.length ? { quotes } : {}) })
-    }
+  //
+  // **찾은 것만 적는다.** 전에는 "없다" 줄도 함께 늘어놓아서, 하나를 찾으면 화면이
+  // 이렇게 됐다 — "느낌표가 연달아 쓰이지 않았습니다 / 감정 낱말이 되풀이됩니다 /
+  // 닥칠 일을 강조하는 표현이 보이지 않습니다". 셋 중 **읽을 것은 하나**인데 눈이
+  // 셋을 훑어야 한다. 아무것도 못 찾았을 때만 ③ 이 "없다" 를 한 줄로 말한다.
+  for (const id of 본것) {
+    if (!있다(id)) continue
+    const pair = parts[id]
+    if (!pair) continue
+    // **같은 낱말을 두 번 적지 않는다.** "충격" 이 본문에 세 번 나오면 세 번 찍혔다 —
+    // 세 가지를 짚은 것처럼 보인다.
+    const quotes = [...new Set(result.spans?.[id] ?? [])]
+    lines.push({ text: pair.present, ...(quotes.length ? { quotes } : {}) })
   }
 
   // ② LLM 이 본문에서 집어 온 문장. **한 줄에 "왜" 하나와 인용 하나씩.**

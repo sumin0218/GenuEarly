@@ -212,7 +212,11 @@ export function sentenceMarks(
 }
 
 /**
- * 점수가 붙은 문장을 **센 것부터** `MAX_PER_ITEM` 개까지.
+ * 점수가 붙은 문장을 **단계마다 센 것부터** `MAX_PER_ITEM` 개까지.
+ *
+ * **단계마다 따로 센다.** 전체에서 센 것부터 둘을 고르면 점수가 높은 쪽 — 곧 빨강 —
+ * 이 두 자리를 다 가져가서, 빨강이 하나라도 있는 기사에서는 **노랑이 영영 안 보인다.**
+ * 실제로 그렇게 됐다. 노랑에도 제 몫을 준다.
  *
  * 점수가 같으면 **기사에 먼저 나온 것**을 앞에 둔다. 같은 기사를 두 번 열었을 때
  * 다른 문장이 칠해지면 안 된다 — 재현되지 않는 화면은 믿을 수 없다.
@@ -224,15 +228,25 @@ function 센문장(
 ): { text: string; score: number }[] {
   const scores = verdict.sentenceScores
   if (!scores) return []
-  const got: { text: string; score: number; at: number }[] = []
+  const 통 = new Map<MarkLevel, { text: string; score: number; at: number }[]>([
+    ['CAUTION', []],
+    ['CHECK', []],
+  ])
   for (const [i, text] of sentences.entries()) {
     const score = scores[i]
     if (score === null || score === undefined || score <= 0) continue
     if (!keep(i)) continue
-    got.push({ text, score, at: i })
+    통.get(isCautionScore(score) ? 'CAUTION' : 'CHECK')?.push({ text, score, at: i })
   }
-  got.sort((a, b) => (b.score - a.score) || (a.at - b.at))
-  return got.slice(0, MAX_PER_ITEM).map(({ text, score }) => ({ text, score }))
+  const out: { text: string; score: number; at: number }[] = []
+  for (const 묶음 of 통.values()) {
+    묶음.sort((a, b) => (b.score - a.score) || (a.at - b.at))
+    out.push(...묶음.slice(0, MAX_PER_ITEM))
+  }
+  // 기사에 나온 차례로 되돌린다. 빨강이 먼저 칠해지고 노랑이 나중에 칠해지면
+  // 겹친 자리에서 어느 색이 위인지가 뽑은 순서에 끌려다닌다.
+  out.sort((a, b) => a.at - b.at)
+  return out.map(({ text, score }) => ({ text, score }))
 }
 
 /** 이 항목은 Jev 의 문장 답만으로 설명할 수 있나. 그렇다면 모델을 부르지 않는다. */

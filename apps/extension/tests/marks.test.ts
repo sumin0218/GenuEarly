@@ -257,3 +257,58 @@ describe('팝업과 형광펜이 같은 문장을 가리킨다', () => {
     expect(sentencePicks(SENTENCES, v, 'emotional_language')).toEqual([])
   })
 })
+
+describe('노랑도 제 자리를 얻는다', () => {
+  it('**빨강이 자리를 다 가져가지 않는다** — 둘 다 칠해진다', () => {
+    const 다섯 = ['가', '나', '다', '라', '마'].map((x) => `${x} 문장이 여기 있다.`)
+    const got = gatherMarks({
+      ...기본,
+      sentences: 다섯,
+      // 빨강 셋, 노랑 둘
+      verdict: 판정([{ id: 'unverifiable_claim', score: 0.8, isConfident: true }], {
+        sentenceScores: [0.9, 0.85, 0.8, 0.3, 0.2],
+      }),
+    })
+    const levels = got.map((m) => m.level)
+    expect(levels).toContain('CAUTION')
+    expect(levels).toContain('CHECK')
+  })
+
+  it('단계마다 둘까지다', () => {
+    const 여섯 = ['가', '나', '다', '라', '마', '바'].map((x) => `${x} 문장이 여기 있다.`)
+    const got = gatherMarks({
+      ...기본,
+      sentences: 여섯,
+      verdict: 판정([{ id: 'unverifiable_claim', score: 0.8, isConfident: true }], {
+        sentenceScores: [0.9, 0.85, 0.8, 0.3, 0.25, 0.2],
+      }),
+    })
+    expect(got.filter((m) => m.level === 'CAUTION')).toHaveLength(2)
+    expect(got.filter((m) => m.level === 'CHECK')).toHaveLength(2)
+  })
+
+  it('각 단계에서 센 것을 고른다', () => {
+    const 넷 = ['가', '나', '다', '라'].map((x) => `${x} 문장이 여기 있다.`)
+    const got = gatherMarks({
+      ...기본,
+      sentences: 넷,
+      verdict: 판정([{ id: 'unverifiable_claim', score: 0.8, isConfident: true }], {
+        sentenceScores: [0.1, 0.5, 0.7, 0.95],
+      }),
+    })
+    // 노랑 둘(0.5, 0.1 중 센 것 둘 = 0.5, 0.1), 빨강 둘(0.95, 0.7)
+    expect(got.map((m) => m.text)).toEqual(넷)
+  })
+
+  it('기사에 나온 차례로 돌려준다 — 뽑은 순서에 끌려다니지 않는다', () => {
+    const 셋 = ['가', '나', '다'].map((x) => `${x} 문장이 여기 있다.`)
+    const got = gatherMarks({
+      ...기본,
+      sentences: 셋,
+      verdict: 판정([{ id: 'unverifiable_claim', score: 0.8, isConfident: true }], {
+        sentenceScores: [0.3, 0.9, 0.4],
+      }),
+    })
+    expect(got.map((m) => m.text)).toEqual(셋)
+  })
+})
