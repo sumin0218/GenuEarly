@@ -38,6 +38,19 @@ type ExplainCopy = Record<
 /** 한 기사에서 칠할 대목 수 상한. 넘으면 글이 온통 칠해져 짚는 뜻이 사라진다. */
 const MAX_MARKS = 24
 
+/**
+ * 한 항목이 문장으로 짚을 수 있는 수. **둘이다.**
+ *
+ * **점수가 0 보다 크기만 하면 칠하던 것을 고친 값이다.** 보통 기사는 대부분의 문장이
+ * "단정하는데 그 문장 안에 출처가 없는" 모양이라, 그대로 두면 본문 열다섯 줄이 통째로
+ * 칠해진다 (실제 포털 기사에서 그렇게 됐다). 그러면 어디를 보라는 것인지 알 수 없어
+ * 짚는 뜻이 사라진다.
+ *
+ * 생성 모델로 집어 올 때도 같은 값이었다 — "넷을 붙여 보니 화면이 본문 복사처럼
+ * 보였다" (apps/proxy/src/pinpoint.ts 의 `MAX_PICKS`).
+ */
+const MAX_PER_ITEM = 2
+
 /** 칠할 글이 어디에 있나. */
 export type Where = 'headline' | 'body'
 
@@ -154,9 +167,6 @@ export function sentenceMarks(
   verdict: ArticleVerdict,
   flags: Map<string, MarkLevel>,
 ): Raw[] {
-  const scores = verdict.sentenceScores
-  if (!scores) return []
-
   const uvcName = itemName(SENTENCE_ITEM)
   const srcName = itemName(SOURCE_ITEM)
   const uvcFlagged = flags.has(SENTENCE_ITEM)
@@ -165,32 +175,64 @@ export function sentenceMarks(
 
   const basis = verdict.sentenceBasis
   const out: Raw[] = []
-  for (const [i, text] of sentences.entries()) {
-    const score = scores[i]
-    if (score === null || score === undefined || score <= 0) continue
-    // **문장마다 제 단계다.** 항목 평균이 아니다.
-    const level: MarkLevel = isCautionScore(score) ? 'CAUTION' : 'CHECK'
-    // 누구인지 밝히지 않은 출처가 있나. 화면 문구가 그 둘을 가른다.
-    const group = GROUP_ONLY.test(text)
 
-    if (uvcFlagged && uvcName) {
-      const reason = reasonText(SENTENCE_ITEM, group ? 'uvc_group_only' : 'uvc_no_basis')
-      out.push({ text, where: 'body', why: { item: uvcName, level, ...(reason ? { reason } : {}) } })
-    }
-    // 출처 항목은 기사 단위 판정이지만, **그 문장에 근거가 없다는 것은 Jev 가 문장마다
-    // 답한 것**이다. 그 답이 있을 때만 붙인다.
-    if (srcFlagged && srcName) {
-      const b = basis?.[i]
-      if (b === null || b === undefined || b >= 0.5) continue
-      const reason = reasonText(SOURCE_ITEM, group ? 'src_group_only' : 'src_none')
+  if (uvcFlagged && uvcName) {
+    for (const { text, score } of 센문장(sentences, verdict)) {
+      const reason = reasonText(SENTENCE_ITEM, GROUP_ONLY.test(text) ? 'uvc_group_only' : 'uvc_no_basis')
       out.push({
         text,
         where: 'body',
-        why: { item: srcName, level: flags.get(SOURCE_ITEM) ?? level, ...(reason ? { reason } : {}) },
+        // **문장마다 제 단계다.** 항목 평균이 아니다.
+        why: { item: uvcName, level: isCautionScore(score) ? 'CAUTION' : 'CHECK', ...(reason ? { reason } : {}) },
+      })
+    }
+  }
+
+  // 출처 항목은 기사 단위 판정이지만, **그 문장에 근거가 없다는 것은 Jev 가 문장마다
+  // 답한 것**이다. 그 답이 있는 문장에만 붙인다.
+  if (srcFlagged && srcName) {
+    const 없는것 = 센문장(sentences, verdict, (i) => {
+      const b = basis?.[i]
+      return b !== null && b !== undefined && b < 0.5
+    })
+    for (const { text, score } of 없는것) {
+      const reason = reasonText(SOURCE_ITEM, GROUP_ONLY.test(text) ? 'src_group_only' : 'src_none')
+      out.push({
+        text,
+        where: 'body',
+        why: {
+          item: srcName,
+          level: flags.get(SOURCE_ITEM) ?? (isCautionScore(score) ? 'CAUTION' : 'CHECK'),
+          ...(reason ? { reason } : {}),
+        },
       })
     }
   }
   return out
+}
+
+/**
+ * 점수가 붙은 문장을 **센 것부터** `MAX_PER_ITEM` 개까지.
+ *
+ * 점수가 같으면 **기사에 먼저 나온 것**을 앞에 둔다. 같은 기사를 두 번 열었을 때
+ * 다른 문장이 칠해지면 안 된다 — 재현되지 않는 화면은 믿을 수 없다.
+ */
+function 센문장(
+  sentences: readonly string[],
+  verdict: ArticleVerdict,
+  keep: (i: number) => boolean = () => true,
+): { text: string; score: number }[] {
+  const scores = verdict.sentenceScores
+  if (!scores) return []
+  const got: { text: string; score: number; at: number }[] = []
+  for (const [i, text] of sentences.entries()) {
+    const score = scores[i]
+    if (score === null || score === undefined || score <= 0) continue
+    if (!keep(i)) continue
+    got.push({ text, score, at: i })
+  }
+  got.sort((a, b) => (b.score - a.score) || (a.at - b.at))
+  return got.slice(0, MAX_PER_ITEM).map(({ text, score }) => ({ text, score }))
 }
 
 /** 이 항목은 Jev 의 문장 답만으로 설명할 수 있나. 그렇다면 모델을 부르지 않는다. */

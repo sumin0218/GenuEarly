@@ -14,8 +14,11 @@ import {
   headlineFingerprint,
   isReusable,
   readScores,
+  readSentences,
   sweepExpired,
+  textFingerprint,
   writeScores,
+  writeSentences,
   type CachedItem,
   type ItemScores,
 } from './cache'
@@ -250,18 +253,29 @@ export async function judgeArticle(msg: Extract<Message, { kind: 'judge-article'
   setIconBadge(tabId, verdict.level)
 
   // **문장 점수를 평균 전에 실어 보낸다.** 형광펜이 문장마다 노랑·빨강을 가른다
-  // (lib/marks.ts). 캐시에서 온 판정에는 이것이 없다 — 캐시에 문장 점수를 담으면
-  // 거기에 기사 내용이 묻어 들어간다.
-  const 문장답 = sentenceItem && perSentence.length === sentences.length ? perSentence : undefined
-  const sentenceScores = 문장답?.map((a) => sentenceScore(a, sentenceItem ?? undefined))
-  // 합친 점수만으로는 출처 항목의 사유를 붙일 수 없다. 원답을 함께 보낸다.
-  const sentenceBasis = 문장답?.map((a) => noulValue(a, NAMED_BASIS))
+  // (lib/marks.ts).
+  //
+  // **캐시에도 적는다.** 캐시가 맞으면 문장을 다시 묻지 않으므로, 적어 두지 않으면
+  // 같은 기사를 두 번째 열 때 배지는 그대로인데 **형광펜만 사라진다.** 적는 것은
+  // 숫자 배열과 지문뿐이라 기사 글이 들어가지 않는다 (lib/cache.ts).
+  const 지문 = await textFingerprint(sentences.join('\n'))
+  let sent: { s: (number | null)[]; b: (number | null)[] } | null = null
+  if (sentenceItem && perSentence.length === sentences.length && sentences.length > 0) {
+    sent = {
+      s: perSentence.map((a) => sentenceScore(a, sentenceItem)),
+      // 합친 점수만으로는 출처 항목의 사유를 붙일 수 없다. 원답을 함께 둔다.
+      b: perSentence.map((a) => noulValue(a, NAMED_BASIS)),
+    }
+    if (!sentenceFailed) await writeSentences(msg.url, { fp: 지문, ...sent })
+  } else {
+    // 이번에 묻지 않았다. 지난번에 적어 둔 것이 있으면 쓴다 — 같은 글일 때만이다.
+    sent = await readSentences(msg.url, 지문)
+  }
 
   return {
     ...verdict,
     ...(capped ? { capped } : {}),
-    ...(sentenceScores ? { sentenceScores } : {}),
-    ...(sentenceBasis ? { sentenceBasis } : {}),
+    ...(sent ? { sentenceScores: sent.s, sentenceBasis: sent.b } : {}),
   }
 }
 

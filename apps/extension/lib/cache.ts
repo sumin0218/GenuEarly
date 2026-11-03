@@ -89,6 +89,27 @@ interface Entry {
   items: ItemScores
   /** 심층 분석 답. 항목 id → 그 항목에 받은 답 */
   explain?: Record<string, CachedExplain>
+  /** 문장마다의 점수. 아래 `CachedSentences` */
+  sent?: CachedSentences
+}
+
+/**
+ * 문장마다 Jev 가 낸 값. **글자를 적지 않는다** — 숫자 배열과 지문뿐이다.
+ *
+ * 왜 캐시하나. 캐시가 맞으면 문장을 다시 묻지 않으므로 이 값이 없어지고, 그러면
+ * **같은 기사를 두 번째 열 때 형광펜이 사라진다.** 배지는 그대로인데 칠만 없으면
+ * 사용자는 무엇이 고장 났는지 알 수 없다.
+ *
+ * 항목 점수(`ItemScores`)를 이미 캐시하고 있다. 문장 점수도 **같은 성격의 숫자**다 —
+ * 기사 글은 들어가지 않는다.
+ */
+export interface CachedSentences {
+  /** 그때 본 문장들의 지문. 글이 바뀌면 자리가 어긋나므로 **다르면 버린다** */
+  fp: string
+  /** 합친 점수 */
+  s: (number | null)[]
+  /** `named_basis` 원답 */
+  b: (number | null)[]
 }
 
 /**
@@ -254,10 +275,41 @@ export async function writeScores(url: string, items: ItemScores): Promise<void>
       // **심층 분석 답을 함께 들고 간다.** 빠뜨리면 점수를 쓸 때마다 지워진다 —
       // 기사를 다시 열 때마다 점수가 먼저 쓰이므로, 받아 둔 답이 한 번도 살아남지 못한다.
       ...(live && old.explain ? { explain: old.explain } : {}),
+      ...(live && old.sent ? { sent: old.sent } : {}),
     }
     await browser.storage.local.set({ [key]: entry })
   } catch {
     // 못 써도 판단은 이미 끝났다. 다음에 다시 부를 뿐이다.
+  }
+}
+
+/** 문장마다의 점수를 적어 둔다. 점수와 **같은 칸**이라 함께 만료된다. */
+export async function writeSentences(url: string, sent: CachedSentences): Promise<void> {
+  try {
+    const key = await keyFor(url)
+    const got = (await browser.storage.local.get(key)) as Record<string, Entry | undefined>
+    const old = got[key]
+    const live = old && old.v === schema.version && old.m === schema.model && old.exp > Date.now()
+    if (!live) return
+    await browser.storage.local.set({ [key]: { ...old, sent } satisfies Entry })
+  } catch {
+    // 못 써도 이번 판정은 그대로다. 다음에 다시 묻는다.
+  }
+}
+
+/**
+ * 적어 둔 문장 점수. **지문이 다르면 없는 것으로 본다** — 글이 바뀌었는데 옛 점수를
+ * 쓰면 엉뚱한 문장에 칠이 간다.
+ */
+export async function readSentences(url: string, fp: string): Promise<CachedSentences | null> {
+  try {
+    const key = await keyFor(url)
+    const got = (await browser.storage.local.get(key)) as Record<string, Entry | undefined>
+    const e = got[key]
+    if (!e || e.v !== schema.version || e.m !== schema.model || e.exp <= Date.now()) return null
+    return e.sent && e.sent.fp === fp ? e.sent : null
+  } catch {
+    return null
   }
 }
 

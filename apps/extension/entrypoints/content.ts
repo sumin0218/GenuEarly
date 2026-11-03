@@ -304,12 +304,25 @@ export default defineContentScript({
       // 문장 점수가 곧 "어느 문장이 걸렸나" 다 (lib/marks.ts). 그래서 기다림이 없다.
       const roots = { body: articleBodyElement(), headline: articleHeadlineElement() }
       if (verdict && (roots.body || roots.headline)) {
-        highlighter.paint(roots, gatherMarks({
+        const marks = gatherMarks({
           body: article.body,
           headline: article.headline,
           sentences: article.sentences,
           level: verdict.level,
           verdict,
+        })
+        highlighter.paint(roots, marks)
+        // **왜 안 칠해지는지 알 수 있어야 한다.** 칠할 것이 없는 이유가 여럿이다 —
+        // 🟢 라서, 걸린 항목이 없어서, 문장 점수가 없어서, 글자를 못 찾아서.
+        // 화면만 보면 넷이 구분되지 않는다.
+        console.warn('[GenuEarly] 형광펜', JSON.stringify({
+          level: verdict.level,
+          걸린항목: verdict.items.filter((i) => i.isConfident && (i.score ?? 0) > 0).map((i) => i.id),
+          문장점수: verdict.sentenceScores ? verdict.sentenceScores.length : '없음',
+          대목: marks.length,
+          칠한상자: highlighter.count(),
+          본문요소: Boolean(roots.body),
+          제목요소: Boolean(roots.headline),
         }))
       }
     } catch (e) {
