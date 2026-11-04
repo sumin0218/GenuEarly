@@ -45,7 +45,6 @@ npx --yes serve landing
 | `hero-article.png` | 기사 페이지 — 배지와 본문 형광펜이 **함께** 보이게 | ✅ |
 | `feature-highlight.png` | 본문 형광펜과 올려놓았을 때 뜨는 사유 | |
 | `feature-portal.png` | 뉴스 목록 — 제목 옆 표시와 오른쪽 아래 범례 | ✅ |
-| `feature-selection.png` | 선택 검사 결과, 또는 공유 직전 알림 | |
 | `feature-report.png` | 리포트 — 주변 보도를 견준 화면 | |
 
 이름이 다르면 그 자리만 자리틀로 남는다. 화면이 깨지지 않으니 하나씩 채워도 된다.
@@ -95,11 +94,10 @@ npx --yes serve eval/fixtures/sample-article
 | --- | --- |
 | `index.html` (목록) | `feature-portal.png` |
 | `c-101.html` (신호 여럿) | `hero-article.png` · `feature-highlight.png` |
-| `c-105.html` | `feature-selection.png` — 드래그 검사와 공유 직전 알림 |
+| `c-107` `c-108` | `feature-highlight.png` — 본문이 **노랑만** 뜨는 기사 |
 | `c-102` `c-104` `c-106` | 🟢 가 나오는 쪽 |
 
-기사 페이지의 **공유·주소 복사 단추**가 ④ 알림을 띄운다. 자세한 것은
-[그쪽 README](../eval/fixtures/sample-article/README.md).
+자세한 것은 [그쪽 README](../eval/fixtures/sample-article/README.md).
 
 사진 아래에는 "화면은 시험용으로 지어낸 기사입니다" 가 늘 붙는다
 ([index.html](index.html) 의 `.shot__cap`). **지우지 않는다.**

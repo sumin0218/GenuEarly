@@ -26,6 +26,8 @@ const 고른것 = {
   'c-104': 'FEL CVUT Katedra 13137 Patro 5 E.jpg',
   'c-105': '2016 USDA Farmers Market (20161021-AMS-LSC-0133).jpg',
   'c-106': 'Town Hall station Melbourne City Square entrance canopy under construction 2024.jpg',
+  'c-107': 'Liverpool Central Library Picton Reading Room (49004383957).jpg',
+  'c-108': 'Recycling bins Drammen.jpg',
 }
 
 /** 이것 말고는 받지 않는다. */
