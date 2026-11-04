@@ -157,8 +157,27 @@ a { color: inherit; }
   font-weight: 700;
   text-decoration: none;
   border: 1px solid transparent;
+  transition:
+    transform 140ms ease,
+    box-shadow 140ms ease,
+    border-color 140ms ease,
+    background-color 140ms ease;
 }
-.btn:hover { filter: brightness(1.06); }
+/**
+ * 올려놓으면 **테두리가 생기고 살짝 들린다.** 색만 바뀌면 눌리는 것인지 알기 어렵다.
+ *
+ * 테두리 색은 바탕에 따라 다르다. 초록 단추 위에는 **흰 실선**이 또렷한데, 흰 띠
+ * 위의 `--ghost` 에 흰 선을 주면 보이지 않는다. 그쪽은 글자색 쪽으로 당긴다.
+ *
+ * 들리는 것은 **2px 뿐이다.** 더 들면 글줄이 흔들려 보인다.
+ */
+.btn:hover {
+  filter: brightness(1.06);
+  transform: translateY(-2px);
+  border-color: rgba(255, 255, 255, 0.6);
+  box-shadow: 0 6px 16px rgba(22, 38, 54, 0.18);
+}
+.btn:active { transform: translateY(0); box-shadow: none; }
 .btn:focus-visible { outline: 0; box-shadow: 0 0 0 3px rgba(2, 182, 127, 0.4); }
 .btn--sm { padding: var(--s8) var(--s16); font-size: 14px; }
 .btn--ghost {
@@ -166,7 +185,18 @@ a { color: inherit; }
   color: var(--ink);
   border-color: var(--rule);
 }
-.btn--ghost:hover { background: var(--surface); filter: none; }
+.btn--ghost:hover {
+  background: var(--surface);
+  filter: none;
+  border-color: var(--ink);
+}
+
+/* **움직임을 끈 사람에게는 움직이지 않는다.** 테두리와 그림자는 그대로 둔다 —
+   눌리는 자리라는 신호까지 없앨 이유는 없다 */
+@media (prefers-reduced-motion: reduce) {
+  .btn { transition: none; }
+  .btn:hover { transform: none; }
+}
 
 /* ── 히어로 ───────────────────────────────────────────────────────── */
 
@@ -335,6 +365,21 @@ h1 {
    덩이가 왼쪽에 남는다 — 바깥 여백까지 같이 밀어야 가운데로 온다 */
 .h2--center { text-align: center; }
 .sub--center { margin-inline: auto; text-align: center; }
+
+/**
+ * 제목 위에 붙는 **칸 이름**. 상단 차림에 적힌 말과 같은 말을 쓴다 — 스크롤로
+ * 내려온 사람이 지금 어느 칸인지 알 수 있어야 한다.
+ *
+ * 페이지에서 **초록을 쓰는 곳은 설치 단추와 여기뿐이다.** 작게 둔다.
+ */
+.kicker {
+  margin: 0 0 var(--s12);
+  font-size: 13px;
+  font-weight: 800;
+  letter-spacing: 0.04em;
+  color: var(--action);
+}
+.kicker--center { text-align: center; }
 
 /* ── 기능 ────────────────────────────────────────────────────────── */
 
@@ -520,6 +565,35 @@ h1 {
 /* ── 업데이트 ────────────────────────────────────────────────────── */
 
 .cta--center { justify-content: center; }
+
+/* 판이 하나뿐일 때도 줄로 보이게 둔다. 늘어나면 그대로 쌓인다 */
+.rels {
+  display: grid;
+  gap: var(--s12);
+  max-width: 760px;
+  margin: 0 auto var(--s32);
+  padding: 0;
+  list-style: none;
+}
+.rel {
+  padding: var(--s24);
+  background: var(--bg);
+  border: 1px solid var(--rule);
+  border-radius: var(--r24);
+}
+.rel__head {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--s12);
+  align-items: center;
+}
+.rel__head b { font-size: 19px; font-weight: 800; letter-spacing: -0.03em; }
+.rel__head time { font-size: 14px; color: var(--muted); }
+.rel p { margin: var(--s12) 0; font-size: 16px; line-height: 1.7; color: var(--muted); }
+.rel > a { font-size: 15px; font-weight: 700; color: var(--action); text-decoration: none; }
+.rel > a:hover { text-decoration: underline; }
+/* 최신 판에만 붙는다. 하나뿐일 때도 어느 것이 지금 쓰는 판인지 말해 준다 */
+.tag--now { border-color: var(--action); color: var(--action); }
 
 /* ── 문의 ────────────────────────────────────────────────────────── */
 
