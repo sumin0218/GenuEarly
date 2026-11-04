@@ -626,9 +626,10 @@ h1 {
 
 .install-box {
   position: relative;
-  /* **내용에 맞춰 좁힌다.** 띠 전체 폭으로 두면 1,080px 틀 안에 글이 550px 만
-     들어가 네모가 허전해지고 축이 안 잡혀 보인다. 카드처럼 모아 둔다. */
-  max-width: 760px;
+  /* **내용에 맞춰 좁힌다.** 띠 전체 폭으로 두면 1,180px 틀 안에 글이 550px 만
+     들어가 네모가 허전해지고 축이 안 잡혀 보인다. 카드처럼 모아 둔다.
+     다만 760px 는 설치 차례 넉 줄에 비해 좁았다 — 940px 로 넓힌다. */
+  max-width: 940px;
   margin: 0 auto;
   padding: var(--s48);
   border: 2px solid var(--action);
@@ -637,6 +638,13 @@ h1 {
   box-shadow: 0 0 0 6px rgba(2, 182, 127, 0.1);
   text-align: center;          /* 네모 안은 가운데로 모은다 */
 }
+.install-box__mark {
+  display: block;
+  width: 72px;
+  height: 72px;
+  margin: 0 auto var(--s16);
+}
+
 /* `.sub` 는 읽기 폭(60ch)이 걸려 있어 그대로 두면 왼쪽으로 치우친다 */
 .install-box .sub {
   margin-inline: auto;
