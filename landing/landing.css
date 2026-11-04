@@ -162,12 +162,29 @@ a { color: inherit; }
   border-bottom: 1px solid var(--rule);
   padding: 128px 0;
 }
+/**
+ * **글 위, 사진 아래.**
+ *
+ * 전에는 둘을 나란히 두었다. 그러면 사진이 가질 수 있는 폭이 틀의 절반(약 540px)
+ * 뿐이라 **화면 속 글씨가 읽히지 않는다** — 배지 문구도 형광펜 사유도.
+ *
+ * 나란히 둔 채로 넓히려면 글 칸을 줄여야 하는데, 제목이 64px 라 "다 읽고 의심하면"
+ * 한 줄에 540px 가 필요하다. 줄일 자리가 없다. 그래서 한 줄로 내렸다 —
+ * 같은 틀에서 사진이 **두 배 넓어진다** (540px → 1,148px).
+ */
 .hero__in {
   display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: var(--s64);
-  align-items: center;
+  justify-items: center;
+  gap: var(--s48);
+  text-align: center;
 }
+.hero__text { max-width: 820px; }
+/* h1·lede 에 걸린 읽기 폭 때문에 그대로 두면 덩이가 왼쪽에 남는다 */
+.hero__text h1,
+.hero__text .lede { margin-inline: auto; }
+.hero__in .cta { justify-content: center; }
+/* 그리드 칸이 내용 폭으로 줄지 않게. 줄면 안의 `width: 100%` 가 기댈 데가 없다 */
+.shot--hero { width: 100%; }
 .eyebrow {
   margin: 0 0 var(--s12);
   font-size: 13px;
@@ -295,6 +312,11 @@ h1 {
   line-height: 1.75;
   color: var(--muted);
 }
+
+/* 머리말을 가운데로. `.sub` 는 읽기 폭이 걸려 있어 `text-align` 만으로는
+   덩이가 왼쪽에 남는다 — 바깥 여백까지 같이 밀어야 가운데로 온다 */
+.h2--center { text-align: center; }
+.sub--center { margin-inline: auto; text-align: center; }
 
 /* ── 기능 ────────────────────────────────────────────────────────── */
 
@@ -569,7 +591,8 @@ code {
 
 @media (max-width: 860px) {
   .band, .hero { padding: var(--s64) 0; }
-  .hero__in, .feat { grid-template-columns: 1fr; gap: var(--s32); }
+  .hero__in { gap: var(--s32); }   /* 넓은 화면에서도 이미 한 줄이다. 간격만 줄인다 */
+  .feat { grid-template-columns: 1fr; gap: var(--s32); }
   .feat--flip .feat__text { order: 0; }   /* 한 칸이 되면 글이 늘 위다 */
   .stats__in { grid-template-columns: repeat(2, 1fr); }
   .steps, .roles, .keeps { grid-template-columns: 1fr; }
