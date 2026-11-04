@@ -614,6 +614,37 @@ h1 {
 .ask b { font-size: 18px; font-weight: 800; letter-spacing: -0.03em; }
 .ask span { font-size: 15px; color: var(--muted); }
 
+/* ── 개인정보 처리방침 ───────────────────────────────────────────── */
+
+/**
+ * 처리방침은 **읽히려고 있는 글이다.** 랜딩처럼 카드로 흩어 두면 "무엇이 나가고
+ * 무엇이 남는지" 를 한 줄씩 짚어 읽을 수 없다. 소제목 하나에 목록 하나로 둔다.
+ */
+.pp {
+  display: grid;
+  gap: var(--s24);
+  max-width: 820px;
+  margin: 0 0 var(--s32);
+}
+.pp__row {
+  padding: var(--s24);
+  background: var(--bg);
+  border: 1px solid var(--rule);
+  border-radius: var(--r24);
+}
+.band--tint .pp__row { background: var(--bg); }
+.band:not(.band--tint) .pp__row { background: var(--surface); border-color: transparent; }
+.pp__row h3 {
+  margin: 0 0 var(--s12);
+  font-size: 18px;
+  font-weight: 800;
+  letter-spacing: -0.03em;
+}
+.pp__row ul { margin: 0; padding-left: var(--s24); }
+.pp__row li { margin-bottom: var(--s8); font-size: 16px; line-height: 1.75; color: var(--muted); }
+.pp__row li:last-child { margin-bottom: 0; }
+.pp__row li b { color: var(--ink); }
+
 /* ── 설치 ────────────────────────────────────────────────────────────
    **여기만 초록으로 감싼다.** 페이지에서 가장 중요한 자리이고, 랜딩의 목적이다.
 

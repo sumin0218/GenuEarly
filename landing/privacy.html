@@ -1,0 +1,273 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>개인정보 처리방침 — GenuEarly</title>
+<meta name="description" content="GenuEarly 가 무엇을 보내고 무엇을 남기는지. 계정도 광고도 분석 도구도 없습니다.">
+<meta name="robots" content="index, follow">
+
+<link rel="icon" href="./assets/icon-128.png">
+<link rel="preconnect" href="https://cdn.jsdelivr.net">
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/variable/pretendardvariable-dynamic-subset.min.css">
+<link rel="stylesheet" href="./landing.css">
+</head>
+<body>
+
+<a class="skip" href="#main">본문으로 건너뛰기</a>
+
+<header class="nav">
+  <div class="wrap nav__in">
+    <a class="brand" href="./">
+      <img src="./assets/icon-128.png" alt="" width="28" height="28">
+      <b>GenuEarly</b>
+    </a>
+    <nav class="nav__links" aria-label="페이지 안내">
+      <a href="./#features">기능</a>
+      <a href="./#how">사용 방법</a>
+      <a href="./#browsers">지원 서비스</a>
+      <a href="./#updates">업데이트</a>
+      <a href="./#contact">문의</a>
+      <a href="https://github.com/sumin0218/GenuEarly">GitHub</a>
+    </nav>
+    <a class="btn btn--sm" href="./#install">설치</a>
+  </div>
+</header>
+
+<main id="main">
+
+<section class="band" id="top">
+  <div class="wrap">
+    <p class="kicker">개인정보 처리방침</p>
+    <h2 class="h2">무엇을 보내고<br class="wide">무엇이 남는지</h2>
+    <p class="sub">
+      GenuEarly 는 <b>계정을 만들지 않습니다.</b> 광고도, 분석 도구도, 추적도 없습니다.
+      기사를 판단하는 데 필요한 것만 보내고, 남는 것은 사용자의 브라우저 안에만 있습니다.
+    </p>
+    <p class="note">마지막 고침 2026년 11월 4일 · 적용 판 v1.1.0</p>
+  </div>
+</section>
+
+<!-- ─────────────────────────────── 보내는 것 ─────────────────────────────── -->
+<section class="band band--tint" id="sent">
+  <div class="wrap">
+    <p class="kicker">1. 밖으로 나가는 것</p>
+    <h2 class="h2">기사 글이 나갑니다.</h2>
+    <p class="sub">
+      판단은 사용자의 컴퓨터가 아니라 AI 모델이 합니다. 그래서 <b>판단할 글이 밖으로 나갑니다.</b>
+      이것을 감추지 않고 적습니다.
+    </p>
+
+    <div class="pp">
+      <div class="pp__row">
+        <h3>무엇이</h3>
+        <ul>
+          <li>지원하는 뉴스 사이트에서 기사를 열었을 때 — 그 기사의 <b>제목과 본문</b></li>
+          <li>뉴스 목록 페이지에서 — 목록에 보이는 <b>기사 제목들</b></li>
+          <li>글을 드래그해 검사를 눌렀을 때 — <b>드래그한 글</b></li>
+          <li>리포트를 만들 때 — 위의 기사 글과, 주변 보도를 찾기 위한 <b>검색어</b></li>
+        </ul>
+      </div>
+      <div class="pp__row">
+        <h3>어디로</h3>
+        <ul>
+          <li>GenuEarly 중계 서버 (<code>genuearly-proxy.workers.dev</code>, Cloudflare Workers)</li>
+          <li>중계 서버가 <b>ChatKHU API 게이트웨이</b>로 넘깁니다. 거기서 Jev 등 모델이 판단합니다</li>
+        </ul>
+      </div>
+      <div class="pp__row">
+        <h3>왜 중계를 거치나</h3>
+        <ul>
+          <li><b>API 키를 확장 프로그램에 넣지 않기 위해서입니다.</b> 확장 프로그램 안의 값은
+            누구나 꺼내 볼 수 있습니다. 키는 중계 서버의 환경변수에만 둡니다</li>
+        </ul>
+      </div>
+    </div>
+
+    <p class="note">
+      <b>기사를 열지 않으면 아무것도 나가지 않습니다.</b> 지원하지 않는 사이트에서는
+      확장 프로그램이 동작하지 않습니다. 설치만 해 두고 뉴스를 읽지 않으면 요청이 한 건도 생기지 않습니다.
+    </p>
+  </div>
+</section>
+
+<!-- ─────────────────────────────── 서버에 남는 것 ─────────────────────────────── -->
+<section class="band" id="server">
+  <div class="wrap">
+    <p class="kicker">2. 서버에 남는 것</p>
+    <h2 class="h2">기사 글은 저장하지 않습니다.</h2>
+    <p class="sub">
+      중계 서버에는 <b>데이터베이스가 붙어 있지 않습니다.</b> 기사 글은 받아서 넘기고 버립니다.
+    </p>
+
+    <div class="pp">
+      <div class="pp__row">
+        <h3>남기지 않는 것</h3>
+        <ul>
+          <li>기사 제목·본문·드래그한 글 — <b>한 글자도 저장하지 않습니다</b></li>
+          <li>사용자가 어떤 기사를 열었는지 — 기록하지 않습니다</li>
+          <li>판단 결과 — 서버에 쌓지 않습니다</li>
+        </ul>
+      </div>
+      <div class="pp__row">
+        <h3>잠깐 쓰는 것</h3>
+        <ul>
+          <li><b>IP 주소</b> — 분당 요청 수를 세어 폭주를 막는 데만 씁니다. 메모리에만 있고
+            저장되지 않으며, 기사 내용과 묶이지 않습니다</li>
+          <li><b>동작 기록(로그)</b> — "요청이 몇 건이었고 성공했는지" 같은 숫자만 남습니다.
+            기사 글도 IP 도 로그에 쓰지 않습니다</li>
+        </ul>
+      </div>
+      <div class="pp__row">
+        <h3>우리 밖</h3>
+        <ul>
+          <li>중계는 <b>Cloudflare</b> 위에서 돕니다. 통신 과정에서 Cloudflare 가
+            접속 정보를 처리할 수 있습니다</li>
+          <li>판단은 <b>ChatKHU API 게이트웨이</b>가 합니다. 보낸 글의 처리는 그쪽 정책을 따릅니다</li>
+        </ul>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ─────────────────────────────── 브라우저에 남는 것 ─────────────────────────────── -->
+<section class="band band--tint" id="local">
+  <div class="wrap">
+    <p class="kicker">3. 브라우저에 남는 것</p>
+    <h2 class="h2">셋뿐이고<br class="wide">전부 지울 수 있습니다.</h2>
+    <p class="sub">
+      모두 <b>사용자의 브라우저 안</b>에만 있습니다. 서버로 올라가지 않고, 다른 기기와 동기화되지 않습니다.
+    </p>
+
+    <div class="keeps">
+      <div class="keep">
+        <h3>판단 캐시</h3>
+        <p>주소의 <b>해시</b>와 항목별 점수만. 기사 글도, 주소 원문도, 읽은 시각도 넣지 않습니다</p>
+        <span>6시간 뒤 사라짐</span>
+      </div>
+      <div class="keep">
+        <h3>보고 있는 리포트</h3>
+        <p>기사 인용이 들어 있어 디스크에 두지 않습니다. 브라우저를 닫으면 사라집니다</p>
+        <span>세션에만</span>
+      </div>
+      <div class="keep">
+        <h3>리포트 보관함</h3>
+        <p>제목과 주소. <b>사용자가 리포트를 만들었을 때만</b> 한 줄 쌓입니다. 20건까지</p>
+        <span>30일 뒤 사라짐</span>
+      </div>
+    </div>
+
+    <p class="note">
+      <b>지우는 법</b> — 보관함은 확장 프로그램 안에서 전체 삭제할 수 있습니다.
+      캐시를 포함해 전부 지우려면 크롬에서 확장 프로그램을 삭제하면 됩니다.
+      삭제하면 위 셋이 함께 사라집니다.
+    </p>
+  </div>
+</section>
+
+<!-- ─────────────────────────────── 권한 ─────────────────────────────── -->
+<section class="band" id="perms">
+  <div class="wrap">
+    <p class="kicker">4. 받는 권한</p>
+    <h2 class="h2">둘뿐입니다.</h2>
+    <p class="sub">
+      모든 사이트를 읽는 권한(<code>&lt;all_urls&gt;</code>)을 받지 않습니다.
+      주소를 하나하나 적어 둔 뉴스 사이트에서만 동작합니다.
+    </p>
+
+    <div class="pp">
+      <div class="pp__row">
+        <h3><code>storage</code></h3>
+        <ul><li>위 3절의 셋을 브라우저에 두기 위해서입니다. 다른 용도로 쓰지 않습니다</li></ul>
+      </div>
+      <div class="pp__row">
+        <h3><code>contextMenus</code></h3>
+        <ul><li>드래그한 글을 오른쪽 클릭으로 검사하는 메뉴를 넣기 위해서입니다</li></ul>
+      </div>
+      <div class="pp__row">
+        <h3>사이트 접근</h3>
+        <ul>
+          <li>네이버 뉴스, 다음 뉴스, 인사이트, 위키트리의 <b>기사와 목록 주소만</b> 적어 두었습니다</li>
+          <li>네이버의 <b>댓글 페이지는 일부러 빼 두었습니다</b></li>
+          <li>적어 둔 주소 밖에서는 확장 프로그램이 뜨지 않습니다</li>
+        </ul>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ─────────────────────────────── 하지 않는 것 ─────────────────────────────── -->
+<section class="band band--tint" id="never">
+  <div class="wrap">
+    <p class="kicker">5. 하지 않는 것</p>
+    <h2 class="h2">파는 일도<br class="wide">쫓는 일도 없습니다.</h2>
+    <div class="pp">
+      <div class="pp__row">
+        <h3>없는 것</h3>
+        <ul>
+          <li>계정·로그인·회원가입</li>
+          <li>광고, 광고 식별자</li>
+          <li>분석 도구(Google Analytics 등), 쿠키 심기</li>
+          <li>사이트를 넘나드는 추적</li>
+          <li>데이터 판매·대여·제3자 제공(위 2절의 처리 위탁 외)</li>
+          <li>원격 코드 실행 — 확장 프로그램은 <b>스토어에 올린 코드만</b> 돌립니다</li>
+        </ul>
+      </div>
+      <div class="pp__row">
+        <h3>아동</h3>
+        <ul>
+          <li>만 14세 미만을 대상으로 만들지 않았고, 나이를 묻거나 수집하지 않습니다</li>
+        </ul>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ─────────────────────────────── 문의 ─────────────────────────────── -->
+<section class="band" id="ask">
+  <div class="wrap">
+    <p class="kicker">6. 문의</p>
+    <h2 class="h2">물어보실 것이 있으면.</h2>
+    <p class="sub">
+      이 방침에 대한 문의, 처리 중지 요청, 잘못된 설명 신고를 GitHub 이슈로 받습니다.
+    </p>
+    <div class="asks">
+      <a class="ask" href="https://github.com/sumin0218/GenuEarly/issues/new">
+        <b>이슈 남기기</b><span>계정만 있으면 누구나</span>
+      </a>
+      <a class="ask" href="https://github.com/sumin0218/GenuEarly/blob/main/docs/security/secure-coding.md">
+        <b>보안 설계 문서</b><span>코드로 어떻게 지키는지</span>
+      </a>
+      <a class="ask" href="https://github.com/sumin0218/GenuEarly">
+        <b>소스 코드</b><span>전부 공개되어 있습니다</span>
+      </a>
+    </div>
+    <p class="note">
+      <b>방침이 바뀌면</b> 이 페이지의 "마지막 고침" 날짜가 바뀌고,
+      바뀐 내용은 <a href="https://github.com/sumin0218/GenuEarly/commits/main/landing/privacy.html">커밋 기록</a>에 그대로 남습니다.
+    </p>
+  </div>
+</section>
+
+</main>
+
+<footer class="foot">
+  <div class="wrap foot__in">
+    <div class="foot__brand">
+      <img src="./assets/icon-128.png" alt="" width="24" height="24">
+      <b>GenuEarly</b>
+    </div>
+    <nav class="foot__links" aria-label="바닥 안내">
+      <a href="./#browsers">지원 서비스</a>
+      <a href="./#updates">업데이트</a>
+      <a href="./#contact">문의</a>
+      <a href="./privacy.html">개인정보 처리방침</a>
+      <a href="https://github.com/sumin0218/GenuEarly">GitHub</a>
+      <a href="https://github.com/sumin0218/GenuEarly/blob/main/LICENSE">MIT License</a>
+    </nav>
+  </div>
+  <p class="foot__copy">© 2026 GenuEarly contributors. All rights reserved.</p>
+</footer>
+
+</body>
+</html>
