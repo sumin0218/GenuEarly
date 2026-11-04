@@ -1,0 +1,211 @@
+/* testJournal 의 겉모습. **우리 제품 색을 쓰지 않는다** — 파랑이다.
+   사진에서 기사 화면과 우리 배지·형광펜이 한눈에 갈려야 한다. */
+
+:root {
+  color-scheme: light;
+  --paper: #ffffff;
+  --ground: #f2f3f5;
+  --ink: #15181d;
+  --muted: #6b7280;
+  --rule: #e4e6ea;
+  --press: #1a4fa0;
+}
+
+* { box-sizing: border-box; }
+
+body {
+  margin: 0;
+  background: var(--ground);
+  color: var(--ink);
+  font: 17px/1.8 Pretendard, -apple-system, BlinkMacSystemFont, "Segoe UI",
+    "Noto Sans KR", "Malgun Gothic", sans-serif;
+  word-break: keep-all;
+  -webkit-font-smoothing: antialiased;
+}
+img { display: block; max-width: 100%; }
+
+.notice {
+  max-width: 1040px;
+  margin: 16px auto 0;
+  padding: 11px 18px;
+  background: #fff8e1;
+  border: 1px solid #f0d58a;
+  border-radius: 4px;
+  font-size: 14px;
+  color: #6b5300;
+}
+
+/* ── 머리 ─────────────────────────────────────────────── */
+
+.masthead { margin-top: 16px; background: var(--paper); border-bottom: 1px solid var(--rule); }
+.masthead__top {
+  max-width: 1040px;
+  margin: 0 auto;
+  padding: 15px 20px;
+  display: flex;
+  align-items: center;
+  gap: 16px;
+}
+.wordmark {
+  font-size: 24px;
+  font-weight: 800;
+  letter-spacing: -0.035em;
+  color: var(--press);
+  text-decoration: none;
+}
+.wordmark em { font-style: normal; color: var(--ink); }
+.masthead__meta { margin-left: auto; font-size: 13px; color: var(--muted); }
+
+.gnb { border-top: 1px solid var(--rule); }
+.gnb ul {
+  max-width: 1040px;
+  margin: 0 auto;
+  padding: 0 20px;
+  display: flex;
+  gap: 24px;
+  list-style: none;
+  font-size: 15px;
+  font-weight: 600;
+}
+.gnb a { display: block; padding: 11px 0; color: var(--ink); text-decoration: none; }
+.gnb .on { color: var(--press); box-shadow: inset 0 -3px 0 var(--press); }
+
+/* ── 기사 ─────────────────────────────────────────────── */
+
+.sheet {
+  max-width: 1040px;
+  margin: 24px auto 56px;
+  padding: 44px 56px 52px;
+  background: var(--paper);
+  border: 1px solid var(--rule);
+  border-radius: 4px;
+}
+.crumb { margin: 0 0 14px; font-size: 14px; color: var(--muted); }
+.crumb b { color: var(--press); font-weight: 700; }
+
+h1#headline {
+  margin: 0 0 16px;
+  font-size: 34px;
+  font-weight: 800;
+  line-height: 1.32;
+  letter-spacing: -0.035em;
+}
+.standfirst {
+  margin: 0 0 24px;
+  padding-left: 14px;
+  border-left: 3px solid var(--rule);
+  font-size: 18px;
+  color: #374151;
+}
+
+.byline {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 10px;
+  padding: 14px 0;
+  border-top: 1px solid var(--rule);
+  border-bottom: 1px solid var(--rule);
+  font-size: 14px;
+  color: var(--muted);
+}
+.byline b { color: var(--ink); font-weight: 700; }
+.byline .sep { color: var(--rule); }
+
+.share { margin-left: auto; display: flex; gap: 8px; }
+.share button {
+  padding: 7px 13px;
+  font: inherit;
+  font-size: 13px;
+  color: var(--ink);
+  background: #fff;
+  border: 1px solid var(--rule);
+  border-radius: 999px;
+  cursor: pointer;
+}
+.share button:hover { background: var(--ground); }
+
+#body { padding-top: 26px; font-size: 17.5px; }
+#body p { margin: 0 0 20px; }
+
+figure.photo { margin: 28px 0; }
+figure.photo .ph,
+figure.photo img {
+  display: grid;
+  place-items: center;
+  width: 100%;
+  aspect-ratio: 16 / 9;
+  object-fit: cover;
+  background: #dde1e7;
+  color: #8b93a1;
+  font-size: 14px;
+}
+/* 원본 라이선스. 캡션의 ⓒ testJournal 은 가짜 언론사의 것이라 출처 표기가 아니다 */
+figure.photo .credit { display: block; margin-top: 3px; font-size: 12px; color: #a3a9b4; }
+figure.photo figcaption { margin-top: 8px; font-size: 14px; color: var(--muted); }
+
+.reporter { margin: 32px 0 0; padding-top: 18px; border-top: 1px solid var(--rule); font-size: 14px; color: var(--muted); }
+.copyright { margin: 8px 0 0; font-size: 13px; color: #9aa1ac; }
+
+aside.related { max-width: 1040px; margin: 0 auto 56px; padding: 0 20px; }
+aside.related h2 { font-size: 18px; margin: 0 0 12px; }
+aside.related ul { margin: 0; padding: 0; list-style: none; display: grid; gap: 10px; }
+aside.related a { color: var(--ink); text-decoration: none; font-size: 16px; }
+aside.related a:hover { text-decoration: underline; }
+
+/* ── 목록 ─────────────────────────────────────────────── */
+
+.list { max-width: 1040px; margin: 24px auto 56px; padding: 0 20px; }
+.list__title {
+  margin: 0 0 20px;
+  font-size: 26px;
+  font-weight: 800;
+  letter-spacing: -0.03em;
+}
+.feed { margin: 0; padding: 0; list-style: none; background: var(--paper); border: 1px solid var(--rule); border-radius: 4px; }
+.feed__item {
+  display: grid;
+  grid-template-columns: 180px 1fr;
+  gap: 20px;
+  padding: 22px 24px;
+  border-bottom: 1px solid var(--rule);
+}
+.feed__item:last-child { border-bottom: 0; }
+.feed__thumb {
+  display: grid;
+  place-items: center;
+  aspect-ratio: 16 / 10;
+  background: #dde1e7;
+  color: #8b93a1;
+  font-size: 13px;
+  text-decoration: none;
+  overflow: hidden;
+}
+.feed__thumb img { width: 100%; height: 100%; object-fit: cover; }
+/* **제목 링크.** ② 가 이 글자 옆에 동그라미를 붙인다 */
+.feed__head {
+  display: inline-block;
+  font-size: 20px;
+  font-weight: 700;
+  line-height: 1.4;
+  letter-spacing: -0.02em;
+  color: var(--ink);
+  text-decoration: none;
+}
+.feed__head:hover { text-decoration: underline; }
+.feed__lede { margin: 8px 0 0; font-size: 15px; color: var(--muted); }
+.feed__meta { margin: 10px 0 0; font-size: 13px; color: #9aa1ac; }
+
+/* ── 바닥 ─────────────────────────────────────────────── */
+
+footer.site { background: #20242b; color: #aeb4bd; font-size: 13px; }
+footer.site div { max-width: 1040px; margin: 0 auto; padding: 28px 20px; }
+
+@media (max-width: 760px) {
+  .sheet { margin: 12px; padding: 28px 20px 36px; }
+  h1#headline { font-size: 27px; }
+  .gnb ul { overflow-x: auto; }
+  .share { margin-left: 0; width: 100%; }
+  .feed__item { grid-template-columns: 1fr; }
+  .feed__thumb { display: none; }
+}
