@@ -151,6 +151,7 @@ export default defineBackground(() => {
           buildReport(
             { url: msg.url, headline: msg.headline, date: msg.date, body: msg.body },
             msg.rows,
+            msg.picks ?? [],
           ),
         )
         .catch((e) => console.warn('[GenuEarly] 리포트 만들기 실패', e))

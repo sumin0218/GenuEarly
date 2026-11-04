@@ -690,7 +690,30 @@ describe('왜 이 판정인가 — 항목별 설명', () => {
       spans: { emo_exclaim: ['!!'], emo_repeat: [], emo_fear: [] },
     })
     expect(lines[0]).toEqual({ text: parts.emo_exclaim.present, quotes: ['!!'] })
-    expect(lines.map((l) => l.text)).toContain(parts.emo_repeat.absent)
+  })
+
+  it('**찾은 것만 적는다** — "없다" 줄을 늘어놓지 않는다', () => {
+    // 하나를 찾으면 전에는 셋이 떴다 — 찾은 하나와 못 찾은 둘. 읽을 것은 하나인데
+    // 눈이 셋을 훑어야 한다.
+    const lines = explainLines('emotional_language', {
+      itemId: 'emotional_language',
+      found: {},
+      spans: { emo_exclaim: ['!!'], emo_repeat: [], emo_fear: [] },
+    })
+    expect(lines).toHaveLength(1)
+    for (const l of lines) {
+      expect(l.text).not.toBe(parts.emo_repeat.absent)
+      expect(l.text).not.toBe(parts.emo_fear.absent)
+    }
+  })
+
+  it('**같은 낱말을 두 번 적지 않는다** — 세 가지를 짚은 것처럼 보인다', () => {
+    const lines = explainLines('emotional_language', {
+      itemId: 'emotional_language',
+      found: {},
+      spans: { emo_repeat: ['충격', '경악', '충격', '충격'] },
+    })
+    expect(lines[0]?.quotes).toEqual(['충격', '경악'])
   })
 
   it('Jev 가 잰 것과 코드가 찾은 것이 한 목록에 들어간다', () => {
@@ -807,10 +830,11 @@ describe('왜 이 판정인가 — 항목별 설명', () => {
       text: content.explain.clickbait_headline.parts.clk_inflating.present,
       quotes: ['충격'],
     })
-    // 코드가 맡지 않는 쪽은 Jev 의 답만 글로 남는다. 인용이 붙지 않는다.
-    expect(lines).toContainEqual({
-      text: content.explain.clickbait_headline.parts.clk_hiding.absent,
-    })
+    // **아니라고 답한 쪽은 적지 않는다.** 찾은 것 하나만 남는다.
+    expect(lines).toHaveLength(1)
+    expect(lines.map((l) => l.text)).not.toContain(
+      content.explain.clickbait_headline.parts.clk_hiding.absent,
+    )
   })
 
   it('걸린 항목에 "신호가 보이지 않습니다" 라고 적지 않는다', () => {

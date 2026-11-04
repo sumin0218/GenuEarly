@@ -254,7 +254,11 @@ describe('Jev 로 보내는 것', () => {
   it('한 판단이 질문 여러 개로 나뉜 항목은 펼쳐서 보낸다', async () => {
     mockFetch(() => ok({
       model: 'jev-latest',
-      answers: { factual_assertion: { type: 'noul', noul: 0.8 }, named_basis: { type: 'noul', noul: 0.1 } },
+      answers: {
+        factual_assertion: { type: 'noul', noul: 0.8 },
+        named_basis: { type: 'noul', noul: 0.1 },
+        emotional_sentence: { type: 'noul', noul: 0.2 },
+      },
     }))
     const res = await judge({
       feature: 'page', group: 'sentence',
@@ -262,9 +266,15 @@ describe('Jev 로 보내는 것', () => {
     })
     expect(res.status).toBe(200)
     const sent = JSON.parse(calls[0].init.body as string)
-    expect(Object.keys(sent.questions).sort()).toEqual(['factual_assertion', 'named_basis'])
+    // **셋이 한 요청에 간다.** 자리 찾기 질문(`emotional_sentence`)을 문장 요청에
+    // 끼워 넣어 **요청 수를 늘리지 않는다** — 따로 물으면 문장마다 하나씩 더 붙는다.
+    expect(Object.keys(sent.questions).sort()).toEqual([
+      'emotional_sentence', 'factual_assertion', 'named_basis',
+    ])
     const body = await res.json() as { answers: Record<string, unknown> }
-    expect(Object.keys(body.answers).sort()).toEqual(['factual_assertion', 'named_basis'])
+    expect(Object.keys(body.answers).sort()).toEqual([
+      'emotional_sentence', 'factual_assertion', 'named_basis',
+    ])
   })
 })
 

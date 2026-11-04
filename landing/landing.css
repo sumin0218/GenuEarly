@@ -1,0 +1,749 @@
+/* GenuEarly 랜딩 페이지.
+
+   **색은 제품에서 가져온다.** 팝업(apps/extension/entrypoints/popup/style.css)과 같은
+   이름, 같은 값이다. 여기서 새 색을 만들지 않는다 — 랜딩에서 본 색과 설치하고 본 색이
+   다르면 같은 제품으로 보이지 않는다.
+
+   **판정 색(초록·노랑·빨강)을 장식에 쓰지 않는다.** 그 넷은 단계를 뜻한다. 버튼이나
+   머리글에 쓰면 아무 뜻 없는 자리에서 판정처럼 읽힌다
+   (apps/extension/tests/design.test.ts "제품의 색이 판정의 색과 부딪히지 않는다"). */
+
+:root {
+  /**
+   * 면. 밝은 쪽부터 **`--bg` → `--surface` → `--ground`** 세 켜다.
+   *
+   * 전에는 `--ground` 와 `--surface` 가 같은 값이라 사실 두 켜였다. 그래서
+   * 두 가지가 걸렸다.
+   *
+   *   1. 띠를 번갈아 칠해도 흰색과의 차이가 밝기로 3.6밖에 안 나서 **회색 띠가
+   *      회색으로 보이지 않았다**
+   *   2. 회색 띠 위에 올린 `--surface` 카드가 **띠와 같은 색이라 사라졌다**
+   *
+   * 셋으로 갈라 둔다. 띠는 `--ground`, 그 위 카드는 `--bg` 나 `--surface`.
+   */
+  --ground: #eaebef;
+  --bg: #ffffff;
+  --surface: #f4f5f7;
+  --ink: #111111;
+  --muted: #5f6368;
+  /* 띠가 짙어진 만큼 금도 같이 내린다. 그러지 않으면 회색 띠 위에서 테두리가 묻는다 */
+  --rule: #dde0e4;
+
+  /* 제품 색 */
+  --brand: #162636;
+  --brand-ink: #ffffff;
+  --action: #02b67f;
+  --action-ink: #0d0d0d;
+
+  /* 단계 색 — 설명하는 자리에서만 쓴다 */
+  --lv-safe: #247b50;
+  --lv-check: #9a5b00;
+  --lv-caution: #c4242a;
+
+  /* 여백은 4px 배수 */
+  --s4: 4px; --s8: 8px; --s12: 12px; --s16: 16px;
+  --s24: 24px; --s32: 32px; --s48: 48px; --s64: 64px; --s96: 96px;
+
+  --r8: 8px; --r12: 12px; --r16: 20px; --r24: 32px;
+  --shadow-lg: 0 16px 48px rgba(22, 38, 54, 0.14);
+  --wrap: 1180px;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    /* 어두운 쪽은 반대로 **띠가 더 어둡다.** 셋의 간격은 밝은 쪽과 같이 벌려 둔다 */
+    --ground: #08080a;
+    --bg: #111111;
+    --surface: #1a1a1c;
+    --ink: #ffffff;
+    --muted: #b4b4b4;
+    --rule: #2e2e31;
+
+    --brand: #e7edf3;
+    --brand-ink: #0d0d0d;
+
+    --lv-safe: #3fc07a;
+    --lv-check: #f0b429;
+    --lv-caution: #f87171;
+
+    --shadow-lg: 0 16px 48px rgba(0, 0, 0, 0.5);
+  }
+}
+
+* { box-sizing: border-box; }
+
+html { scroll-behavior: smooth; }
+@media (prefers-reduced-motion: reduce) { html { scroll-behavior: auto; } }
+
+body {
+  margin: 0;
+  background: var(--ground);
+  color: var(--ink);
+  font: 16px/1.65 Pretendard, -apple-system, BlinkMacSystemFont, "Segoe UI",
+    "Noto Sans KR", "Malgun Gothic", sans-serif;
+  -webkit-font-smoothing: antialiased;
+  word-break: keep-all;          /* 한국어는 낱말 중간에서 끊지 않는다 */
+}
+
+a { color: inherit; }
+
+.wrap {
+  width: 100%;
+  max-width: var(--wrap);
+  margin: 0 auto;
+  padding: 0 var(--s16);         /* 휴대폰에서 글이 가장자리에 붙지 않게 */
+}
+
+.skip {
+  position: absolute;
+  left: -9999px;
+}
+.skip:focus {
+  left: var(--s16);
+  top: var(--s16);
+  z-index: 10;
+  padding: var(--s8) var(--s12);
+  background: var(--brand);
+  color: var(--brand-ink);
+  border-radius: var(--r8);
+}
+
+/* ── 상단 ─────────────────────────────────────────────────────────── */
+
+.nav {
+  position: sticky;
+  top: 0;
+  z-index: 5;
+  background: color-mix(in srgb, var(--bg) 88%, transparent);
+  backdrop-filter: blur(10px);
+  border-bottom: 1px solid var(--rule);
+}
+.nav__in {
+  display: flex;
+  align-items: center;
+  gap: var(--s16);
+  height: 60px;
+}
+.brand {
+  display: flex;
+  align-items: center;
+  gap: var(--s8);
+  font-size: 17px;
+  text-decoration: none;
+}
+.nav__links {
+  display: flex;
+  gap: var(--s16);
+  margin-left: auto;
+  font-size: 14px;
+  color: var(--muted);
+}
+.nav__links a { text-decoration: none; }
+.nav__links a:hover { color: var(--ink); }
+
+@media (max-width: 860px) {
+  .nav__links { display: none; }     /* 좁은 화면에서는 설치 단추만 남긴다 */
+  .nav__in .btn { margin-left: auto; }
+}
+
+/* ── 단추 ─────────────────────────────────────────────────────────── */
+
+.btn {
+  display: inline-block;
+  padding: var(--s12) var(--s24);
+  border-radius: var(--r8);
+  background: var(--action);
+  color: var(--action-ink);
+  font-weight: 700;
+  text-decoration: none;
+  border: 1px solid transparent;
+  transition:
+    transform 140ms ease,
+    box-shadow 140ms ease,
+    border-color 140ms ease,
+    background-color 140ms ease;
+}
+/**
+ * 올려놓으면 **테두리가 생기고 살짝 들린다.** 색만 바뀌면 눌리는 것인지 알기 어렵다.
+ *
+ * 테두리 색은 바탕에 따라 다르다. 초록 단추 위에는 **흰 실선**이 또렷한데, 흰 띠
+ * 위의 `--ghost` 에 흰 선을 주면 보이지 않는다. 그쪽은 글자색 쪽으로 당긴다.
+ *
+ * 들리는 것은 **2px 뿐이다.** 더 들면 글줄이 흔들려 보인다.
+ */
+.btn:hover {
+  filter: brightness(1.06);
+  transform: translateY(-2px);
+  border-color: rgba(255, 255, 255, 0.6);
+  box-shadow: 0 6px 16px rgba(22, 38, 54, 0.18);
+}
+.btn:active { transform: translateY(0); box-shadow: none; }
+.btn:focus-visible { outline: 0; box-shadow: 0 0 0 3px rgba(2, 182, 127, 0.4); }
+.btn--sm { padding: var(--s8) var(--s16); font-size: 14px; }
+.btn--ghost {
+  background: transparent;
+  color: var(--ink);
+  border-color: var(--rule);
+}
+.btn--ghost:hover {
+  background: var(--surface);
+  filter: none;
+  border-color: var(--ink);
+}
+
+/* **움직임을 끈 사람에게는 움직이지 않는다.** 테두리와 그림자는 그대로 둔다 —
+   눌리는 자리라는 신호까지 없앨 이유는 없다 */
+@media (prefers-reduced-motion: reduce) {
+  .btn { transition: none; }
+  .btn:hover { transform: none; }
+}
+
+/* ── 히어로 ───────────────────────────────────────────────────────── */
+
+.hero {
+  background: var(--bg);
+  border-bottom: 1px solid var(--rule);
+  padding: 128px 0;
+}
+/**
+ * **글 왼쪽, 사진 오른쪽.** 그런데 틀(1,180px) 안에서 반씩 나누면 사진 칸이
+ * 540px 뿐이라 **화면 속 글씨가 읽히지 않는다** — 배지 문구도 형광펜 사유도.
+ * 정작 그 둘을 보여 주려고 넣은 사진이다.
+ *
+ * 글 칸을 줄여서 사진을 넓힐 수는 없다. 제목이 76px 라 "다 읽고 의심하면"
+ * 한 줄에 540px 가 그대로 필요하다.
+ *
+ * 그래서 **히어로만 오른쪽으로 틀을 넘긴다.** 왼쪽 여백은 다른 칸과 똑같이
+ * 잡아 두어 글머리가 위아래 칸과 한 줄에 선다. 넘긴 만큼은 전부 사진이 가져간다.
+ *
+ * **넘기는 폭에 끝을 둔다(1,400px).** 끝을 두지 않으면 넓은 화면에서 사진이
+ * 910px 까지 가서 글보다 덩치가 커진다 — 히어로의 주인공은 글이다.
+ * 끝을 두면 1,400px 이상에서 **690px 쯤에 멈춘다.**
+ *
+ * **`100vw` 가 아니라 `100%` 로 재는 것이 중요하다.** `100vw` 는 세로 스크롤바
+ * 너비까지 세어서 가로 스크롤이 생긴다. `100%` 는 부모의 내용 폭이라 그렇지 않다.
+ */
+.hero > .wrap {
+  max-width: 1400px;
+  padding-left: max(var(--s16), (100% - var(--wrap)) / 2);
+}
+.hero__in {
+  display: grid;
+  grid-template-columns: minmax(0, 540px) minmax(0, 1fr);
+  gap: var(--s48);
+  align-items: center;
+}
+.eyebrow {
+  margin: 0 0 var(--s12);
+  font-size: 13px;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  color: var(--muted);
+}
+/* **크게, 두껍게, 바싹.** 한국어 제목은 자간을 좁혀야 덩어리로 읽힌다. */
+h1 {
+  margin: 0 0 var(--s24);
+  max-width: 680px;
+  font-size: clamp(44px, 5.4vw, 76px);
+  font-weight: 800;
+  line-height: 1.08;
+  letter-spacing: -0.065em;
+}
+/* 제목의 한 낱말에만 칠한다 — 제품이 본문에 하는 일을 제목에서 한 번 보여 준다 */
+.mark-y {
+  background: linear-gradient(transparent 62%, rgba(255, 214, 0, 0.5) 62%);
+  padding: 0 var(--s4);
+}
+.lede {
+  margin: 0 0 var(--s32);
+  max-width: 590px;
+  font-size: 18px;
+  line-height: 1.75;
+  color: var(--muted);
+}
+.lede b { color: var(--ink); }
+.cta { display: flex; flex-wrap: wrap; gap: var(--s12); }
+.note {
+  margin: var(--s24) 0 0;
+  font-size: 14px;
+  color: var(--muted);
+}
+
+/* ── 스크린샷 자리 ───────────────────────────────────────────────────
+   **아직 사진이 없다.** 자리만 파 두고, `data-shot` 에 넣을 파일 이름을 적어 둔다.
+   사진이 오면 이 틀을 <img> 로 바꾼다 — 비율은 그대로 두는 것이 좋다. */
+
+.shot { margin: 0; }
+
+/* 사진. 자리틀과 **같은 비율**이라 사진이 들어가도 글의 자리가 밀리지 않는다. */
+/* **제 비율을 지킨다.** 16:10 에 맞춰 잘라 내면 화면 모서리가 날아가는데,
+   배지도 형광펜 말풍선도 하필 모서리에 뜬다. 자리틀만 16:10 이고 사진은 자유다. */
+.shot__img {
+  display: block;
+  width: 100%;
+  height: auto;
+  border: 1px solid var(--rule);
+  border-radius: var(--r24);
+  background: var(--surface);
+}
+.shot--hero .shot__img { box-shadow: var(--shadow-lg); }
+.shot__frame[hidden] { display: none; }
+.shot__frame {
+  position: relative;
+  aspect-ratio: 16 / 10;
+  display: grid;
+  place-items: center;
+  gap: var(--s8);
+  padding: var(--s16);
+  border: 2px dashed var(--rule);
+  border-radius: var(--r24);
+  background: var(--surface);
+  color: var(--muted);
+  text-align: center;
+}
+.shot--hero .shot__frame { box-shadow: var(--shadow-lg); border-style: solid; }
+.shot__hint { font-size: 14px; }
+
+/* **화면이 실제 기사가 아니라고 사진 밑에 적는다.** 특정 매체의 기사에 주의 배지가
+   붙은 사진을 공개 페이지에 올리면, 그 매체를 지목해 평가하는 것이 된다 —
+   "언론사를 평가하지 않는다" 와 정면으로 부딪친다 (docs/product.md 2절). */
+.shot__cap {
+  margin-top: var(--s12);
+  font-size: 13px;
+  color: var(--muted);
+  text-align: center;
+}
+.shot__frame::after {
+  content: attr(data-shot);
+  font-size: 12px;
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  opacity: 0.7;
+}
+
+/* ── 숫자 띠 ─────────────────────────────────────────────────────── */
+
+.stats {
+  background: var(--brand);
+  color: var(--brand-ink);
+}
+.stats__in {
+  display: grid;
+  grid-template-columns: repeat(5, 1fr);
+  gap: var(--s24);
+  padding: var(--s48) var(--s16);
+  text-align: center;
+}
+.stat b {
+  display: block;
+  font-size: clamp(22px, 3vw, 32px);
+  letter-spacing: -0.01em;
+}
+.stat em { font-style: normal; font-size: 0.55em; margin-left: 2px; opacity: 0.8; }
+.stat span { font-size: 13px; opacity: 0.75; }
+
+/* ── 띠 공통 ─────────────────────────────────────────────────────── */
+
+.band { padding: 128px 0; background: var(--bg); }
+.band--tint { background: var(--ground); }
+
+.h2 {
+  margin: 0 0 var(--s24);
+  font-size: clamp(36px, 4.5vw, 60px);
+  font-weight: 800;
+  line-height: 1.16;
+  letter-spacing: -0.055em;
+}
+.sub {
+  margin: 0 0 var(--s64);
+  max-width: 640px;
+  font-size: 17px;
+  line-height: 1.75;
+  color: var(--muted);
+}
+
+/* 머리말을 가운데로. `.sub` 는 읽기 폭이 걸려 있어 `text-align` 만으로는
+   덩이가 왼쪽에 남는다 — 바깥 여백까지 같이 밀어야 가운데로 온다 */
+.h2--center { text-align: center; }
+.sub--center { margin-inline: auto; text-align: center; }
+
+/**
+ * 제목 위에 붙는 **칸 이름**. 상단 차림에 적힌 말과 같은 말을 쓴다 — 스크롤로
+ * 내려온 사람이 지금 어느 칸인지 알 수 있어야 한다.
+ *
+ * 페이지에서 **초록을 쓰는 곳은 설치 단추와 여기뿐이다.** 작게 둔다.
+ */
+.kicker {
+  margin: 0 0 var(--s12);
+  font-size: 13px;
+  font-weight: 800;
+  letter-spacing: 0.04em;
+  color: var(--action);
+}
+.kicker--center { text-align: center; }
+
+/* ── 기능 ────────────────────────────────────────────────────────── */
+
+.feat {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: var(--s64);
+  align-items: center;
+  margin-bottom: 120px;
+}
+.feat:last-child { margin-bottom: 0; }
+.feat--flip .feat__text { order: 2; }   /* 좌우를 번갈아 — 눈이 한쪽으로 쏠리지 않는다 */
+.num {
+  margin: 0 0 var(--s8);
+  font-size: 13px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  color: var(--action);
+}
+.feat h3 {
+  margin: 0 0 var(--s16);
+  font-size: clamp(24px, 2.5vw, 34px);
+  font-weight: 800;
+  line-height: 1.25;
+  letter-spacing: -0.045em;
+}
+.feat p { margin: 0; color: var(--muted); font-size: 17px; line-height: 1.75; }
+.feat p b { color: var(--ink); }
+
+/* ── 배지 단계 설명 ───────────────────────────────────────────────────
+   **단계 색을 쓰는 유일한 자리다.** 여기서는 색이 실제로 단계를 뜻한다.
+   장식으로는 쓰지 않는다 (맨 위 머리말). */
+
+/* **사진 칸 자리에 들어간다.** 배지 넉 장을 사진으로 붙이면 작아서 읽히지 않고
+   색만 남는다. 글로 보여 주는 편이 낫다. */
+.levels {
+  display: grid;
+  gap: var(--s4);
+  padding: var(--s32);
+  background: var(--surface);
+  border-radius: var(--r24);
+}
+.level {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  gap: var(--s4) var(--s12);
+  align-items: center;
+  padding: var(--s12) 0;
+  font-size: 16px;
+  color: var(--muted);
+}
+.level + .level { border-top: 1px solid var(--rule); }
+.level span { grid-column: 2; font-size: 15px; }
+.level i {
+  grid-row: span 2;
+  width: 14px;
+  height: 14px;
+  border-radius: 50%;
+  background: var(--dot);
+}
+.level b { color: var(--ink); font-size: 17px; font-weight: 700; }
+.level[data-lv='SAFE']        { --dot: var(--lv-safe); }
+.level[data-lv='CHECK']       { --dot: var(--lv-check); }
+.level[data-lv='CAUTION']     { --dot: var(--lv-caution); }
+.level[data-lv='UNDETERMINED']{ --dot: var(--muted); }
+
+/* ── 단계 ────────────────────────────────────────────────────────── */
+
+.steps {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: var(--s24);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  counter-reset: none;
+}
+.steps li {
+  padding: var(--s32) var(--s32) var(--s48);
+  background: var(--bg);
+  border: 1px solid var(--rule);
+  border-radius: var(--r24);
+}
+.steps b {
+  display: grid;
+  place-items: center;
+  width: 32px;
+  height: 32px;
+  margin-bottom: var(--s16);
+  border-radius: 50%;
+  background: var(--brand);
+  color: var(--brand-ink);
+  font-size: 15px;
+}
+.steps h3 { margin: 0 0 var(--s12); font-size: 20px; font-weight: 800; letter-spacing: -0.03em; }
+.steps p { margin: 0; color: var(--muted); font-size: 16px; line-height: 1.7; }
+
+/* ── AI 역할 ─────────────────────────────────────────────────────── */
+
+.roles {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: var(--s16);
+}
+.role {
+  padding: var(--s24);
+  background: var(--surface);
+  border: 1px solid var(--rule);
+  border-radius: var(--r24);
+}
+.role h3 { margin: 0 0 var(--s12); font-size: 19px; font-weight: 800; letter-spacing: -0.03em; }
+.role__does { margin: 0 0 var(--s12); font-size: 16px; line-height: 1.7; color: var(--muted); }
+.role__does b { color: var(--ink); }
+.role__not {
+  margin: 0;
+  padding-top: var(--s8);
+  border-top: 1px solid var(--rule);
+  font-size: 13px;
+  color: var(--muted);
+}
+.role__not::before { content: '✕ '; color: var(--muted); }
+
+/* ── 남는 것 ─────────────────────────────────────────────────────── */
+
+.keeps {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: var(--s16);
+}
+.keep {
+  padding: var(--s24);
+  background: var(--bg);
+  border-radius: var(--r24);
+}
+.keep h3 { margin: 0 0 var(--s8); font-size: 19px; font-weight: 800; letter-spacing: -0.03em; }
+.keep p { margin: 0 0 var(--s16); color: var(--muted); font-size: 16px; }
+.keep p b { color: var(--ink); }
+.keep span {
+  display: inline-block;
+  padding: var(--s4) var(--s12);
+  border-radius: 999px;
+  background: var(--brand);
+  color: var(--brand-ink);
+  font-size: 13px;
+  font-weight: 700;
+}
+
+/* ── 지원 서비스 ─────────────────────────────────────────────────── */
+
+/* 둘뿐이다. 세 칸짜리 `.roles` 처럼 늘어놓으면 한 칸이 비어 허전하다 */
+.browsers {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 320px));
+  gap: var(--s16);
+  justify-content: center;
+}
+.browser {
+  padding: var(--s24);
+  background: var(--surface);
+  border: 1px solid var(--rule);
+  border-radius: var(--r24);
+  text-align: center;
+}
+.browser h3 { margin: 0 0 var(--s8); font-size: 19px; font-weight: 800; letter-spacing: -0.03em; }
+.browser p { margin: 0 0 var(--s16); font-size: 16px; line-height: 1.7; color: var(--muted); }
+
+/**
+ * **아직 없는 것에 단추를 달지 않는다.** 단추 모양이면 눌러 보게 되고, 눌러도
+ * 아무 일이 일어나지 않는다. 테두리를 점선으로 바꾸고 글자표만 둔다.
+ */
+.browser--soon { background: var(--ground); border-style: dashed; }
+.tag {
+  display: inline-block;
+  padding: var(--s4) var(--s12);
+  border: 1px solid var(--rule);
+  border-radius: 999px;
+  background: var(--bg);
+  color: var(--muted);
+  font-size: 13px;
+  font-weight: 700;
+}
+
+/* ── 업데이트 ────────────────────────────────────────────────────── */
+
+.cta--center { justify-content: center; }
+
+/* 판이 하나뿐일 때도 줄로 보이게 둔다. 늘어나면 그대로 쌓인다 */
+.rels {
+  display: grid;
+  gap: var(--s12);
+  max-width: 760px;
+  margin: 0 auto var(--s32);
+  padding: 0;
+  list-style: none;
+}
+.rel {
+  padding: var(--s24);
+  background: var(--bg);
+  border: 1px solid var(--rule);
+  border-radius: var(--r24);
+}
+.rel__head {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--s12);
+  align-items: center;
+}
+.rel__head b { font-size: 19px; font-weight: 800; letter-spacing: -0.03em; }
+.rel__head time { font-size: 14px; color: var(--muted); }
+.rel p { margin: var(--s12) 0; font-size: 16px; line-height: 1.7; color: var(--muted); }
+.rel > a { font-size: 15px; font-weight: 700; color: var(--action); text-decoration: none; }
+.rel > a:hover { text-decoration: underline; }
+/* 최신 판에만 붙는다. 하나뿐일 때도 어느 것이 지금 쓰는 판인지 말해 준다 */
+.tag--now { border-color: var(--action); color: var(--action); }
+
+/* ── 문의 ────────────────────────────────────────────────────────── */
+
+.asks {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: var(--s16);
+}
+.ask {
+  display: grid;
+  gap: var(--s4);
+  padding: var(--s24);
+  background: var(--surface);
+  border-radius: var(--r24);
+  text-decoration: none;
+}
+.ask:hover { background: var(--bg); box-shadow: inset 0 0 0 1px var(--rule); }
+.ask b { font-size: 18px; font-weight: 800; letter-spacing: -0.03em; }
+.ask span { font-size: 15px; color: var(--muted); }
+
+/* ── 설치 ────────────────────────────────────────────────────────────
+   **여기만 초록으로 감싼다.** 페이지에서 가장 중요한 자리이고, 랜딩의 목적이다.
+
+   다만 **면을 채도 높은 초록으로 채우지 않는다.** 액션 초록(#02b67f)은 🟢 안심
+   단계(#247b50)와 색상각이 11° 뿐이다 — 넓은 면을 채우면 판정 배너처럼 읽힌다
+   (apps/extension/tests/design.test.ts "제품의 색이 판정의 색과 부딪히지 않는다").
+   그래서 **테두리와 단추에만** 쓰고 면은 옅게 깐다. */
+
+.band--cta { background: var(--ground); border-top: 1px solid var(--rule); }
+
+.install-box {
+  position: relative;
+  /* **내용에 맞춰 좁힌다.** 띠 전체 폭으로 두면 1,180px 틀 안에 글이 550px 만
+     들어가 네모가 허전해지고 축이 안 잡혀 보인다. 카드처럼 모아 둔다.
+     다만 760px 는 설치 차례 넉 줄에 비해 좁았다 — 940px 로 넓힌다. */
+  max-width: 940px;
+  margin: 0 auto;
+  padding: var(--s48);
+  border: 2px solid var(--action);
+  border-radius: var(--r24);
+  background: var(--bg);
+  box-shadow: 0 0 0 6px rgba(2, 182, 127, 0.1);
+  text-align: center;          /* 네모 안은 가운데로 모은다 */
+}
+.install-box__mark {
+  display: block;
+  width: 72px;
+  height: 72px;
+  margin: 0 auto var(--s16);
+}
+
+/* `.sub` 는 읽기 폭(60ch)이 걸려 있어 그대로 두면 왼쪽으로 치우친다 */
+.install-box .sub {
+  margin-inline: auto;
+  margin-bottom: var(--s32);
+}
+
+/* **번호 목록만 왼쪽 정렬이다.** 가운데로 맞추면 번호가 들쭉날쭉해서 차례로 읽히지
+   않는다. 덩이째 가운데에 두고 글은 왼쪽에서 시작하게 한다. */
+.install {
+  width: fit-content;
+  font-size: 17px;
+  line-height: 1.8;
+  max-width: 60ch;
+  margin: 0 auto var(--s32);
+  padding-left: var(--s24);
+  text-align: left;
+  color: var(--muted);
+}
+.install li { margin-bottom: var(--s8); }
+.install b, .install a { color: var(--ink); }
+
+.install-box .cta { justify-content: center; }
+
+code {
+  padding: 2px var(--s8);
+  border-radius: var(--r8);
+  background: var(--surface);
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 0.9em;
+}
+
+@media (max-width: 860px) {
+  .install-box { padding: var(--s32) var(--s24); }
+}
+
+/* ── 바닥 ────────────────────────────────────────────────────────── */
+
+.foot {
+  padding: var(--s48) 0 var(--s32);
+  background: var(--brand);
+  color: var(--brand-ink);
+}
+.foot__in {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--s24) var(--s48);
+  justify-content: space-between;
+  align-items: flex-start;
+}
+.foot__brand { display: flex; gap: var(--s8); align-items: center; }
+
+/**
+ * 넷뿐인 링크를 **한 줄로 눕힌다.** 세로로 쌓으면 왼쪽 브랜드 칸은 한 줄인데
+ * 오른쪽만 네 줄이라 바닥이 한쪽으로만 길어졌다.
+ *
+ * 글머리를 브랜드 이름 줄에 맞추려고 위를 조금 민다 — 아이콘(24px)이 글자보다
+ * 커서 브랜드 줄의 중심이 그만큼 아래에 있다.
+ */
+.foot__links {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--s8) var(--s24);
+  padding-top: var(--s4);
+  font-size: 14px;
+}
+.foot__links a { opacity: 0.85; }
+.foot__links a:hover { opacity: 1; }
+.foot__copy {
+  max-width: var(--wrap);
+  margin: var(--s32) auto 0;
+  padding: var(--s16) var(--s16) 0;
+  border-top: 1px solid rgba(255, 255, 255, 0.14);
+  font-size: 13px;
+  opacity: 0.6;
+}
+@media (prefers-color-scheme: dark) {
+  .foot__copy { border-top-color: rgba(0, 0, 0, 0.18); }
+}
+
+/* ── 좁은 화면 ───────────────────────────────────────────────────── */
+
+/**
+ * **히어로는 다른 칸보다 일찍 접는다.** 글 칸이 540px 로 고정이라 1,020px 밑에서는
+ * 사진에 남는 자리가 400px 도 안 된다 — 두 칸으로 두는 것이 한 칸으로 두는 것보다
+ * 나쁘다. 접으면 사진이 화면 폭을 다 쓴다.
+ */
+@media (max-width: 1020px) {
+  .hero > .wrap { padding-left: var(--s16); }
+  .hero__in { grid-template-columns: 1fr; gap: var(--s48); }
+}
+
+@media (max-width: 860px) {
+  .band, .hero { padding: var(--s64) 0; }
+  .hero__in { gap: var(--s32); }
+  .feat { grid-template-columns: 1fr; gap: var(--s32); }
+  .feat--flip .feat__text { order: 0; }   /* 한 칸이 되면 글이 늘 위다 */
+  .stats__in { grid-template-columns: repeat(2, 1fr); }
+  .steps, .roles, .keeps, .browsers, .asks { grid-template-columns: 1fr; }
+  .sub { margin-bottom: var(--s48); }
+  /* 제목의 강제 줄바꿈은 넓은 화면에서만. 좁은 화면에서는 저절로 접힌다 */
+  br.wide { display: none; }
+}

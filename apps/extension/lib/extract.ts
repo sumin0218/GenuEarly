@@ -162,14 +162,41 @@ const MAX_SUBTITLE_LINES = 4
 /** 이보다 길면 부제가 아니라 본문으로 본다. */
 const SUBTITLE_MAX_CHARS = 80
 
+/** 이 페이지에 쓸 사이트 규칙. 아는 사이트가 아니면 없다. */
+function siteRule(): SiteRule | undefined {
+  // 아는 사이트를 먼저 본다. 거기 없고 **개발 빌드**이면 테스트 자료인지 모양으로 본다.
+  return (
+    RULES.find((r) => r.host.test(location.hostname)) ??
+    (TEST_FIXTURES_ON && isFixtureArticle(document) ? FIXTURE_RULE : undefined)
+  )
+}
+
+/**
+ * 본문을 담고 있는 **요소.** 형광펜이 이 안에서만 글자를 찾는다 (lib/highlight.ts).
+ *
+ * `extractArticle` 은 글자만 돌려준다. 칠하려면 그 글자가 화면의 어디인지 알아야
+ * 하고, 그러려면 요소가 필요하다. **같은 선택자를 두 곳에 적지 않으려고** 여기서
+ * 내보낸다.
+ */
+export function articleBodyElement(): Element | null {
+  const rule = siteRule()
+  return rule ? pick(rule.body) : null
+}
+
+/**
+ * 제목을 담고 있는 **요소.** 제목 항목(`clickbait_headline`·`headline_body_match`)의
+ * 대목을 칠하는 데 쓴다.
+ *
+ * `headlineMeta` 로 읽은 경우에는 화면에 그 글자가 있는 요소가 없으므로 없다.
+ */
+export function articleHeadlineElement(): Element | null {
+  const rule = siteRule()
+  return rule ? pick(rule.headline) : null
+}
+
 /** 지금 페이지가 우리가 아는 기사 페이지면 제목·본문·문장을 돌려준다. */
 export function extractArticle(): Article | null {
-  // 아는 사이트를 먼저 본다. 거기 없고 **개발 빌드**이면 테스트 자료인지 모양으로 본다.
-  const rule =
-    RULES.find((r) => r.host.test(location.hostname)) ??
-    (TEST_FIXTURES_ON && isFixtureArticle(document)
-      ? FIXTURE_RULE
-      : undefined)
+  const rule = siteRule()
   if (!rule) return null
 
   const bodyEl = pick(rule.body)
