@@ -9,13 +9,25 @@
    (apps/extension/tests/design.test.ts "제품의 색이 판정의 색과 부딪히지 않는다"). */
 
 :root {
-  /* 면 */
-  --ground: #f4f5f7;
+  /**
+   * 면. 밝은 쪽부터 **`--bg` → `--surface` → `--ground`** 세 켜다.
+   *
+   * 전에는 `--ground` 와 `--surface` 가 같은 값이라 사실 두 켜였다. 그래서
+   * 두 가지가 걸렸다.
+   *
+   *   1. 띠를 번갈아 칠해도 흰색과의 차이가 밝기로 3.6밖에 안 나서 **회색 띠가
+   *      회색으로 보이지 않았다**
+   *   2. 회색 띠 위에 올린 `--surface` 카드가 **띠와 같은 색이라 사라졌다**
+   *
+   * 셋으로 갈라 둔다. 띠는 `--ground`, 그 위 카드는 `--bg` 나 `--surface`.
+   */
+  --ground: #eaebef;
   --bg: #ffffff;
   --surface: #f4f5f7;
   --ink: #111111;
   --muted: #5f6368;
-  --rule: #e8e8e8;
+  /* 띠가 짙어진 만큼 금도 같이 내린다. 그러지 않으면 회색 띠 위에서 테두리가 묻는다 */
+  --rule: #dde0e4;
 
   /* 제품 색 */
   --brand: #162636;
@@ -39,12 +51,13 @@
 
 @media (prefers-color-scheme: dark) {
   :root {
-    --ground: #0d0d0d;
+    /* 어두운 쪽은 반대로 **띠가 더 어둡다.** 셋의 간격은 밝은 쪽과 같이 벌려 둔다 */
+    --ground: #08080a;
     --bg: #111111;
     --surface: #1a1a1c;
     --ink: #ffffff;
     --muted: #b4b4b4;
-    --rule: #272727;
+    --rule: #2e2e31;
 
     --brand: #e7edf3;
     --brand-ink: #0d0d0d;
@@ -428,7 +441,7 @@ h1 {
 }
 .role {
   padding: var(--s24);
-  background: var(--bg);
+  background: var(--surface);
   border: 1px solid var(--rule);
   border-radius: var(--r24);
 }
@@ -453,7 +466,7 @@ h1 {
 }
 .keep {
   padding: var(--s24);
-  background: var(--surface);
+  background: var(--bg);
   border-radius: var(--r24);
 }
 .keep h3 { margin: 0 0 var(--s8); font-size: 19px; font-weight: 800; letter-spacing: -0.03em; }
@@ -480,7 +493,7 @@ h1 {
 }
 .browser {
   padding: var(--s24);
-  background: var(--bg);
+  background: var(--surface);
   border: 1px solid var(--rule);
   border-radius: var(--r24);
   text-align: center;
@@ -492,7 +505,7 @@ h1 {
  * **아직 없는 것에 단추를 달지 않는다.** 단추 모양이면 눌러 보게 되고, 눌러도
  * 아무 일이 일어나지 않는다. 테두리를 점선으로 바꾸고 글자표만 둔다.
  */
-.browser--soon { background: var(--surface); border-style: dashed; }
+.browser--soon { background: var(--ground); border-style: dashed; }
 .tag {
   display: inline-block;
   padding: var(--s4) var(--s12);
