@@ -181,6 +181,42 @@ function sentenceValue(def: ItemDef, answers: unknown): number | 'uncertain' | '
 }
 
 /**
+ * **문장 하나**의 점수. 모름(⚪)이거나 모양이 틀렸으면 `null`.
+ *
+ * `scoreSentences` 는 문장들을 평균 내어 항목 하나로 만든다. 그러면 "어느 문장이
+ * 걸렸는가" 가 사라진다. 형광펜은 문장마다 노랑·빨강을 갈라야 해서
+ * (docs/requirements.md 3-4-1절) 평균 전의 값이 필요하다.
+ */
+export function sentenceScore(answers: unknown, id = 'unverifiable_claim'): number | null {
+  const def = itemDef(id)
+  if (!def || def.unit !== 'sentence') return null
+  const v = sentenceValue(def, answers)
+  return typeof v === 'number' ? v : null
+}
+
+/**
+ * 문장 하나에 대한 **질문 하나의 원답**. 모름이거나 모양이 틀렸으면 `null`.
+ *
+ * 합친 점수(`sentenceScore`)만으로는 "왜 걸렸는지" 를 가릴 수 없다. `named_basis` 가
+ * 아니라고 한 문장은 **출처가 그 문장에 없는 문장**이기도 해서, 형광펜이 출처 항목의
+ * 사유를 붙일 때 이 값을 본다 (apps/extension/lib/marks.ts).
+ */
+export function noulValue(answers: unknown, questionId: string): number | null {
+  if (!isPlainObject(answers)) return null
+  return noulOf(answers[questionId])
+}
+
+/**
+ * 이 점수가 **주의(🔴) 신호**인가.
+ *
+ * `decideBadge` 가 주의 신호를 세는 기준과 **같은 것을 쓴다** — 기준이 둘이 되면
+ * 배지는 🟡 인데 본문은 빨갛게 칠해지는 일이 생긴다.
+ */
+export function isCautionScore(score: number | null, isConfident = true): boolean {
+  return isConfident && isUnitNumber(score) && score >= ITEM_CAUTION_AT
+}
+
+/**
  * 문장 단위 항목(`unverifiable_claim`)의 점수. `perSentence` 는 문장마다 받은 `answers` 다
  * (키는 항목 id 가 아니라 **질문 id**, docs/architecture.md 4절).
  *

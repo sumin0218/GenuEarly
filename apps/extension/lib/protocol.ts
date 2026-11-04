@@ -164,6 +164,14 @@ export interface BuildReportMessage {
   body: string
   /** 일곱 항목의 판정 줄. **팝업이 이미 그리고 있는 값을 그대로 넘긴다** — 다시 판단하지 않는다 */
   rows: ReportRow[]
+  /**
+   * 걸린 대목. **콘텐츠 스크립트가 Jev 의 문장 답에서 뽑아 보낸다** (lib/marks.ts).
+   *
+   * 전에는 중계 서버가 `/v1/explain` 으로 생성 모델에 다시 물었다. 배지를 만들 때
+   * 이미 받아 둔 답이 있는데 또 묻는 것이고, **두 답이 어긋나면 리포트와 형광펜이
+   * 다른 문장을 가리킨다.** 문장 점수가 없으면(캐시에서 온 판정) 비어 있다.
+   */
+  picks?: { text: string; why: string }[]
 }
 
 /**
@@ -280,4 +288,35 @@ export type DisplayLevel = BadgeLevel | 'PENDING'
  * 이것을 안 보내면 **조용히 덜 보는 것**이 된다. 긴 기사의 뒤쪽에 있는 단정은
  * 판단에서 빠졌는데 화면은 다 본 것처럼 보인다.
  */
-export type ArticleVerdict = Verdict & { capped?: boolean }
+export type ArticleVerdict = Verdict & {
+  capped?: boolean
+  /**
+   * 문장마다의 점수. 보낸 문장을 상한까지 자른 것과 **같은 순서, 같은 길이**다.
+   * 모름(⚪)이거나 모양이 틀린 문장은 `null`.
+   *
+   * 형광펜이 문장마다 노랑·빨강을 가르는 데 쓴다 (docs/requirements.md 3-4-1절).
+   * `Verdict.items` 는 문장들을 **평균 낸** 항목 하나라서 어느 문장이 걸렸는지 알 수 없다.
+   *
+   * **캐시에서 읽은 판정에는 없다.** 캐시는 항목 점수만 들고 있다 (lib/cache.ts) —
+   * 문장 점수까지 담으면 거기에 기사 내용이 묻어 들어간다. 없으면 형광펜은
+   * 항목 단계로 칠한다.
+   */
+  sentenceScores?: (number | null)[]
+  /**
+   * 문장마다 **그 문장 안에 근거(기관명·실명·자료명)가 적혀 있나** 에 대한 Jev 의 답.
+   * `sentenceScores` 와 같은 순서·길이. 높을수록 "적혀 있다".
+   *
+   * 합친 점수만으로는 출처 항목의 사유를 붙일 수 없어서 원답을 함께 보낸다.
+   * 이것도 **캐시에는 담지 않는다** (`sentenceScores` 와 같은 이유).
+   */
+  sentenceBasis?: (number | null)[]
+  /**
+   * 문장마다 **감정을 끌어올리는 표현을 쓰는가** 에 대한 Jev 의 답.
+   * `sentenceScores` 와 같은 순서·길이. 높을수록 그렇다.
+   *
+   * **점수에 들어가지 않는다.** 배지의 감정 등급은 기사 단위 질문이 그대로 내고,
+   * 이것은 **어느 문장인지 찾는 데만** 쓴다 (judgment-items.json 의
+   * `emotional_sentence`). 문장 요청에 끼워 넣은 질문이라 요청 수가 늘지 않는다.
+   */
+  sentenceEmotion?: (number | null)[]
+}

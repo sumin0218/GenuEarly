@@ -8,14 +8,17 @@
 // 엔트리포인트는 WXT 의 defineBackground 로 감싸여 있어 그대로는 불러올 수 없다.
 // **점수 규칙은 여기 없다.** `@genuearly/shared` 하나가 원본이고 중계 서버와 함께 쓴다 (GE-15).
 // 두 벌을 두면 조용히 갈라진다.
-import { decideBadge, hasCodeEvidence, resolveBand, scoreArticle, type ItemResult } from '@genuearly/shared'
+import { decideBadge, hasCodeEvidence, noulValue, resolveBand, scoreArticle, sentenceScore, type ItemResult } from '@genuearly/shared'
 import schema from '@genuearly/shared/judgment-items.json'
 import {
   headlineFingerprint,
   isReusable,
   readScores,
+  readSentences,
   sweepExpired,
+  textFingerprint,
   writeScores,
+  writeSentences,
   type CachedItem,
   type ItemScores,
 } from './cache'
@@ -55,6 +58,23 @@ import {
  * 폭주 차단기가 실제로 걸리는 것도 보기 전이었다 (docs/requirements.md 8-1절).
  */
 const MAX_SENTENCES = 15
+
+/**
+ * 문장 항목의 두 질문 가운데 **근거를 묻는 쪽**의 id.
+ * `judgment-items.json` 의 `unverifiable_claim.combine.b` 를 그대로 읽는다 —
+ * 여기에 글자로 적어 두면 스키마를 고쳤을 때 조용히 어긋난다.
+ */
+const NAMED_BASIS = (schema.items as unknown as { id: string; combine?: { b?: string } }[])
+  .find((i) => i.id === 'unverifiable_claim')?.combine?.b ?? 'named_basis'
+
+/**
+ * 문장마다 **감정을 끌어올리는 표현인가** 를 묻는 질문의 id.
+ *
+ * **점수에 들어가지 않는다.** 배지의 감정 등급은 기사 단위 질문이 그대로 내고, 이것은
+ * 그 등급의 대목이 어느 문장인지만 알려 준다. 문장 요청에 끼워 넣어서 **요청 수가
+ * 늘지 않는다** — 따로 물으면 문장마다 하나씩 더 붙는다.
+ */
+const EMOTION_Q = 'emotional_sentence'
 
 /**
  * **모델이 내린 판단만 캐시한다.**
@@ -240,7 +260,34 @@ export async function judgeArticle(msg: Extract<Message, { kind: 'judge-article'
 
   const verdict = decideBadge([...toResults(cached), ...fresh])
   setIconBadge(tabId, verdict.level)
-  return { ...verdict, ...(capped ? { capped } : {}) }
+
+  // **문장 점수를 평균 전에 실어 보낸다.** 형광펜이 문장마다 노랑·빨강을 가른다
+  // (lib/marks.ts).
+  //
+  // **캐시에도 적는다.** 캐시가 맞으면 문장을 다시 묻지 않으므로, 적어 두지 않으면
+  // 같은 기사를 두 번째 열 때 배지는 그대로인데 **형광펜만 사라진다.** 적는 것은
+  // 숫자 배열과 지문뿐이라 기사 글이 들어가지 않는다 (lib/cache.ts).
+  const 지문 = await textFingerprint(sentences.join('\n'))
+  let sent: { s: (number | null)[]; b: (number | null)[]; e?: (number | null)[] } | null = null
+  if (sentenceItem && perSentence.length === sentences.length && sentences.length > 0) {
+    sent = {
+      s: perSentence.map((a) => sentenceScore(a, sentenceItem)),
+      // 합친 점수만으로는 출처 항목의 사유를 붙일 수 없다. 원답을 함께 둔다.
+      b: perSentence.map((a) => noulValue(a, NAMED_BASIS)),
+      // **자리 찾기 전용.** 점수에 들어가지 않는다 — 감정 등급은 기사 단위 질문이 낸다.
+      e: perSentence.map((a) => noulValue(a, EMOTION_Q)),
+    }
+    if (!sentenceFailed) await writeSentences(msg.url, { fp: 지문, ...sent })
+  } else {
+    // 이번에 묻지 않았다. 지난번에 적어 둔 것이 있으면 쓴다 — 같은 글일 때만이다.
+    sent = await readSentences(msg.url, 지문)
+  }
+
+  return {
+    ...verdict,
+    ...(capped ? { capped } : {}),
+    ...(sent ? { sentenceScores: sent.s, sentenceBasis: sent.b, sentenceEmotion: sent.e ?? [] } : {}),
+  }
 }
 
 /** 캐시에서 읽은 것을 `decideBadge` 가 받는 모양으로 되돌린다. */

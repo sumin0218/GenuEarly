@@ -9,9 +9,12 @@ import { TEST_FIXTURES_ON, isFixtureArticle, isFixturePage } from '../lib/fixtur
 import { ARTICLE_EXCLUDE_MATCHES, ARTICLE_MATCHES, TEST_FIXTURE_MATCHES } from '../match-patterns'
 import content from '../../../packages/content/ui.ko.json'
 import { findEvidence } from '@genuearly/shared'
-import { packPicks, readExplain, unpackPicks, writeExplain } from '../lib/cache'
-import { extractArticle } from '../lib/extract'
+import { articleBodyElement, articleHeadlineElement, extractArticle } from '../lib/extract'
+import { createHighlighter } from '../lib/highlight'
+import { gatherMarks, hasSentenceAnswer, sentencePicks } from '../lib/marks'
+import { CLAIM_ITEMS } from '../lib/report'
 import { TOAST_MS, createToast } from '../lib/toast'
+import { createShareNotice, listenForShare } from '../lib/share'
 import { createIcon } from '../lib/icon'
 import { LEVEL_ICON, LEVEL_INK, LEVEL_INK_DARK } from '../lib/item-view'
 import type {
@@ -110,6 +113,24 @@ export default defineContentScript({
     const article = extractArticle()
     const badge = createBadge()
     const toast = createToast()
+    const share = createShareNotice()
+    const highlighter = createHighlighter()
+
+    // ④ 공유 직전 알림. **🔴 에만, 기사당 한 번만.**
+    //
+    // 기사당 한 번은 이 콘텐츠 스크립트가 사는 동안으로 센다. 어디에도 적지 않는다 —
+    // "이 기사를 봤다" 를 디스크에 남기면 그것이 곧 열람 기록이다(아래 onMessage 와
+    // 같은 이유). 사용자가 페이지를 다시 부르면 한 번 더 뜨는데, 다시 부른 것은
+    // 사용자가 한 일이라 그대로 둔다.
+    let told = false
+    const stopListening = listenForShare(() => {
+      if (told) return
+      if (badge.state().level !== 'CAUTION') return
+      told = true
+      share.show()
+      stopListening()
+    })
+
     const ui = await createShadowRootUi(ctx, {
       name: 'genuearly-badge',
       position: 'inline',
@@ -120,7 +141,7 @@ export default defineContentScript({
       // docs/security/secure-coding.md 4절이 'closed' 를 기본으로 정하고 있다.
       mode: 'closed',
 
-      onMount: (container) => { container.append(badge.el, toast.el) },
+      onMount: (container) => { container.append(badge.el, toast.el, share.el, highlighter.el) },
     })
     ui.mount()
 
@@ -145,6 +166,19 @@ export default defineContentScript({
         // **날짜가 없으면 만들지 않는다.** 날짜 없이 기록을 맞추면 다른 날 기록에
         // "뒷받침됨" 이 뜬다 (실측 21%, apps/proxy/src/records.ts).
         if (!article.date) return Promise.resolve({ ok: false, reason: 'no_date' } satisfies MakeReportAnswer)
+
+        // **걸린 대목은 여기서 뽑아 보낸다.** 중계 서버가 생성 모델에 다시 묻지
+        // 않도록 — 배지를 만들 때 받아 둔 Jev 의 문장 답이 곧 그 대목이다.
+        // 형광펜·팝업과 **같은 곳**에서 나온다 (lib/marks.ts).
+        const v = badge.state().verdict
+        const picks = v?.sentenceScores
+          ? CLAIM_ITEMS.flatMap((id) => {
+              const level = raw.rows.find((r) => r.id === id)?.level
+              if (level !== 'CAUTION' && level !== 'CHECK') return []
+              return sentencePicks(article.sentences, v, id)
+            })
+          : []
+
         const ask: Message = {
           kind: 'build-report',
           url: location.href,
@@ -152,6 +186,7 @@ export default defineContentScript({
           date: article.date,
           body: article.body,
           rows: raw.rows,
+          ...(picks.length ? { picks } : {}),
         }
         void browser.runtime.sendMessage(ask).catch((e) => {
           console.warn('[GenuEarly] 리포트를 만들지 못했다', e)
@@ -166,58 +201,35 @@ export default defineContentScript({
         if (!article) return Promise.resolve(null)
         const itemId = raw.itemId
 
-        // **코드가 찾는 것은 여기서 끝난다.** 바깥에 묻지 않는다 — 글자가 거기 있는지는
-        // 문자열 찾기지 판단이 아니다 (docs/jev.md 3절 "피해야 할 것").
+        // **Jev 가 문장마다 답한 항목은 바깥에 묻지 않는다.** 배지를 만들 때 이미
+        // 받아 둔 답이 곧 "어느 문장이 걸렸나" 다. 형광펜과 **같은 곳**에서 나오므로
+        // 화면 두 곳이 다른 문장을 가리킬 수 없다 (lib/marks.ts).
+        const state = badge.state()
+        if (hasSentenceAnswer(itemId) && state.verdict?.sentenceScores) {
+          const picks = sentencePicks(article.sentences, state.verdict, itemId)
+          return Promise.resolve({ itemId, found: {}, spans: {}, ...(picks.length ? { picks } : {}) })
+        }
+
+        // **여기서 끝난다. 바깥에 묻지 않는다.**
+        //
+        // 전에는 코드가 빈손이면 `gpt-5.6-luna` 에 "어느 대목이냐" 를 물었다. 두 가지를
+        // 치렀다 — 펼칠 때마다 **몇 초를 기다렸고**, 그 답이 Jev 의 판정과 어긋날 수
+        // 있었다. 지금은 세 길뿐이고 셋 다 즉시 끝난다.
+        //
+        //   1. Jev 가 문장마다 답한 항목 → 위에서 돌려줬다
+        //   2. 코드가 글자로 찾는 항목 → 아래
+        //   3. 둘 다 아니면 **"찾지 못했습니다"** — 지어낸 설명보다 빈손이 낫다
+        //
+        // 3번은 손해다. 비속어나 "감정이 실린 서술" 은 목록으로 담을 수 없어 코드가
+        // 못 찾는다. 그래도 **판정 자체는 Jev 가 이미 냈고** 팝업이 그 줄을 보여 준다 —
+        // 없는 것은 "어느 대목인지" 뿐이다.
         const spans: Record<string, string[]> = {}
         for (const e of findEvidence(itemId, { headline: article.headline, body: article.body })) {
           spans[e.id] = e.spans.map((x) => x.text)
         }
-
-        const body = article.body
-        const ask: Message = {
-          kind: 'judge-explain',
-          url: location.href,
-          body,
-          itemId,
-          // 판정은 **이미 나와 있다.** 바깥에 다시 묻는 것이 아니라 적어 보낼 뿐이다.
-          level: raw.level,
-          // 코드가 빈손이면 LLM 에 넘긴다. 찾았으면 부르지 않는다 (lib/judge.ts).
-          noEvidence: Object.values(spans).every((v) => v.length === 0),
-        }
-
-        return (async () => {
-          // **받아 둔 답이 있으면 그것을 쓴다.** 생성 모델은 같은 글에도 매번 다르게
-          // 답한다. 눌렀다 접었다 할 때마다 짚는 문장이 바뀌면 어느 쪽을 믿어야 할지
-          // 알 수 없다. 캐시가 곧 **재현성**이다 (lib/cache.ts).
-          const hit = await readExplain(location.href, itemId, raw.level)
-          if (hit) {
-            const picks = await unpackPicks(body, hit.p)
-            return { itemId, found: hit.f, spans, ...(picks.length ? { picks } : {}) }
-          }
-
-          const res = await browser.runtime.sendMessage(ask).catch((e) => {
-            // Jev 쪽이 실패해도 **코드가 찾은 것은 보여 준다.**
-            console.warn('[GenuEarly] 심층 분석을 받지 못했다', e)
-            return null
-          })
-          const out = res as
-            | { found?: Record<string, boolean>; picks?: { text: string; why: string }[] }
-            | null
-          if (!out) return Object.keys(spans).length === 0 ? null : { itemId, found: {}, spans }
-
-          // **집어 온 글자를 여기서 또 대조한다.** 중계 서버와 background 에 이어 셋째다.
-          // 본문을 들고 있는 것은 우리뿐이라, 마지막으로 거를 수 있는 자리이기도 하다.
-          const picks = (out.picks ?? []).filter((x) => body.includes(x.text))
-          const found = out.found ?? {}
-          // 받은 답만 적어 둔다. 못 받은 것을 적어 두면 6시간 동안 빈 채로 보인다.
-          await writeExplain(location.href, itemId, {
-            lv: raw.level,
-            f: found,
-            p: await packPicks(body, picks),
-          })
-          return { itemId, found, spans, ...(picks.length ? { picks } : {}) }
-        })()
+        return Promise.resolve(Object.keys(spans).length === 0 ? null : { itemId, found: {}, spans })
       }
+
       return
       },
     )
@@ -228,6 +240,8 @@ export default defineContentScript({
       // ⚪ 는 실패가 아니라 결과다.
       console.warn('[GenuEarly] 기사 구조를 읽지 못했다')
       badge.render('UNDETERMINED')
+      // ⚪ 에서는 ④ 가 뜰 일이 없다. 듣고 있을 이유도 없다.
+      stopListening()
       return
     }
 
@@ -245,11 +259,47 @@ export default defineContentScript({
       // **판단이 나왔을 때만 알린다.** ⚪ 는 결과이긴 하지만, "결과를 보려면 누르세요"
       // 하고 불러 놓고 "판단하지 못했습니다" 를 보여 주는 것은 헛걸음을 시키는 일이다.
       if (verdict && verdict.level !== 'UNDETERMINED') toast.show(TOAST_MS)
+      // 🔴 이 아니면 ④ 는 영영 뜰 일이 없다. 판정은 한 번 나면 바뀌지 않는다.
+      if (verdict?.level !== 'CAUTION') stopListening()
+
+      // **걸린 대목을 미리 찾아 기사에 칠한다.** 팝업에서 항목을 펼칠 때까지
+      // 기다리지 않는다 — 기다리면 칠할 자리를 알 수 없고, 펼친 뒤에도 모델을
+      // 기다려야 한다. 찾은 것은 캐시에 들어가므로 팝업은 읽기만 한다 (lib/marks.ts).
+      //
+      // 기다리지 않는다. 코드 몫이 먼저 칠해지고 LLM 몫이 뒤따라 덧칠된다.
+      // **걸린 대목을 기사에 칠한다.** 모델을 다시 부르지 않는다 — 판정과 함께 온
+      // 문장 점수가 곧 "어느 문장이 걸렸나" 다 (lib/marks.ts). 그래서 기다림이 없다.
+      const roots = { body: articleBodyElement(), headline: articleHeadlineElement() }
+      if (verdict && (roots.body || roots.headline)) {
+        const marks = gatherMarks({
+          body: article.body,
+          headline: article.headline,
+          sentences: article.sentences,
+          level: verdict.level,
+          verdict,
+        })
+        highlighter.paint(roots, marks)
+        // **왜 안 칠해지는지 알 수 있어야 한다.** 칠할 것이 없는 이유가 여럿이다 —
+        // 🟢 라서, 걸린 항목이 없어서, 문장 점수가 없어서, 글자를 못 찾아서.
+        // 화면만 보면 넷이 구분되지 않는다.
+        console.warn('[GenuEarly] 형광펜', JSON.stringify({
+          level: verdict.level,
+          걸린항목: verdict.items.filter((i) => i.isConfident && (i.score ?? 0) > 0).map((i) => i.id),
+          문장점수: verdict.sentenceScores ? verdict.sentenceScores.length : '없음',
+          문장: article.sentences.length,
+          대목: marks.length,
+          칠한상자: highlighter.count(),
+          본문요소: roots.body?.tagName ?? null,
+          제목요소: roots.headline?.tagName ?? null,
+          못찾음: highlighter.missed(),
+        }))
+      }
     } catch (e) {
       // service worker 가 죽었거나 확장이 다시 로드됐다. ⚪ 는 실패가 아니라 결과다.
       console.warn('[GenuEarly] 판단을 받지 못했다', e)
       badge.render('UNDETERMINED')
       toast.hide()
+      stopListening()
     }
   },
 })
