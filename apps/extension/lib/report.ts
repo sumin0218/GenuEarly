@@ -23,7 +23,7 @@
 // **다 된 리포트는 따로 한 벌 보관된다** (lib/archive.ts). 그쪽은 `local` 이다 —
 // 사용자가 직접 만든 것만, 사용자가 지울 수 있는 형태로 남는다.
 import { saveToArchive } from './archive'
-import { PROXY_URL, type ExplainLevel, type ReportRow } from './protocol'
+import { PROXY_URL, type ReportRow } from './protocol'
 
 /** 저장소 열쇠. 하나만 둔다 — 쌓이면 그것이 곧 열람 기록이다. */
 export const REPORT_KEY = 'report'
@@ -173,38 +173,39 @@ async function post<T>(path: string, body: unknown): Promise<T | null> {
  *
  *   ① 나란히 볼 문장 — **판정과 무관하게 늘** 고른다 (/v1/claims).
  *      이것이 리포트의 주된 일이다. 초록 기사에도 주변 기록은 있다
- *   ② 걸린 항목의 대목 — 🔴·🟡 이 있을 때만 더한다 (/v1/explain).
+ *   ② 걸린 항목의 대목 — 🔴·🟡 이 있을 때만 더한다.
  *      **곁다리다.** 부족한 자리를 보충한다
  *
  * ②를 **뒤에** 놓는다. 앞자리는 기사의 핵심이 차지해야 한다 —
  * 신호를 앞세우면 리포트가 다시 "흠잡기" 로 읽힌다.
+ *
+ * ## ②는 묻지 않는다. 받아 온 것을 쓴다
+ *
+ * 전에는 `/v1/explain` 으로 생성 모델에 "어느 문장이냐" 를 물었다. 배지를 만들 때
+ * Jev 가 **이미 문장마다** 답해 둔 것이 있는데 또 묻는 것이었고, 두 답이 어긋나면
+ * **리포트와 형광펜이 다른 문장을 가리켰다.** 이제 콘텐츠 스크립트가 그 답에서
+ * 뽑아 `picks` 로 넘겨 준다 (lib/marks.ts 의 `sentencePicks`).
+ *
+ * ①은 그대로 둔다. **하는 일이 다르다** — 판정과 무관하게 "나란히 볼 만한 핵심
+ * 문장" 을 고르는 것이라, 걸린 것이 없는 기사에도 있어야 한다.
  */
-async function gatherClaims(body: string, rows: readonly ReportRow[]): Promise<ReportClaim[]> {
+async function gatherClaims(
+  body: string,
+  picks: readonly { text: string; why: string }[] = [],
+): Promise<ReportClaim[]> {
   const out: ReportClaim[] = []
+  const add = (c: { text: string; why: string }): boolean => {
+    if (out.some((x) => x.text === c.text)) return true
+    out.push({ text: c.text, why: c.why, records: [], pending: true })
+    return out.length < MAX_CLAIMS
+  }
 
   // ① 늘 한다
   const picked = await post<{ claims?: { text: string; why: string }[] }>('/v1/claims', { body })
-  for (const c of picked?.claims ?? []) {
-    if (out.some((x) => x.text === c.text)) continue
-    out.push({ text: c.text, why: c.why, records: [], pending: true })
-    if (out.length >= MAX_CLAIMS) return out
-  }
+  for (const c of picked?.claims ?? []) if (!add(c)) return out
 
-  // ② 걸린 자리를 보충한다
-  for (const itemId of CLAIM_ITEMS) {
-    const level = rows.find((r) => r.id === itemId)?.level
-    if (level !== 'CAUTION' && level !== 'CHECK') continue
-    const got = await post<{ picks?: { text: string; why: string }[] }>('/v1/explain', {
-      itemId,
-      level: level satisfies ExplainLevel,
-      body,
-    })
-    for (const p of got?.picks ?? []) {
-      if (out.some((c) => c.text === p.text)) continue
-      out.push({ text: p.text, why: p.why, records: [], pending: true })
-      if (out.length >= MAX_CLAIMS) return out
-    }
-  }
+  // ② 걸린 자리를 보충한다. **호출이 없다.**
+  for (const p of picks) if (!add(p)) return out
   return out
 }
 
@@ -222,6 +223,8 @@ async function gatherClaims(body: string, rows: readonly ReportRow[]): Promise<R
 export async function buildReport(
   article: { url: string; headline: string; date: string; body: string },
   rows: ReportRow[],
+  /** 걸린 대목. 콘텐츠 스크립트가 Jev 의 문장 답에서 뽑아 보낸 것이다 */
+  picks: readonly { text: string; why: string }[] = [],
 ): Promise<Report> {
   // **본문을 리포트에 넣지 않는다.** `{ ...article }` 로 펼치면 `body` 가 따라
   // 들어간다 — `Report` 타입에 없어도 런타임에는 지워지지 않는다. 그 리포트는
@@ -234,7 +237,7 @@ export async function buildReport(
   let report: Report = { ...base, stage: 'claims', claims: [] }
   await put(report)
 
-  const claims = await gatherClaims(article.body, rows)
+  const claims = await gatherClaims(article.body, picks)
   if (claims.length === 0) {
     report = { ...report, stage: 'failed', reason: 'no_claims' }
     await put(report)

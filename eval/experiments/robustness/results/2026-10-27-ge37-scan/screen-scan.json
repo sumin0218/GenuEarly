@@ -1,0 +1,13 @@
+{
+  "date": "2026-10-27",
+  "screen": "1.1.0",
+  "question_set": "1.1.0",
+  "articles": 98,
+  "by_kind": {
+    "real": 83,
+    "fictional": 15
+  },
+  "sentences": 2080,
+  "articles_hit": 0,
+  "hits": []
+}

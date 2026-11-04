@@ -166,7 +166,7 @@ claude-opus-5-5 (ChatKHU 게이트웨이 경유): 리포트의 글을 엮습니�
 
 ChatKHU 프롬프트 원문: tools/content-gen/prompt.md
 생성 회차와 고른 이유: packages/content/ui.ko.json 의 source.rounds, 18차
-판단 질문 세트: packages/shared/judgment-items.json, v1.6.0
+판단 질문 세트: packages/shared/judgment-items.json, v1.7.0
 측정 결과: eval/experiments/robustness/results/
 아이콘 검증: docs/ai-log/evidence/
 출처와 라이선스: docs/ai-log/sources.md
