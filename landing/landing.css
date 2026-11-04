@@ -535,15 +535,14 @@ code {
   justify-content: space-between;
   align-items: flex-start;
 }
-.foot__brand { display: grid; grid-template-columns: auto auto; gap: var(--s8); align-items: center; }
-.foot__brand p { grid-column: 1 / -1; margin: var(--s4) 0 0; font-size: 13px; opacity: 0.7; }
+.foot__brand { display: flex; gap: var(--s8); align-items: center; }
 
 /**
- * 넷뿐인 링크를 **한 줄로 눕힌다.** 세로로 쌓으면 왼쪽 브랜드 칸은 두 줄인데
+ * 넷뿐인 링크를 **한 줄로 눕힌다.** 세로로 쌓으면 왼쪽 브랜드 칸은 한 줄인데
  * 오른쪽만 네 줄이라 바닥이 한쪽으로만 길어졌다.
  *
  * 글머리를 브랜드 이름 줄에 맞추려고 위를 조금 민다 — 아이콘(24px)이 글자보다
- * 커서 브랜드 첫 줄의 중심이 그만큼 아래에 있다.
+ * 커서 브랜드 줄의 중심이 그만큼 아래에 있다.
  */
 .foot__links {
   display: flex;
